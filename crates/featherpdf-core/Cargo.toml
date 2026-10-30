@@ -1,0 +1,28 @@
+[package]
+name = "featherpdf-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Operacoes estruturais em documentos PDF sem acesso a arquivos nem GUI"
+
+[dependencies]
+lopdf = "0.45"
+# Chave da criptografia (a mesma versão que o lopdf já traz).
+getrandom = "0.4"
+# Métricas da Helvetica (sem dependências próprias).
+feather-draw = { git = "https://github.com/feather-works/feather-draw", tag = "v0.1.1" }
+# Assinatura digital (PAdES), tudo RustCrypto puro, sem OpenSSL. O p12-keystore lê o
+# .pfx/.p12 do certificado A1 e já fixa a geração nova (cms 0.3, der 0.8, sha2 0.11 do lopdf).
+p12-keystore = "0.4"
+cms = "=0.3.0-pre.1"
+x509-cert = "0.3"
+der = "0.8"
+spki = "0.8"
+rsa = { version = "0.10.0-rc.19", features = ["sha2"] }
+sha2 = "0.11"
+zopfli = { version = "0.8", default-features = false, features = ["std", "zlib"] }
+
+[dev-dependencies]
+# Os testes criam o PDF pelo exportador oficial da suíte, sem outro codificador.
+feather-io = { git = "https://github.com/feather-works/feather-io", tag = "v0.1.3" }

@@ -1,0 +1,27 @@
+[package]
+name = "featherpdf-io"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Adaptador PDF: feather-io, leitura atomica e visualizacao raster"
+
+[dependencies]
+
+featherpdf-core = { path = "../featherpdf-core" }
+feather-draw = { git = "https://github.com/feather-works/feather-draw", tag = "v0.1.1" }
+feather-io = { git = "https://github.com/feather-works/feather-io", tag = "v0.1.3" }
+hayro = "0.8.0"
+# Comprimir: reamostrar as fotos e regravar em JPEG.
+image = { version = "0.25", default-features = false, features = ["jpeg", "webp"] }
+jpeg-encoder = "0.7"
+# Exportar → TIFF de várias páginas (o mesmo tiff que o image usa) e SVG vetorial pelo próprio Hayro.
+tiff = { version = "0.11", default-features = false, features = ["deflate"] }
+hayro-svg = "0.8.0"
+# Converter → FeatherSheet: planilha com mesclas, bordas e tamanhos da página.
+rust_xlsxwriter = { version = "0.79", default-features = false }
+# Converter → FeatherDocs: o .docx é um zip (mesma versão que o rust_xlsxwriter já usa).
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
+# Embutir fontes: achar a do sistema (as mesmas versões que o iced já traz).
+fontdb = "0.18"
+ttf-parser = "0.21"

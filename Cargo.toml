@@ -1,0 +1,38 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/featherpdf-core",
+    "crates/featherpdf-io",
+    "crates/featherpdf-ocr",
+    "crates/featherpdf-pelicano",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.98.1"
+publish = false
+
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+# Mesmo perfil do FeatherSheet: release sem LTO e incremental, para recompilar rápido.
+[profile.medir]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = true
+strip = false
+
+[profile.dev]
+opt-level = 1
+[profile.dev.package."*"]
+opt-level = 3
+
+# Provisório: a marca do FeatherPDF entra no feather-ui; trocar pela tag nova antes de lançar.
+[patch."https://github.com/feather-works/feather-ui"]
+# A versão pelicano (0.3) com a marca FeatherPDF, no branch `featherpdf` do checkout irmão.
+feather-ui-pelicano = { path = "../feather-ui-pelicano", package = "feather-ui" }
