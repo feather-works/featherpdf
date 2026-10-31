@@ -68,7 +68,33 @@ impl DocumentoPdf {
         let texto = if estado == "None" { "Estado removido".to_string() } else { format!("Marcado como {}", nome_estado(estado)) };
         self.nota_ligada(pagina, indice, dictionary! {
             "State" => lopdf::text_string(estado), "StateModel" => lopdf::text_string("Review"), "Contents" => lopdf::text_string(&texto),
-        }, autor)
+        }, autor)?;
+        if estado == "Accepted" { self.aplicar_substituicao(pagina, indice)?; }
+        Ok(())
+    }
+
+    /// "Substituir texto" aceito: troca o trecho riscado pelo texto do Caret na página (com refluxo)
+    /// e tira o riscado; o Caret fica, marcado como aceito. Outro comentário: não faz nada.
+    fn aplicar_substituicao(&mut self, pagina: u32, indice: usize) -> Result<(), String> {
+        let (id, caret, _) = self.alvo_anotacao(pagina, indice)?;
+        let d = self.documento.get_dictionary(caret).map_err(|e| e.to_string())?;
+        if d.get(b"Subtype").and_then(Object::as_name).ok() != Some(b"Caret") { return Ok(()); }
+        let texto_de = |d: &lopdf::Dictionary| d.get(b"Contents").ok().and_then(|o| lopdf::decode_text_string(o).ok()).unwrap_or_default();
+        let novo = texto_de(d);
+        let lista = self.lista_anotacoes(id);
+        let Some((k, risco)) = lista.iter().enumerate().find_map(|(k, o)| {
+            let r = self.documento.get_dictionary(o.as_reference().ok()?).ok()?;
+            (r.get(b"Subtype").and_then(Object::as_name).ok() == Some(b"StrikeOut") && r.get(b"IRT").and_then(Object::as_reference).ok() == Some(caret)).then_some((k, r))
+        }) else { return Ok(()) };
+        let busca = texto_de(risco);
+        let q: Vec<f32> = risco.get(b"QuadPoints").and_then(Object::as_array).map(|v| v.iter().filter_map(|x| x.as_float().ok()).collect()).unwrap_or_default();
+        if q.len() < 8 { return Err("O trecho riscado não tem caixa.".into()); }
+        let (cx, cy) = ((q[0] + q[2]) / 2.0, (q[1] + q[5]) / 2.0);
+        let objeto = self.objetos(pagina)?.iter().position(|o| matches!(o.tipo, crate::TipoObjeto::Texto { .. })
+            && o.caixa[0] <= cx && cx <= o.caixa[2] && o.caixa[1] <= cy && cy <= o.caixa[3])
+            .ok_or("Não achei a linha do trecho riscado.")?;
+        self.substituir_com_refluxo(pagina, objeto, busca.trim(), novo.trim())?;
+        self.apagar_anotacao(pagina, k)
     }
 
     /// "Substituir texto": risca o trecho e põe um sinal de inserção (Caret) com o texto novo,
@@ -153,6 +179,22 @@ mod testes {
         pdf.apagar_anotacao(1, 4).unwrap();
         pdf.apagar_anotacao(1, 0).unwrap();
         assert!(pdf.anotacoes().is_empty());
+    }
+
+    #[test]
+    fn substituicao_aceita_troca_o_texto() {
+        let mut pdf = pdf_com("BT /F1 12 Tf 72 700 Td (Valor 1742 total) Tj ET");
+        let (caixas, texto) = pdf.caixas_de_texto(1, [100.0, 695.0, 130.0, 712.0]).unwrap();
+        assert_eq!(texto.trim(), "1742");
+        pdf.substituir_texto(1, caixas, texto, "123", "Ana").unwrap();
+        pdf.marcar_estado(1, 1, "Accepted", "Bia").unwrap();
+        let linha = pdf.objetos(1).unwrap().into_iter().find_map(|o| match o.tipo { crate::TipoObjeto::Texto { texto, .. } => Some(texto), _ => None }).unwrap();
+        assert_eq!(linha, "Valor 123 total");
+        // O riscado sai; a inserção fica, aceita.
+        let lista = pdf.anotacoes();
+        assert!(!lista.iter().any(|a| a.tipo == "Riscado"), "{lista:?}");
+        let ins = lista.iter().find(|a| a.tipo == "Inserção").unwrap();
+        assert_eq!(estado_atual(&lista, ins), Some("Accepted"));
     }
 
     #[test]

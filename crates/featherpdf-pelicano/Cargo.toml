@@ -15,11 +15,12 @@ featherpdf-core = { path = "../featherpdf-core" }
 featherpdf-io = { path = "../featherpdf-io" }
 featherpdf-ocr = { path = "../featherpdf-ocr" }
 pelicano = { git = "https://github.com/feather-works/pelicano.git", tag = "v0.1.11" }
-feather-ui = { git = "https://github.com/feather-works/feather-ui.git", tag = "v0.3.2" }
+# Branch `featherpdf` do feather-ui (marca FeatherPDF, F12); trocar por uma tag quando entrar no main.
+feather-ui = { git = "https://github.com/feather-works/feather-ui.git", rev = "4eabc66" }
 feather-draw = { git = "https://github.com/feather-works/feather-draw", tag = "v0.1.1" }
 feather-shapes = { git = "https://github.com/feather-works/feather-shapes", tag = "v0.1.2" }
 rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "tokio"] }
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "time"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "time", "sync"] }
 arboard = { version = "3.6", features = ["wayland-data-control"] }
 ab_glyph = "0.2"
 tiny-skia = "0.11"

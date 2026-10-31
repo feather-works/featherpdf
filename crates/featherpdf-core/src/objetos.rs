@@ -704,9 +704,13 @@ impl DocumentoPdf {
         let real = |v: f32| Object::Real(v);
         for &k in objetos {
             let lugar = &analise.lugares[k];
-            if lugar.escritas.is_empty() {
-                // Imagem dentro de um recorte (q … W n … Do Q) anda com o recorte, senão sai cortada.
-                let (inicio, fim, ctm) = match bloco_do_recorte(&analise.ops, lugar.insercao, lugar.fim) {
+            // Imagem ou texto dentro do próprio recorte (q … W n … Do/Tj Q; plantas do AutoCAD põem cada
+            // texto num) anda com o recorte, senão sai cortado.
+            // Recortes um dentro do outro (o AutoCAD põe dois): vai até o de fora que ainda é só dele.
+            let mut recorte = bloco_do_recorte(&analise.ops, lugar.insercao, lugar.fim);
+            while let Some(fora) = recorte.and_then(|(i, f)| bloco_do_recorte(&analise.ops, i, f)) { recorte = Some(fora); }
+            if lugar.escritas.is_empty() || recorte.is_some() {
+                let (inicio, fim, ctm) = match recorte {
                     Some((i, f)) => (i, f, ctm_em(&analise.ops, i)),
                     None => (lugar.insercao, lugar.fim, lugar.matriz),
                 };
@@ -798,35 +802,45 @@ impl DocumentoPdf {
         Ok(textos.iter().map(|t| fonte.codigos(&Document::encode_text(cod, t)).map(|c| fonte.larguras.get(&c).copied().unwrap_or(fonte.padrao)).sum()).collect())
     }
 
-    /// Troca o texto de uma linha, na mesma fonte e posição. A fonte embutida
-    /// costuma ter só as letras usadas no documento: letra que falta é recusada
-    /// com o nome dela, em vez de sumir calada.
+    /// Troca o texto de uma linha, na mesma posição. Na fonte original quando ela tem todas as
+    /// letras; a embutida costuma ter só as usadas no documento (CAD grava 40, 50 letras), e aí
+    /// a linha vai em Helvetica no mesmo tamanho, como o Acrobat faz, em vez de virar quadrado.
     pub fn editar_texto(&mut self, pagina: u32, objeto: usize, novo: &str) -> Result<(), String> {
         let mut analise = self.analisar(pagina)?;
         Self::validar_indices(&analise, &[objeto])?;
         let lugar = analise.lugares[objeto].clone();
         if lugar.escritas.is_empty() { return Err("Esse objeto não é texto.".into()); }
         let id = self.id_pagina(pagina)?;
-        let (dicts, _) = self.recursos(id);
-        let dict = dicts.get(&lugar.fonte).ok_or("A fonte desta linha não foi encontrada.")?;
-        let copia = copia_para_codificar(dict);
-        let fonte = Fonte::ler(&self.documento, dict, copia.as_ref().unwrap_or(dict));
-        let cod = fonte.codificacao.as_ref()
-            .ok_or_else(|| format!("A fonte {} não diz quais letras tem; não dá para escrever nela.", fonte.nome))?;
-        let bytes = Document::encode_text(cod, novo);
-        if Document::decode_text(cod, &bytes).ok().as_deref() != Some(novo) {
-            let faltam: String = novo.chars().filter(|c| {
-                let s = c.to_string();
-                Document::decode_text(cod, &Document::encode_text(cod, &s)).ok().as_deref() != Some(s.as_str())
-            }).collect::<std::collections::BTreeSet<char>>().into_iter().collect();
-            return Err(format!("A fonte {} embutida no PDF não tem: {}", fonte.nome,
-                faltam.chars().map(|c| if c == ' ' { "espaço".to_string() } else { c.to_string() }).collect::<Vec<_>>().join(" ")));
-        }
-        let formato = if fonte.dois_bytes { lopdf::StringFormat::Hexadecimal } else { lopdf::StringFormat::Literal };
+        // Na fonte original: os bytes, se ela tem todas as letras (vai e volta igual).
+        let (na_original, nome_fonte) = {
+            let (dicts, _) = self.recursos(id);
+            let dict = dicts.get(&lugar.fonte).ok_or("A fonte desta linha não foi encontrada.")?;
+            let copia = copia_para_codificar(dict);
+            let fonte = Fonte::ler(&self.documento, dict, copia.as_ref().unwrap_or(dict));
+            let formato = if fonte.dois_bytes { lopdf::StringFormat::Hexadecimal } else { lopdf::StringFormat::Literal };
+            let bytes = fonte.codificacao.as_ref().map(|cod| (Document::encode_text(cod, novo), cod))
+                .filter(|(b, cod)| Document::decode_text(cod, b).ok().as_deref() == Some(novo)).map(|(b, _)| (b, formato));
+            (bytes, fonte.nome.clone())
+        };
         let primeira = lugar.escritas[0];
-        analise.ops[primeira] = Operation::new("Tj", vec![Object::String(bytes, formato)]);
         for &i in lugar.escritas[1..].iter().rev() { analise.ops.remove(i); }
-        drop(dicts);
+        match na_original {
+            Some((bytes, formato)) => analise.ops[primeira] = Operation::new("Tj", vec![Object::String(bytes, formato)]),
+            None => {
+                if let Some(c) = novo.chars().find(|&c| crate::inserir::win_ansi(c).is_none()) {
+                    return Err(format!("Nem a fonte {nome_fonte} embutida no PDF nem a Helvetica têm “{c}”."));
+                }
+                let tamanho = match &analise.objetos[objeto].tipo { TipoObjeto::Texto { tamanho, .. } => *tamanho, _ => 12.0 };
+                let f = self.fonte_com_larguras(false);
+                let nome = format!("FPo{}", f.0);
+                self.por_recurso(id, "Font", &nome, f)?;
+                let bytes: Vec<u8> = novo.chars().filter_map(crate::inserir::win_ansi).collect();
+                // Troca a fonte só para esta escrita e devolve a original logo depois.
+                analise.ops[primeira] = Operation::new("Tf", vec![Object::Name(nome.into_bytes()), tamanho.into()]);
+                analise.ops.insert(primeira + 1, Operation::new("Tj", vec![Object::String(bytes, lopdf::StringFormat::Literal)]));
+                analise.ops.insert(primeira + 2, Operation::new("Tf", vec![Object::Name(lugar.fonte.clone()), tamanho.into()]));
+            }
+        }
         self.gravar_conteudo(pagina, &analise.ops)
     }
 }
@@ -934,6 +948,18 @@ pub(crate) mod testes {
         let recorte = ops.iter().position(|o| o.operator == "re").unwrap();
         // O deslocamento entra antes do recorte, não só antes do Do.
         assert!(ops[..recorte].iter().any(|o| o.operator == "cm"));
+    }
+
+    #[test]
+    fn texto_no_proprio_recorte_anda_com_o_recorte() {
+        // Como as plantas do AutoCAD: cada texto numa caixa justa; mover só o texto o cortava.
+        let mut pdf = pdf_com("q 90 690 80 30 re W n q 95 695 70 20 re W n BT /F1 12 Tf 100 700 Td (teste 123) Tj ET Q Q");
+        pdf.mover_objetos(1, &[0], 200.0, 0.0).unwrap();
+        let caixa = pdf.objetos(1).unwrap()[0].caixa;
+        assert!((caixa[0] - 300.0).abs() < 0.01, "{caixa:?}");
+        let ops = pdf.analisar(1).unwrap().ops;
+        let recorte = ops.iter().position(|o| o.operator == "re").unwrap();
+        assert!(ops[..recorte].iter().any(|o| o.operator == "cm"), "os dois recortes andam juntos");
     }
 
     #[test]

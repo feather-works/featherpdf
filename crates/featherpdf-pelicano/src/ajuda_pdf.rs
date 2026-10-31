@@ -33,6 +33,7 @@ pub fn modelo() -> &'static Catalogo {
                         m("A gravação é segura: o arquivo novo é escrito à parte e só troca o antigo no fim, mantendo as permissões."),
                         m("PDF assinado não é regravado por cima: o app pede “Salvar como”, porque mudar o arquivo invalida as assinaturas."),
                         m("Fechar uma aba com alterações não salvas pede confirmação."),
+                        m("A página inicial mostra os recentes e atalhos para abrir, criar e converter; ela aparece quando não há documento aberto."),
                         t("Os recentes ficam no menu Arquivo (☰ Menu)."),
                     ]),
                     topico("abas", "Páginas", vec![
@@ -69,6 +70,9 @@ pub fn modelo() -> &'static Catalogo {
                         t("Distâncias, áreas e perímetros em plantas."),
                         m("Escala… calibra pela cota do desenho (ex.: 1:50) ou por uma linha de tamanho conhecido."),
                         m("Clique ponto a ponto; Enter termina e Backspace desfaz o último ponto."),
+                        m("Ímã: o ponto gruda nos cantos e pontas das linhas do desenho (marcador verde). Desligue no painel se atrapalhar."),
+                        m("Segure Shift para travar o ângulo em passos de 45°."),
+                        m("Área e perímetro fecham sozinhos: clique de novo no primeiro ponto ou use Fechar."),
                         m("Medidas lista tudo o que foi medido na página."),
                     ]),
                     topico("proteger", "Proteger e assinar", vec![
@@ -106,9 +110,11 @@ pub fn modelo() -> &'static Catalogo {
                     topico("fluxos", "Fluxos em blocos", vec![
                         t("A mesma sequência em vários PDFs de uma vez."),
                         m("Converter → Fluxos em lote abre a janela de blocos."),
-                        m("Entrada: uma pasta de PDFs ou o arquivo aberto. Saída: uma pasta (padrão: “processados” ao lado da entrada)."),
-                        m("Blocos: girar, numerar, tirar páginas em branco, OCR, tarjar padrões, clarear fundo, limpar foto de caderno, apagar metadados, embutir fontes, comprimir e linearizar."),
-                        m("Clique num bloco para configurar; ↑ e ↓ mudam a ordem."),
+                        m("Entrada: arraste pastas, PDFs ou imagens para a janela, ou use o arquivo aberto. Saída: uma pasta (padrão: “processados” ao lado da entrada)."),
+                        m("Modelos prontos montam a sequência de uma vez; o modo diz se sai um arquivo por entrada, tudo junto num PDF, dividido, PNG, Word ou planilha."),
+                        m("Juntar imagens: várias fotos viram um PDF com uma imagem por página."),
+                        m("Blocos: girar (todas, pares, ímpares ou escolhidas), numerar, marca-d'água, cabeçalho, tirar páginas em branco, OCR, tarjar padrões, clarear fundo, limpar caderno, normalizar tamanho, apagar metadados, embutir fontes, comprimir, PDF/A e linearizar."),
+                        m("Arraste os blocos para mudar a ordem. Para tirar: ×, Delete ou arraste para fora. Botão direito: subir, descer, duplicar, remover."),
                         m("Testar com 1 roda no primeiro arquivo sem gravar e mostra a prévia. Rodar grava todos; os originais não mudam."),
                     ]),
                     topico("scripts", "Scripts", vec![

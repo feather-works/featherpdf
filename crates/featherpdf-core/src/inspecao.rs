@@ -296,7 +296,9 @@ fn previa(s: &Stream) -> String {
     if estranhos * 10 > corte.len() {
         return format!("(conteúdo binário — {}{})", tamanho(dados.len()), if decodificado { " decodificados" } else { ", não decodificado" });
     }
-    let mut t = String::from_utf8_lossy(corte).into_owned();
+    // Byte fora do ASCII (código de glifo num Tj) vira escape octal do PDF: como "�" ele não existia na
+    // fonte mono, e a janela do F12 procurava outra fonte a cada quadro (~40 ms com o fluxo à vista).
+    let mut t: String = corte.iter().map(|&b| if b.is_ascii() { (b as char).to_string() } else { format!("\\{b:03o}") }).collect();
     if !decodificado { t.insert_str(0, "(não decodificado)\n"); }
     if dados.len() > MAX_FLUXO { t.push_str(&format!("\n… ({} no total)", tamanho(dados.len()))); }
     t
@@ -691,6 +693,12 @@ mod testes {
         assert!(i.problemas.iter().any(|p| p.titulo == "Fonte F2 sem ToUnicode"));
         assert!(i.problemas.iter().any(|p| p.objeto == Some(imagem) && p.titulo.contains("300 dpi")));
         assert!(i.estrutura.is_none());
+    }
+
+    #[test]
+    fn previa_do_fluxo_fica_em_ascii() {
+        let s = Stream::new(lopdf::Dictionary::new(), b"BT (caf\xe9) Tj ET".to_vec());
+        assert_eq!(previa(&s), "BT (caf\\351) Tj ET");
     }
 
     #[test]

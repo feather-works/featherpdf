@@ -62,7 +62,7 @@ pub const VERSAO: &str = env!("CARGO_PKG_VERSION");
 /// Índice de "Vermelho" em `tema::ACENTOS`: a cor do FeatherPDF.
 pub(crate) const ACENTO_PDF: usize = 4;
 pub const ZOOM_MIN: f32 = 0.25;
-pub const ZOOM_MAX: f32 = 4.0;
+pub const ZOOM_MAX: f32 = 8.0;
 /// Espaço entre páginas e margem da mesa, em pixels lógicos.
 pub const VAO_PAGINAS: f32 = 16.0;
 /// Passos de Ctrl+Z guardados.
@@ -73,10 +73,21 @@ pub fn id_mesa() -> &'static str { ID_MESA }
 
 /// Desenho de uma página inteira, ou só do trecho à vista quando a página
 /// inteira passaria de [`LIMITE_INTEIRA`] pixels (zoom alto numa planta A1).
+impl Desenho {
+    /// Onde está, em `pixels`, o pixel (`x`, `y`) do desenho inteiro.
+    pub fn indice(&self, x: f32, y: f32) -> usize {
+        let p = self.passo.max(1) as usize;
+        let largura = (self.largura as usize).div_ceil(p);
+        ((y as usize / p) * largura + x as usize / p) * 4
+    }
+}
+
 pub struct Desenho {
     pub imagem: Image,
-    /// Os mesmos pixels em RGBA, para a edição pegar a cor da letra e do papel.
+    /// Os pixels em RGBA, um a cada `passo` em cada direção, para a edição pegar a cor da
+    /// letra e do papel (a imagem da tela não devolve os dela; inteira seria o dobro da memória).
     pub pixels: std::sync::Arc<Vec<u8>>,
+    pub passo: u32,
     pub largura: u32,
     pub altura: u32,
     pub geracao: u64,
@@ -141,11 +152,19 @@ pub enum Msg {
     /// Fecha o documento da frente (Ctrl+W).
     IrInicio,
     BuscaRecentes(String),
+    InicioMais,
     // Abas de documento
     Guia(usize),
     FecharGuia(usize),
     ProximaGuia,
     // Páginas e zoom
+    ZoomParou(u64),
+    ZoomQuadro,
+    /// Resposta ao "salvar antes de fechar?": Some(true) salva, Some(false) descarta, None cancela.
+    FecharResposta(Option<bool>),
+    /// Página inicial: escolhe um PDF e, aberto, segue para a ferramenta (OCR, Comprimir…).
+    AbrirPara(Box<Msg>),
+    Fundo(u64, u32, Result<featherpdf_io::PaginaRaster, String>),
     Desenhada { geracao: u64, pagina: u32, escala: f32, trecho: Option<[u32; 4]>, resultado: Result<featherpdf_io::PaginaRaster, String> },
     Rolou(Viewport),
     IrPagina(u32),
@@ -239,6 +258,7 @@ pub enum Msg {
     EscalaTela(f32),
     Arrastar(WindowId),
     Puxar(ResizeDirection),
+    PuxarJanela(WindowId, ResizeDirection),
     Minimizar(WindowId),
     Maximizar(WindowId),
     TelaCheia,
@@ -291,17 +311,35 @@ pub struct App {
     pub ativa: usize,
     /// Aba com alterações à espera do segundo clique no ×; `usize::MAX`: fechar a janela.
     fechar_pendente: Option<usize>,
+    /// Pergunta "salvar antes de fechar?" aberta: a aba, ou `usize::MAX` para a janela inteira.
+    pub perguntar_fechar: Option<usize>,
+    /// Aba que fecha assim que o "Salvar como" dela terminar.
+    fechar_depois_de_salvar: Option<u64>,
+    /// A ferramenta que abre assim que o PDF escolhido na página inicial carregar.
+    depois_de_abrir: Option<Msg>,
     pub pagina: u32,
     pub zoom: f32,
     pub disposicao: Disposicao,
     /// Páginas desenhadas. Um desenho de outra `geracao` (zoom ou conteúdo
     /// antigos) fica na tela, esticado, até o novo chegar: sem isso o zoom piscava.
     pub desenhadas: HashMap<u32, Desenho>,
+    /// Página inteira em baixa resolução (até 2 MP), embaixo do trecho no zoom alto: não depende
+    /// do zoom, então mudar o zoom não deixa a página em branco onde o trecho ainda não chegou.
+    pub fundos: HashMap<u32, Image>,
+    fundos_pedidos: std::collections::HashSet<u32>,
+    geracao_fundos: u64,
     pedidas: HashSet<u32>,
     geracao: u64,
     pub escala_tela: f32,
     pub viewport: Option<(f32, f32, f32)>, // deslocamento y, largura e altura visíveis
     pub rolagem_x: f32,
+    /// Ctrl+roda em andamento: o zoom anda até `alvo` quadro a quadro.
+    pub zoom_animado: Option<ZoomAnimado>,
+    /// Tamanho da mesa no último layout: o `Rolou` não chega antes da primeira rolagem nem
+    /// quando a janela muda de tamanho, e o zoom no mouse precisa dele desde o começo.
+    pub tamanho_mesa: std::cell::Cell<Size>,
+    /// Zoom mudou e o desenho espera ele parar (`ZoomParou`).
+    pub zoom_esperando: bool,
     pub status: String,
     pub aba: Aba,
     pub faixa_aberta: bool,
@@ -313,6 +351,8 @@ pub struct App {
     pub busca_comandos: String,
     pub foco_pesquisa: u64,
     pub busca_recentes: String,
+    /// Início mostrando todas as ações rápidas, não só as 4 primeiras.
+    pub inicio_mais: bool,
     pub busca: busca::EstadoBusca,
     pub ins: inserir::Insercoes,
     pub medidas: medir::Medidas,
@@ -385,11 +425,6 @@ fn novo_id() -> u64 {
     PROXIMO.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
-fn documento(pdf: DocumentoPdf) -> Result<Aberto, String> {
-    let vis = Visualizador::novo(pdf.serializar()?)?;
-    Ok(Aberto { id: novo_id(), tamanhos: vis.tamanhos(), pdf, vis })
-}
-
 fn nome_do(pdf: &DocumentoPdf) -> String {
     pdf.origem().and_then(|p| p.file_name()).map_or("Documento sem título.pdf".into(), |n| n.to_string_lossy().into_owned())
 }
@@ -413,15 +448,24 @@ impl App {
             guias: vec![None],
             ativa: 0,
             fechar_pendente: None,
+            perguntar_fechar: None,
+            fechar_depois_de_salvar: None,
+            depois_de_abrir: None,
             pagina: 1,
             zoom: 1.0,
             disposicao: Disposicao::UmaPagina,
             desenhadas: HashMap::new(),
+            fundos: HashMap::new(),
+            fundos_pedidos: Default::default(),
+            geracao_fundos: 0,
             pedidas: HashSet::new(),
             geracao: 0,
             escala_tela: 1.0,
             viewport: None,
             rolagem_x: 0.0,
+            zoom_animado: None,
+            tamanho_mesa: std::cell::Cell::new(Size::new(0.0, 0.0)),
+            zoom_esperando: false,
             status: String::new(),
             aba: Aba::Inicio,
             faixa_aberta: config.faixa,
@@ -433,6 +477,7 @@ impl App {
             busca_comandos: String::new(),
             foco_pesquisa: 0,
             busca_recentes: String::new(),
+            inicio_mais: false,
             busca: busca::EstadoBusca::default(),
             ins: inserir::Insercoes::default(),
             medidas: medir::Medidas::default(),
@@ -486,10 +531,8 @@ impl App {
         };
         app.ocr.lingua = app.config.lingua_ocr;
         app.janelas.principal = Some(WindowId::MAIN);
-        let mut tarefas = vec![match featherpdf_io::criar_a4().and_then(|pdf| Ok((Visualizador::novo(pdf.serializar()?)?, pdf))) {
-            Ok((vis, pdf)) => app.entrar(pdf, vis),
-            Err(e) => { app.status = e; Task::none() }
-        }];
+        // Sem arquivo, começa na página inicial (`aberto` vazio).
+        let mut tarefas = Vec::new();
         // Arquivo pela linha de comando (abrir com…).
         if let Some(caminho) = std::env::args_os().nth(1).map(PathBuf::from) {
             tarefas.push(Task::done(Msg::AbrirCaminho(caminho)));
@@ -571,20 +614,66 @@ impl App {
         Task::batch([tarefa, Task::scroll_to(ID_MESA, g.rolagem)])
     }
 
-    /// Fecha a aba `i`; com alterações não salvas, só no segundo clique.
+    fn responder_fechar(&mut self, resposta: Option<bool>) -> Task<Msg> {
+        let Some(alvo) = self.perguntar_fechar.take() else { return Task::none() };
+        match resposta {
+            None => Task::none(),
+            Some(false) => {
+                self.fechar_pendente = Some(alvo);
+                if alvo == usize::MAX { self.update_interno(Msg::FecharJanela(WindowId::MAIN)) } else { self.fechar_aba(alvo) }
+            }
+            Some(true) => {
+                // A janela: salva cada aba alterada; se alguma pedir "Salvar como" (sem arquivo ou assinada), para nela.
+                let abas: Vec<usize> = if alvo == usize::MAX { (0..self.guias.len()).filter(|&i| self.modificada(i)).collect() } else { vec![alvo] };
+                let mut tarefas = Vec::new();
+                for i in abas {
+                    tarefas.push(self.ir_para_aba(i));
+                    tarefas.push(self.update_interno(Msg::Salvar));
+                    if self.modificada(i) {
+                        // Esperando o "Salvar como": a aba fecha quando ele terminar.
+                        if alvo != usize::MAX { self.fechar_depois_de_salvar = self.id_aberto(); }
+                        return Task::batch(tarefas);
+                    }
+                }
+                tarefas.push(if alvo == usize::MAX { self.update_interno(Msg::FecharJanela(WindowId::MAIN)) } else { self.fechar_aba(alvo) });
+                Task::batch(tarefas)
+            }
+        }
+    }
+
+    /// "Salvar antes de fechar?" por cima da tela.
+    pub fn com_pergunta_fechar<'a>(&'a self, base: Element<'a, Msg>) -> Element<'a, Msg> {
+        let Some(alvo) = self.perguntar_fechar else { return inicio::sem_camada(base) };
+        let texto = if alvo == usize::MAX {
+            let n = (0..self.guias.len()).filter(|&i| self.modificada(i)).count();
+            if n == 1 { "Um documento tem alterações que não foram salvas.".to_string() } else { format!("{n} documentos têm alterações que não foram salvas.") }
+        } else { format!("“{}” tem alterações que não foram salvas.", self.nome_da_aba(alvo)) };
+        let botoes = row![
+            feather_ui::dialogo::botao_secundario("Cancelar", Some(Msg::FecharResposta(None))),
+            Space::new(Length::FILL, 0.0),
+            feather_ui::dialogo::botao_secundario("Não salvar", Some(Msg::FecharResposta(Some(false)))),
+            feather_ui::dialogo::botao_primario("Salvar", Some(Msg::FecharResposta(Some(true)))),
+        ].spacing(8);
+        feather_ui::dialogo::Dialogo::new("Salvar antes de fechar?", pelicano::column![text(texto).size(13), botoes].spacing(18))
+            .icone("device-floppy").ao_fechar(Msg::FecharResposta(None)).largura(440.0).topo((inserir::janela().1 / 2.0 - 90.0).max(40.0)).sobre(base)
+    }
+
+    /// Fecha a aba `i`; com alterações não salvas, pergunta antes (`com_pergunta_fechar`).
     fn fechar_aba(&mut self, i: usize) -> Task<Msg> {
         if i >= self.guias.len() { return Task::none(); }
         if self.modificada(i) && self.fechar_pendente != Some(i) {
-            self.fechar_pendente = Some(i);
-            self.status = format!("“{}” tem alterações não salvas. Clique de novo no × para fechar sem salvar.", self.nome_da_aba(i));
+            self.perguntar_fechar = Some(i);
             return Task::none();
         }
         self.fechar_pendente = None;
         if self.guias.len() == 1 {
-            return match featherpdf_io::criar_a4().and_then(documento) {
-                Ok(a) => self.entrar_sem_registro(a.pdf, a.vis),
-                Err(e) => { self.status = e; Task::none() }
-            };
+            // Última aba: volta para a página inicial.
+            self.aberto = None;
+            self.historico.clear();
+            self.refeitos.clear();
+            self.desenhadas.clear();
+            self.status.clear();
+            return Task::none();
         }
         let mut tarefa = Task::none();
         if i == self.ativa { tarefa = self.ir_para_aba(if i + 1 < self.guias.len() { i + 1 } else { i - 1 }); }
@@ -597,13 +686,22 @@ impl App {
 
     /// Joga fora o que foi desenhado (zoom, giro ou documento mudaram).
     fn invalidar(&mut self) -> Task<Msg> {
+        self.descartar();
+        // Documento ou giro mudaram (o zoom não passa por aqui): o fundo também vale menos.
+        self.fundos.clear();
+        self.fundos_pedidos.clear();
+        self.geracao_fundos += 1;
+        self.org.limpar_miniaturas();
+        Task::batch([self.pedir_visiveis(), self.pedir_miniaturas()])
+    }
+
+    fn descartar(&mut self) {
         self.geracao = self.geracao.wrapping_add(1);
         // Fica só o desenho em volta da página atual, para cobrir a tela enquanto o novo vem.
         let atual = self.pagina;
-        self.desenhadas.retain(|&p, _| p.abs_diff(atual) <= 3);
+        self.desenhadas.retain(|&p, _| p.abs_diff(atual) <= 1);
         self.pedidas.clear();
-        self.org.limpar_miniaturas();
-        Task::batch([self.pedir_visiveis(), self.pedir_miniaturas()])
+        GERACAO.store(self.geracao, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Guarda o estado anterior a uma mudança feita aos poucos (digitar num campo).
@@ -688,7 +786,7 @@ impl App {
         let largura = |ns: &[u32]| ns.iter().map(|&n| tamanho(n).0).sum::<f32>() + VAO_PAGINAS * (ns.len() as f32 - 1.0);
         let linhas = self.linhas();
         let mesa = (linhas.iter().map(|(ns, _)| largura(ns)).fold(0.0, f32::max) + 2.0 * VAO_PAGINAS)
-            .max(self.viewport.map_or(0.0, |v| v.1));
+            .max(self.viewport.map_or(self.tamanho_mesa.get().width, |v| v.1));
         let (mut y, mut lista) = (VAO_PAGINAS, Vec::new());
         for (ns, h) in &linhas {
             let mut x = VAO_PAGINAS + (mesa - 2.0 * VAO_PAGINAS - largura(ns)) / 2.0;
@@ -710,13 +808,23 @@ impl App {
             .filter(|(_, r)| r.y + r.height >= topo - r.height && r.y <= topo + altura + r.height).collect();
         self.ler_objetos(&visiveis.iter().map(|v| v.0).collect::<Vec<_>>());
         let Some(aberto) = &self.aberto else { return Task::none() };
-        let escala = (self.zoom * self.escala_tela).clamp(0.1, 8.0);
+        let escala = (self.zoom * self.escala_tela).clamp(0.1, 16.0);
         let tela = Rect { x: self.rolagem_x, y: topo, width: largura.max(1.0), height: altura };
         // Folga de meia tela em volta, para rolar um pouco sem esperar desenho novo.
         let folga = Rect { x: tela.x - tela.width / 2.0, y: tela.y - tela.height / 2.0, width: tela.width * 2.0, height: tela.height * 2.0 };
         let mut tarefas = Vec::new();
         for (pagina, r) in visiveis {
             let (pl, pa) = aberto.tamanhos[pagina as usize - 1];
+            // shortcut: no modo escuro o fundo sairia claro (sem o `escurecer`); fica sem fundo.
+            if !self.modo_escuro && pl * escala * pa * escala > LIMITE_INTEIRA && !self.fundos.contains_key(&pagina) && self.fundos_pedidos.insert(pagina) {
+                let (vis, g) = (aberto.vis.clone(), self.geracao_fundos);
+                let escala_fundo = (2_000_000.0 / (pl * pa)).sqrt().clamp(0.1, 8.0);
+                tarefas.push(Task::perform(async move {
+                    let _vez = DESENHOS.acquire().await;
+                    tokio::task::spawn_blocking(move || { alocador::prioridade_baixa(); vis.desenhar(pagina, escala_fundo) }).await
+                        .unwrap_or_else(|e| Err(e.to_string()))
+                }, move |r| Msg::Fundo(g, pagina, r)));
+            }
             let (pl, pa) = (pl * escala, pa * escala);
             // Pedaço da página, em pixels do desenho.
             let em_pixels = |v: Rect| -> [u32; 4] {
@@ -755,7 +863,11 @@ impl App {
                 }).collect()
             }).unwrap_or_default());
             tarefas.push(Task::perform(async move {
+                let _vez = DESENHOS.acquire().await;
+                // Zoom ou rolagem mudaram enquanto esperava a vez: o resultado iria para o lixo.
+                if GERACAO.load(std::sync::atomic::Ordering::Relaxed) != geracao { return Err("obsoleto".into()); }
                 tokio::task::spawn_blocking(move || {
+                    alocador::prioridade_baixa();
                     let mut r = match trecho {
                         Some(t) => vis.desenhar_trecho(pagina, escala, t),
                         None => vis.desenhar(pagina, escala),
@@ -780,6 +892,23 @@ impl App {
         self.total_paginas().max(1)
     }
 
+    /// Rola a mesa e já anota a posição: o `Rolou` só chega depois do próximo quadro (às vezes
+    /// 100 ms depois), e o zoom seguinte, calculado com a posição velha, fazia a tela pular.
+    fn rolar_mesa(&mut self, alvo: Point) -> Task<Msg> {
+        if let Some((_, w, h)) = self.viewport.or(Some((0.0, self.tamanho_mesa.get().width, self.tamanho_mesa.get().height))) {
+            let altura = self.linhas_alturas() + VAO_PAGINAS;
+            let largura = self.posicoes().iter().map(|(_, r)| r.x + r.width).fold(0.0, f32::max) + VAO_PAGINAS;
+            self.viewport = Some((alvo.y.clamp(0.0, (altura - h).max(0.0)), w, h));
+            self.rolagem_x = alvo.x.clamp(0.0, (largura - w).max(0.0));
+        }
+        Task::scroll_to(ID_MESA, alvo)
+    }
+
+    /// Altura do conteúdo da mesa até o fim da última linha (com o vão de cima).
+    fn linhas_alturas(&self) -> f32 {
+        self.linhas().iter().map(|(_, h)| h + VAO_PAGINAS).sum::<f32>()
+    }
+
     fn rolar_para(&self, pagina: u32) -> Task<Msg> {
         let mut y = 0.0;
         for (paginas, h) in self.linhas() {
@@ -789,12 +918,68 @@ impl App {
         Task::scroll_to(ID_MESA, Point::new(self.rolagem_x, y))
     }
 
+    /// Ctrl+roda: o ponto da página embaixo do mouse fica embaixo do mouse.
+    /// O zoom anda até o alvo em alguns quadros (`ZoomQuadro`), em vez de saltar 10% de uma vez.
+    fn zoom_no_ponteiro(&mut self, fator: f32) -> Task<Msg> {
+        let alvo = (self.zoom_animado.map_or(self.zoom, |z| z.alvo) * fator).clamp(ZOOM_MIN, ZOOM_MAX);
+        let ancora = match self.zoom_animado { Some(z) => Some(z.ancora), None => self.ancora_do_ponteiro() };
+        let Some(ancora) = ancora else { return self.mudar_zoom(alvo) };
+        self.zoom_animado = Some(ZoomAnimado { alvo, ancora });
+        Task::none()
+    }
+
+    /// Página embaixo do mouse, o ponto dentro dela (em fração) e onde ele está na mesa.
+    fn ancora_do_ponteiro(&self) -> Option<(u32, f32, f32, Point)> {
+        let Size { width: w, height: h } = self.tamanho_mesa.get();
+        if w < 1.0 || h < 1.0 { return None; }
+        let topo = self.viewport.map_or(0.0, |v| v.0);
+        let (px, py) = inserir::ponteiro();
+        let (_, altura_janela) = inserir::janela();
+        // shortcut: a origem da mesa vem do layout de tela::janela (o scrollable só dá o tamanho);
+        // mudou o rodapé ou o painel de ferramentas, ajuste aqui.
+        let (ox, abaixo) = if self.leitura { (0.0, 0.0) } else { (12.0 + if self.ferramentas_abertas { 280.0 } else { 0.0 }, 71.0) };
+        let local = Point::new((px - ox).clamp(0.0, w), (py - (altura_janela - abaixo - h)).clamp(0.0, h));
+        let ponto = Point::new(self.rolagem_x + local.x, topo + local.y);
+        // Distância do ponto até a página (0 dentro dela).
+        let perto = |r: &Rect| (r.x - ponto.x).max(ponto.x - r.x - r.width).max(0.0) + (r.y - ponto.y).max(ponto.y - r.y - r.height).max(0.0);
+        let (n, r) = self.posicoes().into_iter().min_by(|a, b| perto(&a.1).total_cmp(&perto(&b.1)))?;
+        Some((n, (ponto.x - r.x) / r.width, (ponto.y - r.y) / r.height, local))
+    }
+
+    fn quadro_de_zoom(&mut self) -> Task<Msg> {
+        let Some(ZoomAnimado { alvo, ancora: (n, fx, fy, local) }) = self.zoom_animado else { return Task::none() };
+        // Anda 25% do que falta por quadro: rápido no começo, assenta suave. Com 40% ficava seco.
+        // Assenta a 0,5% do alvo (~170 ms): o fim da curva não se vê e só atrasava o desenho nítido.
+        let mut zoom = self.zoom + (alvo - self.zoom) * 0.25;
+        let chegou = (alvo - zoom).abs() < alvo * 0.005;
+        if chegou { zoom = alvo; self.zoom_animado = None; }
+        let rolar = self.mudar_zoom_e(zoom, move |app| {
+            let Some((_, r)) = app.posicoes().into_iter().find(|p| p.0 == n) else { return app.rolar_para(n) };
+            // Pixel inteiro: meio pixel de rolagem faz a imagem tremer a cada quadro.
+            let alvo = Point::new((r.x + fx * r.width - local.x).max(0.0).round(), (r.y + fy * r.height - local.y).max(0.0).round());
+            app.rolar_mesa(alvo)
+        });
+        // Fim da animação: desenha já, sem os 60 ms do ZoomParou (que ficam para a rodinha sem animação).
+        if !chegou { return rolar; }
+        self.zoom_esperando = false;
+        Task::batch([rolar, self.pedir_visiveis()])
+    }
+
     fn mudar_zoom(&mut self, zoom: f32) -> Task<Msg> {
+        self.mudar_zoom_e(zoom, |app| app.rolar_para(app.pagina))
+    }
+
+    fn mudar_zoom_e(&mut self, zoom: f32, rolar: impl FnOnce(&mut Self) -> Task<Msg>) -> Task<Msg> {
         let zoom = zoom.clamp(ZOOM_MIN, ZOOM_MAX);
         if (zoom - self.zoom).abs() < 0.001 { return Task::none(); }
         self.zoom = zoom;
-        let rolar = self.rolar_para(self.pagina);
-        Task::batch([self.invalidar(), rolar])
+        let rolar = rolar(self);
+        // Cada passo da rodinha pedia um desenho novo da planta inteira; só desenha quando o zoom para.
+        self.descartar();
+        let g = self.geracao;
+        self.zoom_esperando = true;
+        let esperar = Task::perform(async { tokio::time::sleep(Duration::from_millis(60)).await }, move |_| Msg::ZoomParou(g));
+        Task::batch([esperar, rolar])
     }
 
     // ---------- Arquivo ----------
@@ -809,9 +994,9 @@ impl App {
                 let pdf = if juntar::e_imagem(&caminho) { juntar::documento_de_arquivo(&caminho)? }
                     else { featherpdf_io::abrir_com_senha(&caminho, senha.as_deref())? };
                 let ler = inicio.elapsed();
-                let bytes = pdf.serializar()?;
+                let mapeado = (!juntar::e_imagem(&caminho)).then(|| Visualizador::do_arquivo(&caminho, pdf.total_paginas())).flatten();
+                let vis = match mapeado { Some(v) => v, None => Visualizador::novo(pdf.serializar()?)? };
                 let serializar = inicio.elapsed() - ler;
-                let vis = Visualizador::novo(bytes)?;
                 monitor::anotar(format!("[abrir] {} páginas em {} · ler a estrutura {} · serializar {} · preparar o desenho {}",
                     pdf.total_paginas(), monitor::tempo(inicio.elapsed()), monitor::tempo(ler),
                     monitor::tempo(serializar), monitor::tempo(inicio.elapsed() - ler - serializar)));
@@ -950,9 +1135,11 @@ impl App {
                 match featherpdf_io::criar_a4().and_then(|pdf| Ok((Visualizador::novo(pdf.serializar()?)?, pdf))) {
                     Ok((vis, pdf)) => {
                         // Novo sempre ganha aba própria.
-                        self.guias[self.ativa] = self.guardar_guia();
-                        self.guias.push(None);
-                        self.ativa = self.guias.len() - 1;
+                        if self.aberto.is_some() {
+                            self.guias[self.ativa] = self.guardar_guia();
+                            self.guias.push(None);
+                            self.ativa = self.guias.len() - 1;
+                        }
                         let t = self.entrar_sem_registro(pdf, vis);
                         self.status = "PDF A4 em branco.".into();
                         return t;
@@ -972,9 +1159,13 @@ impl App {
                 self.status = format!("Abrindo {}…", caminho.display());
                 return Self::abrir_caminho(caminho, None);
             }
-            Msg::CaminhoEscolhido(None) | Msg::DestinoEscolhido(_, None) => {}
-            Msg::Aberto(Ok((pdf, vis))) => return self.entrar(pdf, vis),
-            Msg::Aberto(Err(e)) => self.status = e,
+            Msg::CaminhoEscolhido(None) => self.depois_de_abrir = None,
+            Msg::DestinoEscolhido(_, None) => {}
+            Msg::Aberto(Ok((pdf, vis))) => {
+                let entrar = self.entrar(pdf, vis);
+                return match self.depois_de_abrir.take() { Some(m) => Task::batch([entrar, self.update_interno(m)]), None => entrar };
+            }
+            Msg::Aberto(Err(e)) => { self.depois_de_abrir = None; self.status = e; }
             Msg::Salvar => {
                 self.menu = false;
                 let Some(a) = &self.aberto else { return Task::none() };
@@ -1039,6 +1230,11 @@ impl App {
                 let assinado = a.pdf.modificado() && assinar::tem_assinatura(&a.pdf);
                 self.status = match featherpdf_io::salvar_como(&mut a.pdf, &destino) {
                     Ok(()) => {
+                        if self.fechar_depois_de_salvar.take() == Some(a.id) {
+                            let i = self.ativa;
+                            self.recentes.registrar(&destino, a.pdf.total_paginas());
+                            return self.fechar_aba(i);
+                        }
                         self.recentes.registrar(&destino, a.pdf.total_paginas());
                         if assinado { format!("Salvo em {}. As assinaturas que o PDF tinha não valem nesta versão alterada.", destino.display()) }
                         else { format!("Salvo em {}", destino.display()) }
@@ -1069,10 +1265,21 @@ impl App {
             Msg::Modificadores(m) => self.modificadores = m,
             // Um "clique" da roda = 10%.
             Msg::Roda(passos) => if self.aba != Aba::Paginas {
-                return self.mudar_zoom((self.zoom * 1.1f32.powf(passos) * 100.0).round() / 100.0);
+                return self.zoom_no_ponteiro(1.1f32.powf(passos));
             },
             Msg::BuscaRecentes(t) => self.busca_recentes = t,
+            Msg::InicioMais => self.inicio_mais = !self.inicio_mais,
 
+            Msg::ZoomQuadro => return self.quadro_de_zoom(),
+            Msg::FecharResposta(r) => return self.responder_fechar(r),
+            Msg::AbrirPara(m) => { self.depois_de_abrir = Some(*m); return self.update_interno(Msg::Abrir); }
+            Msg::Fundo(g, pagina, r) => if g == self.geracao_fundos {
+                match r.ok().and_then(|r| Image::from_rgba(r.largura, r.altura, r.rgba)) {
+                    Some(img) => { self.fundos.insert(pagina, img); }
+                    None => { self.fundos_pedidos.remove(&pagina); }
+                }
+            },
+            Msg::ZoomParou(g) => if g == self.geracao { self.zoom_esperando = false; return self.pedir_visiveis() },
             Msg::Desenhada { geracao, pagina, escala, trecho, resultado } => {
                 if geracao != self.geracao { return Task::none(); }
                 self.pedidas.remove(&pagina);
@@ -1081,11 +1288,14 @@ impl App {
                 }
                 match resultado.and_then(|r| {
                     let (l, a) = (r.largura, r.altura);
-                    let pixels = std::sync::Arc::new(r.rgba.clone());
-                    Image::from_rgba(l, a, r.rgba).map(|i| (i, pixels, l, a)).ok_or_else(|| "imagem inválida".to_string())
+                    // Página grande (planta A1 com zoom): a amostra pula um pixel; sem mistura, a cor da letra fica pura.
+                    let passo = if l as u64 * a as u64 > 4_000_000 { 2 } else { 1 };
+                    let pixels = std::sync::Arc::new(amostra_rgba(&r.rgba, l, a, passo));
+                    Image::from_rgba(l, a, r.rgba).map(|i| (i, pixels, passo, l, a)).ok_or_else(|| "imagem inválida".to_string())
                 }) {
-                    Ok((imagem, pixels, largura, altura)) => {
-                        self.desenhadas.insert(pagina, Desenho { imagem, pixels, largura, altura, geracao, escala, trecho });
+                    Ok((imagem, pixels, passo, largura, altura)) => {
+                        self.desenhadas.insert(pagina, Desenho { imagem, pixels, passo, largura, altura, geracao, escala, trecho });
+                        alocador::devolver();
                     }
                     Err(e) => self.status = format!("Página {pagina}: {e}"),
                 }
@@ -1098,7 +1308,11 @@ impl App {
                 self.pagina = self.pagina_no_meio();
                 // Só o desenho em volta da página atual fica na memória.
                 let atual = self.pagina;
-                self.desenhadas.retain(|&p, _| p.abs_diff(atual) <= 6);
+                self.desenhadas.retain(|&p, _| p.abs_diff(atual) <= 1);
+                self.fundos.retain(|&p, _| p.abs_diff(atual) <= 1);
+                self.fundos_pedidos.retain(|&p| p.abs_diff(atual) <= 1);
+                // No meio do zoom, desenho novo chegaria num zoom que já passou e trocaria a imagem esticada.
+                if self.zoom_animado.is_some() || self.zoom_esperando { return Task::none(); }
                 return self.pedir_visiveis();
             }
             Msg::IrPagina(p) => if (1..=self.total_paginas()).contains(&p) {
@@ -1266,6 +1480,7 @@ impl App {
             },
             Msg::Arrastar(id) => return Task::window_of(id, WindowCmd::Drag),
             Msg::Puxar(d) => return Task::window(WindowCmd::DragResize(d)),
+            Msg::PuxarJanela(id, d) => return Task::window_of(id, WindowCmd::DragResize(d)),
             Msg::Minimizar(id) => return Task::window_of(id, WindowCmd::Minimize),
             Msg::Maximizar(id) => return Task::window_of(id, WindowCmd::ToggleMaximize),
             Msg::TelaCheia => return Task::window(WindowCmd::ToggleFullscreen),
@@ -1276,8 +1491,7 @@ impl App {
                 }
                 let alteradas = (0..self.guias.len()).filter(|&i| self.modificada(i)).count();
                 if alteradas > 0 && self.fechar_pendente != Some(usize::MAX) {
-                    self.fechar_pendente = Some(usize::MAX);
-                    self.status = format!("{alteradas} documento(s) com alterações não salvas. Clique de novo em fechar para sair sem salvar.");
+                    self.perguntar_fechar = Some(usize::MAX);
                     return Task::none();
                 }
                 return Task::window(WindowCmd::Close);
@@ -1427,7 +1641,7 @@ impl pelicano::App for App {
     fn view(&self) -> Element<'_, Msg> { tela::janela(self) }
 
     fn view_window(&self, id: WindowId) -> Element<'_, Msg> {
-        match self.janelas.tipo(id) {
+        let corpo = match self.janelas.tipo(id) {
             Some(Auxiliar::Ajuda) => cromo::painel_utilitario(
                 "Ajuda · FeatherPDF",
                 ajuda_pdf::modelo().view(&self.ajuda).map(Msg::AjudaEvento),
@@ -1439,8 +1653,10 @@ impl pelicano::App for App {
             Some(Auxiliar::Ocr) => self.view_ocr(id),
             Some(Auxiliar::Imprimir) => self.view_imprimir(id),
             Some(Auxiliar::Fluxos) => self.view_fluxos(id),
-            None => tela::janela(self),
-        }
+            None => return tela::janela(self),
+        };
+        // Sem moldura do sistema, a auxiliar só muda de tamanho pelas bordas desenhadas aqui.
+        pelicano::stack![corpo, tela::alcas(move |d| Msg::PuxarJanela(id, d))].into()
     }
 
     fn theme(&self) -> Theme { tema::tema() }
@@ -1456,6 +1672,9 @@ impl pelicano::App for App {
         if self.ocr.rodando() {
             subs.push(Subscription::every(Duration::from_secs(1)).map(|_| Msg::Ocr(ocr::Oc::Tique)));
         }
+        if self.zoom_animado.is_some() {
+            subs.push(Subscription::every(Duration::from_millis(16)).map(|_| Msg::ZoomQuadro));
+        }
         Subscription::batch(subs)
     }
 
@@ -1467,7 +1686,6 @@ impl pelicano::App for App {
             Event::ModifiersChanged(m) => Some(Msg::Modificadores(*m)),
             Event::CursorMoved(p) if self.arrastando_painel => Some(Msg::LarguraPainel(Some(p.x))),
             Event::MouseReleased(MouseButton::Left) if self.arrastando_painel => Some(Msg::LarguraPainel(None)),
-            Event::Wheel { dy, modifiers, .. } if modifiers.control_key() => Some(Msg::Roda(dy.signum())),
             Event::CloseRequested => Some(Msg::FecharJanela(WindowId::MAIN)),
             _ => None,
         }
@@ -1498,7 +1716,64 @@ impl pelicano::App for App {
     }
 }
 
+/// Um pixel RGBA a cada `passo`, em cada direção (`passo` 1 copia tudo).
+fn amostra_rgba(rgba: &[u8], largura: u32, altura: u32, passo: u32) -> Vec<u8> {
+    let (l, p) = (largura as usize, passo.max(1) as usize);
+    let mut v = Vec::with_capacity(rgba.len() / (p * p) + 4);
+    for y in (0..altura as usize).step_by(p) {
+        for x in (0..l).step_by(p) { v.extend_from_slice(&rgba[(y * l + x) * 4..(y * l + x) * 4 + 4]); }
+    }
+    v
+}
+
+/// O glibc guarda a memória liberada para reaproveitar e não devolve ao sistema: cada desenho de página
+/// em zoom alto (dezenas de MB) deixava o RSS em 2–3 GB com só ~100 MB em uso de verdade.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+mod alocador {
+    extern "C" {
+        fn mallopt(param: i32, valor: i32) -> i32;
+        fn malloc_trim(pad: usize) -> i32;
+        fn setpriority(qual: i32, quem: u32, prioridade: i32) -> i32;
+        fn gettid() -> i32;
+    }
+    /// Blocos de 1 MB para cima vão direto para mmap (voltam ao sistema no free) e no máximo 2 arenas.
+    pub fn configurar() {
+        // SAFETY: funções do glibc sem pré-condições; chamadas antes de qualquer thread.
+        unsafe { mallopt(-3 /* M_MMAP_THRESHOLD */, 1 << 20); mallopt(-8 /* M_ARENA_MAX */, 2); }
+    }
+    pub fn devolver() {
+        // SAFETY: idem.
+        unsafe { malloc_trim(0); }
+    }
+    /// A thread atual cede a vez ao resto do sistema (nice 10): desenhar a planta não trava o PC.
+    pub fn prioridade_baixa() {
+        // SAFETY: idem; no Linux, PRIO_PROCESS com o tid vale só para esta thread.
+        unsafe { setpriority(0, gettid() as u32, 10); }
+    }
+}
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+mod alocador { pub fn configurar() {} pub fn devolver() {} pub fn prioridade_baixa() {} }
+
+#[derive(Debug, Clone, Copy)]
+pub struct ZoomAnimado {
+    pub alvo: f32,
+    /// Página, ponto dentro dela (fração) e onde ele fica na mesa.
+    pub ancora: (u32, f32, f32, Point),
+}
+
+/// Desenhos de página ao mesmo tempo: cada um usa um núcleo inteiro e, sem teto, o zoom numa planta
+/// ocupava todos e a interface travava.
+pub static DESENHOS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
+/// A geração dos desenhos que ainda valem (a mesma de `App::geracao`), para as tarefas na fila.
+static GERACAO: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 fn main() -> Result<(), Error> {
+    alocador::configurar();
+    // shortcut: o winit 0.30 não entrega arquivo solto no Wayland (só X11), então roda pelo XWayland;
+    // tirar quando o pelicano tratar wl_data_device. Sem DISPLAY (sem XWayland) fica no Wayland mesmo.
+    if std::env::var_os("DISPLAY").is_some() && std::env::var_os("FEATHER_WAYLAND").is_none() {
+        std::env::remove_var("WAYLAND_DISPLAY");
+    }
     // A marca antes da janela: o app_id ("featherpdf") e o ícone saem dela; depois seria o padrão (FeatherSheet).
     marca::definir_marca(marca::Produto::FeatherPDF, false);
     pelicano::run(
@@ -1518,9 +1793,16 @@ fn main() -> Result<(), Error> {
 mod testes {
     use super::*;
 
+    /// O app como fica depois de "PDF em branco" na página inicial.
+    fn com_a4() -> App {
+        let (mut app, _) = App::novo();
+        let _ = app.update(Msg::NovoA4);
+        app
+    }
+
     #[test]
     fn abas_abrem_trocam_e_pedem_confirmacao_para_fechar() {
-        let (mut app, _) = App::novo();
+        let mut app = com_a4();
         let _ = app.update(Msg::NovoA4);
         assert_eq!((app.guias.len(), app.ativa), (2, 1));
         // A aba nova ganha uma página a mais; a primeira continua com uma.
@@ -1532,14 +1814,23 @@ mod testes {
         assert_eq!(app.total_paginas(), 2);
         // O Ctrl+Z da aba volta com ela.
         assert!(app.pode_desfazer());
-        // Com alterações, o primeiro × só avisa; o segundo fecha e a outra aba vem para a frente.
+        // Com alterações, o × pergunta se salva; Cancelar deixa como está.
         let _ = app.update(Msg::FecharGuia(1));
-        assert_eq!(app.guias.len(), 2);
+        assert_eq!((app.guias.len(), app.perguntar_fechar), (2, Some(1)));
+        let _ = app.update(Msg::FecharResposta(None));
+        assert_eq!((app.guias.len(), app.perguntar_fechar), (2, None));
+        // "Não salvar" fecha e a outra aba vem para a frente.
         let _ = app.update(Msg::FecharGuia(1));
+        let _ = app.update(Msg::FecharResposta(Some(false)));
         assert_eq!((app.guias.len(), app.ativa, app.total_paginas()), (1, 0, 1));
-        // A última aba não some: vira um PDF em branco.
+        // Fechar a última aba (PDF sem arquivo também pergunta) volta para a página inicial.
         let _ = app.update(Msg::FecharGuia(0));
+        let _ = app.update(Msg::FecharResposta(Some(false)));
         assert_eq!(app.guias.len(), 1);
+        assert!(app.aberto.is_none());
+        // Dali, "PDF em branco" usa a mesma aba.
+        let _ = app.update(Msg::NovoA4);
+        assert_eq!((app.guias.len(), app.total_paginas()), (1, 1));
     }
 
     #[test]
@@ -1554,7 +1845,7 @@ mod testes {
 
     #[test]
     fn desfazer_e_refazer_voltam_a_estrutura() {
-        let (mut app, _) = App::novo();
+        let mut app = com_a4();
         let _ = app.update(Msg::Pag(organizar::Pag::Duplicar));
         assert_eq!(app.total_paginas(), 2);
         let _ = app.update(Msg::Desfazer);
@@ -1586,6 +1877,19 @@ mod testes {
     }
 
     #[test]
+    fn fechar_e_salvar_grava_e_fecha() {
+        let (mut app, _) = App::novo();
+        let c = temporario("fechar-salvar");
+        abrir_de(&mut app, &c);
+        let _ = app.update(Msg::Pag(organizar::Pag::Duplicar));
+        let _ = app.update(Msg::FecharGuia(app.ativa));
+        let _ = app.update(Msg::FecharResposta(Some(true)));
+        assert!(c.exists(), "gravou antes de fechar");
+        assert!(app.aberto.is_none() && app.perguntar_fechar.is_none());
+        let _ = std::fs::remove_file(&c);
+    }
+
+    #[test]
     fn desfazer_depois_de_salvar_continua_modificado() {
         let (mut app, _) = App::novo();
         let c = temporario("desfazer");
@@ -1601,7 +1905,7 @@ mod testes {
 
     #[test]
     fn destino_de_outra_aba_e_ignorado() {
-        let (mut app, _) = App::novo();
+        let mut app = com_a4();
         let primeiro = app.id_aberto().unwrap();
         let _ = app.update(Msg::NovoA4);
         let c = temporario("outra-aba");
@@ -1614,7 +1918,7 @@ mod testes {
 
     #[test]
     fn alteracao_nova_rearma_o_aviso_de_fechar() {
-        let (mut app, _) = App::novo();
+        let mut app = com_a4();
         let _ = app.update(Msg::NovoA4);
         let _ = app.update(Msg::Pag(organizar::Pag::InserirBranco));
         let _ = app.update(Msg::FecharGuia(1));
@@ -1631,7 +1935,7 @@ mod testes {
     fn captura() {
         use pelicano::App as _;
         let destino = std::env::var("FEATHERPDF_CAPTURA").expect("FEATHERPDF_CAPTURA=caminho.png");
-        let (mut app, _) = App::novo();
+        let mut app = com_a4();
         app.viewport = Some((0.0, 1000.0, 640.0));
         let resultado = app.aberto.as_ref().unwrap().vis.desenhar(1, 1.0);
         let geracao = app.geracao;
@@ -1645,4 +1949,60 @@ mod testes {
             }
         }
     }
+
+    #[test]
+    fn zoom_anota_a_rolagem_sem_esperar_o_rolou() {
+        use pelicano::App as _;
+        let mut app = com_a4();
+        app.viewport = Some((0.0, 1000.0, 640.0));
+        app.zoom_animado = Some(ZoomAnimado { alvo: 3.0, ancora: (1, 0.5, 0.5, Point::new(500.0, 320.0)) });
+        while app.zoom_animado.is_some() { let _ = app.update(Msg::ZoomQuadro); }
+        // O centro da página tem que estar no ponto (500, 320) da mesa, pela posição anotada.
+        let r = app.posicoes()[0].1;
+        let (topo, ..) = app.viewport.unwrap();
+        assert!((r.x + r.width / 2.0 - app.rolagem_x - 500.0).abs() <= 1.0 && (r.y + r.height / 2.0 - topo - 320.0).abs() <= 1.0,
+            "rolagem anotada {:?} / {}", app.viewport, app.rolagem_x);
+    }
+
+    #[test]
+    fn fundo_sobrevive_ao_zoom_mas_nao_a_edicao() {
+        use pelicano::App as _;
+        let mut app = com_a4();
+        let raster = || Ok(featherpdf_io::PaginaRaster { largura: 2, altura: 2, rgba: vec![255; 16] });
+        let _ = app.update(Msg::Fundo(app.geracao_fundos, 1, raster()));
+        assert!(app.fundos.contains_key(&1));
+        let _ = app.mudar_zoom(2.0);
+        assert!(app.fundos.contains_key(&1), "o fundo não depende do zoom");
+        let antiga = app.geracao_fundos;
+        let _ = app.invalidar();
+        assert!(app.fundos.is_empty());
+        let _ = app.update(Msg::Fundo(antiga, 1, raster()));
+        assert!(app.fundos.is_empty(), "fundo de antes da mudança chega atrasado e é jogado fora");
+    }
+
+    #[test]
+    fn zoom_animado_chega_no_alvo() {
+        use pelicano::App as _;
+        let mut app = com_a4();
+        app.viewport = Some((0.0, 1000.0, 640.0));
+        app.zoom_animado = Some(ZoomAnimado { alvo: 2.0, ancora: (1, 0.5, 0.5, Point::new(500.0, 320.0)) });
+        let mut quadros = 0;
+        while app.zoom_animado.is_some() && quadros < 30 { let _ = app.update(Msg::ZoomQuadro); quadros += 1; }
+        assert!(app.zoom_animado.is_none() && (app.zoom - 2.0).abs() < 1e-6, "parou em {} após {quadros} quadros", app.zoom);
+        assert!(quadros <= 18, "{quadros} quadros: lento demais");
+        assert!(!app.zoom_esperando, "no fim da animação desenha já, sem esperar o ZoomParou");
+    }
+
+    #[test]
+    fn amostra_da_pagina_acha_o_mesmo_pixel() {
+        // 5 × 3 pixels, cada um com o próprio número no vermelho.
+        let rgba: Vec<u8> = (0..15u8).flat_map(|i| [i, 0, 0, 255]).collect();
+        let pixels = std::sync::Arc::new(amostra_rgba(&rgba, 5, 3, 2));
+        assert_eq!(pixels.len(), 3 * 2 * 4, "3 colunas (0, 2, 4) × 2 linhas (0, 2)");
+        let d = Desenho { imagem: Image::from_rgba(5, 3, rgba).unwrap(), pixels, passo: 2, largura: 5, altura: 3, geracao: 0, escala: 1.0, trecho: None };
+        // (4, 2) é o pixel 14; (3, 1) cai na amostra (2, 0), o pixel 2.
+        assert_eq!(d.pixels[d.indice(4.0, 2.0)], 14);
+        assert_eq!(d.pixels[d.indice(3.0, 1.0)], 2);
+    }
+
 }

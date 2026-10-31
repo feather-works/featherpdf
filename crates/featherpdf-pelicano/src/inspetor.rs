@@ -5,8 +5,6 @@
 use pelicano::*;
 use pelicano::column;
 use crate::compat::*;
-use crate::compat::mouse;
-use crate::compat::canvas::{self, Frame, Geometry, Path, Stroke};
 use std::collections::HashSet;
 use std::time::Instant;
 
@@ -19,7 +17,7 @@ use featherpdf_core::{tamanho, Cor, DetalheObjeto, DocumentoPdf, Gravidade, Insp
 type Id = (u32, u16);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum AbaInsp { #[default] Objetos, Fontes, Imagens, Estrutura, Problemas, Desempenho, Console }
+pub enum AbaInsp { #[default] Desempenho, Objetos, Fontes, Imagens, Estrutura, Problemas, Console }
 
 #[derive(Debug, Clone)]
 pub enum Ins {
@@ -79,6 +77,9 @@ fn ambar() -> Color { if tema::escuro() { Color::rgb8(245, 193, 97) } else { Col
 fn mistura(a: Color, b: Color, t: f32) -> Color {
     Color::rgb(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t)
 }
+/// Linhas da árvore e do dicionário mostradas de uma vez (ver `coluna_arvore`).
+const MAX_LINHAS_VISTAS: usize = 300;
+
 fn mono(t: impl Into<std::borrow::Cow<'static, str>>) -> Text<'static> { text(t).font(Font::MONO).size(12) }
 
 fn painel(_: &Theme) -> Style {
@@ -109,31 +110,6 @@ fn intervalos(paginas: &[u32]) -> String {
     }
     let t = partes.join(", ");
     if t.chars().count() > 40 { format!("{}…", t.chars().take(40).collect::<String>()) } else if t.is_empty() { "—".into() } else { t }
-}
-
-/// Gráfico de linha pequeno do quadro Recursos.
-struct Linha { valores: Vec<f32>, maximo: f32, cor: Color }
-
-impl canvas::Program<Msg> for Linha {
-    type State = ();
-    fn draw(&self, _: &(), renderer: &Renderer, _: &Theme, bounds: Rect, _: mouse::Cursor) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
-        if self.valores.len() >= 2 {
-            let passo = bounds.width / (self.valores.len() - 1) as f32;
-            let y = |v: f32| bounds.height - 2.0 - (v / self.maximo.max(f32::EPSILON)).clamp(0.0, 1.0) * (bounds.height - 4.0);
-            let caminho = Path::new(|p| {
-                p.move_to(Point::new(0.0, y(self.valores[0])));
-                for (i, v) in self.valores.iter().enumerate().skip(1) { p.line_to(Point::new(i as f32 * passo, y(*v))); }
-            });
-            frame.stroke(&caminho, Stroke::default().with_color(self.cor).with_width(1.5));
-        }
-        vec![frame.into_geometry()]
-    }
-}
-
-fn grafico<'a>(valores: Vec<f32>, maximo: f32, cor: Color) -> Element<'a, Msg> {
-    container(canvas::Canvas::new(Linha { valores, maximo, cor }).width(Length::FILL).height(34))
-        .padding([2, 4]).style(painel).into()
 }
 
 fn cartao_problema(p: &Problema) -> Element<'_, Msg> {
@@ -216,23 +192,23 @@ impl App {
             format!("PDF {} · {} páginas · {} objetos · {}", r.versao, r.paginas, r.objetos,
                 if r.xref_comprimido { "xref comprimido" } else { "tabela xref" })
         }).unwrap_or_default();
-        let titulo = self.nome_documento().map_or("Inspetor".into(), |n| format!("Inspetor — {n}"));
-        let cabecalho = row![marca::icone_atual(18.0), text(titulo).size(15), Space::with_width(Length::FILL), text(resumo).size(12).color(muted)]
-            .spacing(9).align_y(Align::Center).padding([8, 14]);
         let problemas = insp.leitura.as_ref().map_or(0, |l| l.problemas.len());
         let mut abas = row![].spacing(3).align_y(Align::Center);
         for (aba, rotulo) in [
-            (AbaInsp::Objetos, "Objetos".to_string()), (AbaInsp::Fontes, "Fontes".into()), (AbaInsp::Imagens, "Imagens".into()),
-            (AbaInsp::Estrutura, "Estrutura (tags)".into()), (AbaInsp::Problemas, format!("Problemas {problemas}")),
-            (AbaInsp::Desempenho, "Desempenho".into()), (AbaInsp::Console, "Console".into()),
+            (AbaInsp::Desempenho, "Desempenho".to_string()), (AbaInsp::Objetos, "Objetos".into()), (AbaInsp::Fontes, "Fontes".into()),
+            (AbaInsp::Imagens, "Imagens".into()), (AbaInsp::Estrutura, "Estrutura (tags)".into()),
+            (AbaInsp::Problemas, format!("Problemas {problemas}")), (AbaInsp::Console, "Console".into()),
         ] {
             abas = abas.push(feather_ui::ribbon::aba(&AbaRibbon::nova(aba, rotulo), &insp.aba, |a| msg(Ins::Aba(a))));
         }
-        let barra = container(abas).padding([4, 10]).width(Length::FILL).height(44).style(tema::estilo_barra_abas);
+        // As abas são a barra de título (como na janela principal); o resumo do documento fica no canto.
+        let barra = container(row![marca::pena_atual(18.0), abas, Space::with_width(Length::FILL), text(resumo).size(11).color(muted)]
+            .spacing(10).align_y(Align::Center)).padding([4, 10]).width(Length::FILL).height(44).style(tema::estilo_barra_abas);
         let sem_documento = || vazio("Nenhum PDF aberto", "Abra um documento para inspecionar objetos, fontes e imagens.");
         let corpo: Element<'_, Msg> = match (insp.aba, &insp.leitura) {
             (AbaInsp::Desempenho, _) => row![
-                container(self.monitor.tela.view_memoria(Msg::MonitorEvento)).width(Length::Fill(3)),
+                container(self.monitor.tela.view_memoria_com(Msg::MonitorEvento, self.extras_recursos(),
+                    (!self.desenhadas.is_empty()).then(|| ("Liberar cache de páginas".to_string(), msg(Ins::LiberarCache))))).width(Length::Fill(3)),
                 container(self.monitor.tela.view_metricas(self.metricas_monitor())).width(Length::Fill(2)),
             ].spacing(14).into(),
             (AbaInsp::Console, _) => self.monitor.tela.view_console(Msg::MonitorEvento),
@@ -250,13 +226,12 @@ impl App {
         };
         let rodape = row![Space::with_width(Length::FILL), text("F12 abre e fecha. Só leitura.").size(11).color(muted)].padding([4, 14]);
         let tela = column![
-            cabecalho,
-            barra,
+            cromo::barra_integrada(barra.into(), Self::acoes_janela(id)),
             container(corpo).padding([10, 12]).width(Length::FILL).height(Length::FILL),
             container(Space::with_height(1)).width(Length::FILL).style(tema::estilo_linha),
             rodape,
         ];
-        cromo::janela_com_barra("Inspetor interno (F12)", tela.into(), Self::acoes_janela(id))
+        tela.into()
     }
 
     fn coluna_arvore(&self) -> Element<'_, Msg> {
@@ -265,9 +240,12 @@ impl App {
         let filtro = text_input("Filtrar (ex.: /Type /Font)", &insp.filtro)
             .on_input(|t| msg(Ins::Filtro(t))).size(12).padding([6, 8]).style(tema::estilo_entrada_suspensa);
         let mut linhas = column![].spacing(0);
-        for l in &insp.arvore {
+        // A janela do F12 é refeita a cada mensagem do app (zoom, rolagem): milhares de linhas
+        // de texto mono pesavam em cada quadro. O filtro acha o resto.
+        for l in insp.arvore.iter().take(MAX_LINHAS_VISTAS) {
             let seta = if !l.expansivel { " " } else if l.aberto { "▾" } else { "▸" };
-            let alternar = button(mono(seta).color(muted)).padding([2, 4]).style(botao_texto)
+            // ▾ ▸ não existem na fonte mono: com ela o cosmic-text procurava outra fonte a cada quadro.
+            let alternar = button(text(seta).size(12).color(muted)).padding([2, 4]).style(botao_texto)
                 .on_press_maybe(l.expansivel.then(|| msg(Ins::Alternar(l.caminho.clone()))));
             let mut conteudo = row![].spacing(6).align_y(Align::Center);
             if !l.chave.is_empty() { conteudo = conteudo.push(mono(l.chave.clone()).color(roxo())); }
@@ -286,6 +264,9 @@ impl App {
                 })
                 .on_press_maybe(acao);
             linhas = linhas.push(row![Space::with_width(l.nivel as f32 * 14.0), alternar, linha].align_y(Align::Center));
+        }
+        if insp.arvore.len() > MAX_LINHAS_VISTAS {
+            linhas = linhas.push(text(format!("… mais {} linhas: use o filtro.", insp.arvore.len() - MAX_LINHAS_VISTAS)).size(11).color(muted));
         }
         if insp.arvore.is_empty() {
             linhas = linhas.push(text("Nenhum objeto bate com o filtro.").size(12).color(muted));
@@ -311,7 +292,7 @@ impl App {
             button(text("Copiar").size(12)).padding([5, 10]).style(tema::estilo_botao_secundario).on_press(msg(Ins::Copiar)),
         ].spacing(10).align_y(Align::Center);
         let mut linhas = column![].spacing(1);
-        for l in &d.linhas {
+        for l in d.linhas.iter().take(MAX_LINHAS_VISTAS) {
             let pedacos: Vec<Span<'static, Msg>> = l.iter().map(|p| {
                 let s = span(p.texto.clone());
                 match p.cor {
@@ -337,36 +318,23 @@ impl App {
         coluna.into()
     }
 
-    fn coluna_recursos<'a>(&'a self, l: &'a Inspecao) -> Element<'a, Msg> {
+    /// Linhas do PDF no quadro Recursos da aba Desempenho (o gráfico de RAM e CPU vem do feather-ui).
+    fn extras_recursos(&self) -> Vec<(String, String)> {
         let m = &self.monitor;
-        let muted = tema::COR_TEXTO_MUTED();
-        let mib = |kb: u64| format!("{:.0} MB", kb as f64 / 1024.0);
-        let item = |rotulo: String, valor: String| row![text(rotulo).size(11).color(muted), Space::with_width(Length::FILL), text(valor).size(11)].spacing(6);
-        let ram = m.ram.last().map_or("—".into(), |&kb| mib(kb));
-        let pico = m.sistema.pico_kb.or_else(|| m.ram.iter().max().copied()).map_or("—".into(), mib);
-        let nucleos = std::thread::available_parallelism().map_or(0, |n| n.get());
-        let cpu = m.cpu.last().map_or("—".into(), |c| format!("{c:.0}%"));
-        let threads = m.sistema.threads.map_or(String::new(), |t| format!(" · {t} threads"));
-        let maior_ram = m.ram.iter().max().copied().unwrap_or(1) as f32 * 1.1;
         let cache: usize = self.desenhadas.values().map(|d| d.largura as usize * d.altura as usize * 4).sum();
-        let mut c = column![
-            text("Recursos").size(14),
-            item("Memória RAM".into(), format!("{ram} · pico {pico}")),
-            grafico(m.ram.iter().map(|&v| v as f32).collect(), maior_ram, verde()),
-            item("CPU".into(), format!("{cpu} · {nucleos} núcleos{threads}")),
-            grafico(m.cpu.clone(), 100.0, roxo()),
-            item("Páginas desenhadas".into(), format!("{} · {}", self.desenhadas.len(), tamanho(cache))),
-        ].spacing(6);
-        if let Some((ms, p)) = m.ultimo { c = c.push(item(format!("Desenhar p. {p}"), format!("{ms} ms"))); }
-        if let Some(t) = m.abrir { c = c.push(item("Abrir o arquivo".into(), crate::monitor::tempo(t))); }
+        let mut v = vec![("Páginas desenhadas".to_string(), format!("{} · {}", self.desenhadas.len(), tamanho(cache)))];
+        if let Some((ms, p)) = m.ultimo { v.push((format!("Desenhar p. {p}"), format!("{ms} ms"))); }
+        if let Some(t) = m.abrir { v.push(("Abrir o arquivo".into(), crate::monitor::tempo(t))); }
         if let Some((lido, gravado)) = m.sistema.disco {
-            c = c.push(item("Disco lido / gravado".into(), format!("{} / {}", tamanho(lido as usize), tamanho(gravado as usize))));
+            v.push(("Disco lido / gravado".into(), format!("{} / {}", tamanho(lido as usize), tamanho(gravado as usize))));
         }
-        if !self.desenhadas.is_empty() {
-            c = c.push(button(text("Liberar cache de páginas").size(11).color(tema::COR_AZUL_ACENTO()))
-                .padding(0).style(botao_texto).on_press(msg(Ins::LiberarCache)));
-        }
-        c = c.push(Space::with_height(6)).push(text(format!("Problemas ({})", l.problemas.len())).size(14));
+        v
+    }
+
+    fn coluna_recursos<'a>(&'a self, l: &'a Inspecao) -> Element<'a, Msg> {
+        let muted = tema::COR_TEXTO_MUTED();
+        let mut c = column![].spacing(6);
+        c = c.push(text(format!("Problemas ({})", l.problemas.len())).size(14));
         if l.problemas.is_empty() { c = c.push(text("Nenhum encontrado.").size(11).color(muted)); }
         for p in l.problemas.iter().take(4) { c = c.push(cartao_problema(p)); }
         if l.problemas.len() > 4 {
@@ -424,3 +392,4 @@ fn estrutura(l: &Inspecao) -> Element<'_, Msg> {
     ].spacing(8).align_y(Align::Center).into())).spacing(2);
     container(scrollable(linhas.padding(10)).height(Length::FILL)).style(painel).height(Length::FILL).into()
 }
+

@@ -57,14 +57,12 @@ pub fn tempo(d: Duration) -> String {
 
 /// Medidas do processo que só o sistema dá (Linux: `/proc/self`); `None` onde não há.
 #[derive(Default)]
-pub struct Sistema { pub threads: Option<u64>, pub pico_kb: Option<u64>, pub disco: Option<(u64, u64)> }
+pub struct Sistema { pub disco: Option<(u64, u64)> }
 
 fn ler_sistema() -> Sistema {
-    let status = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
-    let campo = |nome: &str| status.lines().find_map(|l| l.strip_prefix(nome)?.split_whitespace().next()?.parse().ok());
     let io = std::fs::read_to_string("/proc/self/io").unwrap_or_default();
     let campo_io = |nome: &str| io.lines().find_map(|l| l.strip_prefix(nome)?.trim().parse::<u64>().ok());
-    Sistema { threads: campo("Threads:"), pico_kb: campo("VmHWM:"), disco: campo_io("read_bytes:").zip(campo_io("write_bytes:")) }
+    Sistema { disco: campo_io("read_bytes:").zip(campo_io("write_bytes:")) }
 }
 
 /// Amostras guardadas para os gráficos pequenos do quadro Recursos.

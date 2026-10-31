@@ -3,7 +3,7 @@
 //! Este crate nao depende de GUI/Iced.
 
 use std::path::{Path, PathBuf};
-use lopdf::Document;
+use lopdf::{Document, Object, ObjectId};
 
 mod achatamento;
 mod anotacoes;
@@ -119,6 +119,8 @@ impl DocumentoPdf {
             return Err("O PDF nao possui paginas.".into());
         }
         let modificado = origem.is_none();
+        let mut documento = documento;
+        normalizar_cmaps(&mut documento);
         Ok(Self { documento, origem, modificado })
     }
 
@@ -207,9 +209,55 @@ pub(crate) fn podar(documento: &mut Document) {
     documento.objects.retain(|id, _| vistos.contains(id));
 }
 
+/// Separa os tokens colados de um CMap (`/CMapName/Adobe-Identity-UCS`, `/Registry(Adobe)`,
+/// `>>def`), como o AutoCAD e outros grava: o parser do lopdf exige o espaço e, sem ele, perde o
+/// /ToUnicode inteiro, e o texto da página some na busca, na cópia e na edição.
+pub(crate) fn espacar_cmap(c: &[u8]) -> Vec<u8> {
+    let mut o = Vec::with_capacity(c.len() + 64);
+    for (i, &b) in c.iter().enumerate() {
+        let colado = o.last().is_some_and(|a: &u8| !a.is_ascii_whitespace() && !matches!(a, b'<' | b'[' | b'(' | b'{'));
+        if matches!(b, b'/' | b'(' | b'<' | b'[') && colado { o.push(b' '); }
+        o.push(b);
+        if b == b'>' && c.get(i + 1).is_some_and(u8::is_ascii_alphanumeric) { o.push(b' '); }
+    }
+    o
+}
+
+/// Aplica [`espacar_cmap`] aos /ToUnicode das fontes (só quando muda algo).
+fn normalizar_cmaps(doc: &mut Document) {
+    let ids: Vec<ObjectId> = doc.objects.values().filter_map(|o| o.as_dict().ok())
+        .filter_map(|d| d.get(b"ToUnicode").and_then(Object::as_reference).ok()).collect();
+    for id in ids {
+        let Ok(s) = doc.get_object_mut(id).and_then(Object::as_stream_mut) else { continue };
+        let Ok(plano) = s.decompressed_content().or_else(|_| Ok::<_, lopdf::Error>(s.content.clone())) else { continue };
+        if !plano.windows(9).any(|w| w == b"begincmap") { continue; }
+        let novo = espacar_cmap(&plano);
+        if novo != plano { s.set_plain_content(novo); }
+    }
+}
+
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    #[test]
+    fn cmap_colado_do_cad_volta_a_ler() {
+        // O /ToUnicode como o AutoCAD grava: nomes e valores sem espaço entre eles.
+        let cmap = b"/CIDInit/ProcSet findresource begin\n12 dict begin begincmap\n/CMapName/Adobe-Identity-UCS def\n\
+/CIDSystemInfo<</Registry(Adobe)/Ordering(UCS)/Supplement 0>>def\n/CMapType 2 def\n1 begincodespacerange\n<0000><FFFF>\n\
+endcodespacerange\n2 beginbfchar\n<0001><0034>\n<0002><0032>\nendbfchar\nendcmap\nCMapName currentdict /CMap defineresource pop end end";
+        let mut doc = lopdf::Document::with_version("1.7");
+        let tu = doc.add_object(lopdf::Stream::new(lopdf::Dictionary::new(), cmap.to_vec()));
+        let fonte = doc.add_object(lopdf::dictionary! { "Type" => "Font", "Subtype" => "Type0", "BaseFont" => "Verdana", "ToUnicode" => tu });
+        let ler = |doc: &lopdf::Document| {
+            let d = doc.get_dictionary(fonte).unwrap();
+            lopdf::Document::decode_text(&d.get_font_encoding(doc).unwrap(), &[0, 1, 0, 2, 0, 2]).unwrap()
+        };
+        assert_eq!(ler(&doc), "", "o lopdf sozinho perde o mapa");
+        normalizar_cmaps(&mut doc);
+        assert_eq!(ler(&doc), "422");
+        assert_eq!(espacar_cmap(b"/CMapName/Adobe def <0001><0034> /Registry(A)>>def"), b"/CMapName /Adobe def <0001> <0034> /Registry (A)>> def".to_vec());
+    }
     use feather_draw::Cena;
     use feather_io::{Documento, Registro};
 

@@ -147,7 +147,7 @@ impl DocumentoPdf {
     }
 
     /// Helvetica com as larguras: sem elas a caixa da linha (e a seleção) sairia errada.
-    fn fonte_com_larguras(&mut self, negrito: bool) -> ObjectId {
+    pub(crate) fn fonte_com_larguras(&mut self, negrito: bool) -> ObjectId {
         let (fonte, base) = if negrito { (FontePdf::Negrito, "Helvetica-Bold") } else { (FontePdf::Helvetica, "Helvetica") };
         let larguras: Vec<Object> = (32u8..=255).map(|b| {
             de_win_ansi(b).map_or(0.0, |c| largura_texto(&c.to_string(), fonte, 1000.0)).round().into()

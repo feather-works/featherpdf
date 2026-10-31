@@ -506,7 +506,8 @@ impl App {
                 }
                 let (x, y) = ler(&PONTEIRO);
                 self.ins.menu = Some((m, ((x - 30.0).max(8.0), y + 26.0)));
-                self.ins.mais_cores = false;
+                // Cor do texto abre direto no seletor (hexa, RGB e as amostras dele).
+                self.ins.mais_cores = m == Menu::CorTexto;
                 if let Some(c) = self.cor_do_menu(m) {
                     self.ins.hsva = seletor_cor::rgba_para_hsva(seletor_cor::rgba_de(&c), self.ins.hsva[0]);
                     self.ins.hex = c.trim_start_matches('#').into();
@@ -530,14 +531,19 @@ impl App {
             }
             Ins::MaisCores => self.ins.mais_cores = !self.ins.mais_cores,
             Ins::Seletor(e) => {
-                let escolhida = matches!(e, EventoCor::Escolhida(_));
+                // Hexa válido digitado também vale como escolha.
+                let escolhida = matches!(e, EventoCor::Escolhida(_) | EventoCor::TextoHex(_));
                 let hsva = &mut self.ins.hsva;
                 let do_hsva = |h: [f32; 4]| {
                     let [r, g, b] = seletor_cor::hsv_para_rgb(h[0], h[1], h[2]);
                     seletor_cor::hex_de([r, g, b, 255])
                 };
                 let cor = match e {
-                    EventoCor::Fechar => { self.ins.mais_cores = false; return Task::none(); }
+                    EventoCor::Fechar => {
+                        if self.ins.menu.is_some_and(|(m, _)| m == Menu::CorTexto) { self.ins.menu = None; }
+                        self.ins.mais_cores = false;
+                        return Task::none();
+                    }
                     EventoCor::Escolhida(h) if h.is_empty() => None,
                     EventoCor::Escolhida(h) => { *hsva = seletor_cor::rgba_para_hsva(seletor_cor::rgba_de(&h), hsva[0]); Some(h) }
                     EventoCor::SaturacaoBrilho(s, v) => { hsva[1] = s.clamp(0.0, 1.0); hsva[2] = v.clamp(0.0, 1.0); Some(do_hsva(*hsva)) }
@@ -744,7 +750,7 @@ impl App {
             Menu::Icones => self.menu_icones(alto),
             m => self.menu_cor(m),
         };
-        let largura = match menu { Menu::Formas | Menu::Icones => 336.0, _ if self.ins.mais_cores => 476.0, _ => 206.0 };
+        let largura = match menu { Menu::Formas | Menu::Icones => 336.0, Menu::CorTexto => 264.0, _ if self.ins.mais_cores => 476.0, _ => 206.0 };
         let x = if jl > 0.0 { x.min(jl - largura - 8.0).max(8.0) } else { x };
         Stack::new().width(Length::FILL).height(Length::FILL)
             .push(base)
@@ -850,6 +856,9 @@ impl App {
             cores = cores.push(row(fileira.iter().map(|&c| amostra(c))).spacing(6));
         }
         let titulo = match menu { Menu::Preenchimento => "Preenchimento", Menu::Contorno => "Contorno", _ => "Cor do texto" };
+        let seletor = seletor_cor::painel(titulo, atual.as_deref().unwrap_or(""), self.ins.hsva, &self.ins.hex)
+            .map(|e| Msg::Ins(Ins::Seletor(e)));
+        if menu == Menu::CorTexto { return seletor; }
         let rotulo = |t: &'static str| text(t).size(10.5).color(tema::COR_TEXTO_MUTED());
         let mut corpo = column![text(titulo).size(13), rotulo("COR"), cores].spacing(8);
         if menu != Menu::CorTexto {
@@ -876,8 +885,6 @@ impl App {
         }
         let painel = container(corpo.padding(12).width(206)).style(tema::estilo_popup_menu);
         if !self.ins.mais_cores { return painel.into(); }
-        let seletor = seletor_cor::painel(titulo, atual.as_deref().unwrap_or(""), self.ins.hsva, &self.ins.hex)
-            .map(|e| Msg::Ins(Ins::Seletor(e)));
         row![painel, seletor].spacing(6).into()
     }
 

@@ -238,6 +238,19 @@ impl Visualizador {
         Ok(Self { pdf: std::sync::Arc::new(pdf) })
     }
 
+    /// Lê o arquivo direto do disco, mapeado na memória: sem a segunda cópia de ~50 MB que
+    /// `novo(pdf.serializar())` fazia ao abrir. `None` se o hayro não ler o arquivo como está
+    /// (cifrado, quebrado) ou contar outras páginas: aí vale a cópia regravada pelo lopdf.
+    // shortcut: outro programa truncando o arquivo enquanto está aberto derruba o app (SIGBUS); salvar
+    // por cima com rename (como o FeatherPDF faz) é seguro. Copiar para a memória se isso aparecer.
+    pub fn do_arquivo(caminho: &Path, paginas: u32) -> Option<Self> {
+        let arquivo = std::fs::File::open(caminho).ok()?;
+        // SAFETY: só leitura; o risco é o arquivo mudar de tamanho por fora (ver shortcut acima).
+        let mapa = unsafe { memmap2::Mmap::map(&arquivo) }.ok()?;
+        let pdf = hayro::hayro_syntax::Pdf::new(std::sync::Arc::new(mapa)).ok()?;
+        (pdf.pages().len() as u32 == paginas).then(|| Self { pdf: std::sync::Arc::new(pdf) })
+    }
+
     pub fn total_paginas(&self) -> u32 { self.pdf.pages().len() as u32 }
 
     /// Tamanho de cada página em pontos, já com o giro aplicado.
@@ -248,6 +261,29 @@ impl Visualizador {
     /// Desenha a página (começando em 1). Rodar fora da thread da interface.
     pub fn desenhar(&self, pagina: u32, escala: f32) -> Result<PaginaRaster, String> {
         Self::raster(self.pixmap(pagina, escala, None)?)
+    }
+
+    /// Como `desenhar`, mas em pedaços colados: exportar uma A1 a 300 dpi (9933×7016) passa do
+    /// limite de um desenho só. Teto de 150 MP (~600 MB) para não derrubar o app.
+    pub fn desenhar_grande(&self, pagina: u32, escala: f32) -> Result<PaginaRaster, String> {
+        let (pl, pa) = *self.tamanhos().get(pagina.saturating_sub(1) as usize).ok_or("Pagina solicitada nao existe.")?;
+        let (l, a) = ((pl * escala) as u32, (pa * escala) as u32);
+        if l as u64 * a as u64 <= 20_000_000 && l <= 8000 && a <= 8000 { return self.desenhar(pagina, escala); }
+        if l as u64 * a as u64 > 150_000_000 { return Err("Pagina grande demais para esta resolucao; escolha menos dpi.".into()); }
+        const LADO: u32 = 4000;
+        let mut rgba = vec![0u8; l as usize * a as usize * 4];
+        for y0 in (0..a).step_by(LADO as usize) {
+            for x0 in (0..l).step_by(LADO as usize) {
+                let p = self.desenhar_trecho(pagina, escala, [x0, y0, LADO.min(l - x0), LADO.min(a - y0)])?;
+                for y in 0..p.altura.min(a - y0) {
+                    let n = p.largura.min(l - x0) as usize * 4;
+                    let de = (y * p.largura) as usize * 4;
+                    let para = (((y0 + y) * l + x0) as usize) * 4;
+                    rgba[para..para + n].copy_from_slice(&p.rgba[de..de + n]);
+                }
+            }
+        }
+        Ok(PaginaRaster { largura: l, altura: a, rgba })
     }
 
     /// A página (começando em 1) em SVG vetorial: texto, traços e imagens como no PDF.
@@ -265,12 +301,9 @@ impl Visualizador {
     }
 
     fn raster(raster: hayro::vello_cpu::Pixmap) -> Result<PaginaRaster, String> {
-        Ok(PaginaRaster {
-            largura: raster.width() as u32,
-            altura: raster.height() as u32,
-            // Fundo branco opaco: o RGBA pré-multiplicado é igual ao comum.
-            rgba: raster.data_as_u8_slice().to_vec(),
-        })
+        let (largura, altura) = (raster.width() as u32, raster.height() as u32);
+        // Fundo branco opaco: o RGBA pré-multiplicado é igual ao comum, e os pixels saem sem cópia.
+        Ok(PaginaRaster { largura, altura, rgba: raster.take_rgba8(hayro::vello_cpu::peniko::ImageAlphaType::AlphaPremultiplied) })
     }
 
     fn pixmap(&self, pagina: u32, escala: f32, trecho: Option<[u32; 4]>) -> Result<hayro::vello_cpu::Pixmap, String> {
@@ -281,8 +314,8 @@ impl Visualizador {
         use hayro::vello_cpu::{Pixmap, RasterizerSettings, RenderContext, Resources, TargetInit};
         use hayro::{render_into, RenderCache, RenderSettings};
 
-        if !escala.is_finite() || !(0.1..=8.0).contains(&escala) {
-            return Err("Zoom deve estar entre 10% e 800%.".into());
+        if !escala.is_finite() || !(0.1..=16.0).contains(&escala) {
+            return Err("Zoom deve estar entre 10% e 1600%.".into());
         }
         let indice = pagina.checked_sub(1)
             .ok_or_else(|| "Pagina deve ser maior que zero.".to_string())? as usize;
@@ -297,7 +330,9 @@ impl Visualizador {
         }
 
         let cache = RenderCache::new();
-        let mut ctx = RenderContext::new(l as u16, a as u16);
+        // Trecho grande (zoom alto) com 4 threads; desenho pequeno (miniatura) não compensa o custo de dividir.
+        let threads = if l as u64 * a as u64 >= 1_000_000 { 4 } else { 0 };
+        let mut ctx = RenderContext::new_with(l as u16, a as u16, hayro::vello_cpu::RenderSettings { num_threads: threads, ..Default::default() });
         let transform = Affine::translate((-(x as f64), -(y as f64)))
             * Affine::scale(escala as f64) * pagina.initial_transform(true).to_kurbo();
         render_into(pagina, &cache, &InterpreterSettings::default(), &RenderSettings::default(), &mut ctx, transform);
@@ -709,6 +744,69 @@ mod testes {
     use super::*;
 
     #[test]
+    fn pagina_grande_sai_em_pedacos_colados() {
+        let v = Visualizador::novo(criar_a4().unwrap().serializar().unwrap()).unwrap();
+        // A4 a 8× = 4763×6736: passa dos 20 MP de um desenho só.
+        let r = v.desenhar_grande(1, 8.0).unwrap();
+        assert_eq!((r.largura, r.altura), ((595.0f32 * 8.0) as u32, (842.0f32 * 8.0) as u32));
+        assert_eq!(r.rgba.len(), r.largura as usize * r.altura as usize * 4);
+        assert!(r.rgba.chunks_exact(4).all(|p| p == [255, 255, 255, 255]), "página em branco sai branca, sem buraco");
+    }
+
+    #[test]
+    fn desenha_lendo_o_arquivo_do_disco() {
+        let destino = std::env::temp_dir().join(format!("featherpdf-teste-mapa-{}.pdf", std::process::id()));
+        std::fs::write(&destino, criar_a4().unwrap().serializar().unwrap()).unwrap();
+        let v = Visualizador::do_arquivo(&destino, 1).expect("lê o PDF mapeado");
+        assert!(v.desenhar(1, 0.5).is_ok());
+        assert!(Visualizador::do_arquivo(&destino, 2).is_none(), "outra contagem de páginas cai na cópia regravada");
+        let _ = std::fs::remove_file(&destino);
+    }
+
+    #[test]
+    fn imagem_grande_lida_em_pedacos_do_disco_sai_igual() {
+        // 3000×3000 (36 MB pronta) não cabe na RAM do cache: vai para o arquivo e volta em pedaços.
+        let (l, a) = (3000u32, 3000u32);
+        let rgb = (0..l * a).flat_map(|i| { let (x, y) = (i % l, i / l); [(x * 255 / l) as u8, (y * 255 / a) as u8, ((x + y) * 255 / (l + a)) as u8] }).collect();
+        let mut pdf = criar_a4().unwrap();
+        pdf.so_imagens(vec![(featherpdf_core::ImagemNova::Pixels { largura: l, altura: a, rgb, alfa: None }, l, a)],
+            featherpdf_core::AjusteImagem::A4).unwrap();
+        let v = Visualizador::novo(pdf.serializar().unwrap()).unwrap();
+        let inteira = v.desenhar(1, 6.0).unwrap();
+        for t in [[500u32, 1500, 900, 700], [2400, 2600, 800, 600], [0, 1200, 600, 500]] {
+            let p = v.desenhar_trecho(1, 6.0, t).unwrap();
+            let mut ruins = 0;
+            for y in 0..t[3] { for x in 0..t[2] {
+                let i = (((y + t[1]) * inteira.largura + x + t[0]) * 4) as usize;
+                let j = ((y * p.largura + x) * 4) as usize;
+                if (0..3).any(|c| inteira.rgba[i + c].abs_diff(p.rgba[j + c]) > 3) { ruins += 1; }
+            }}
+            assert_eq!(ruins, 0, "trecho {t:?}");
+        }
+    }
+
+    #[test]
+    fn trecho_com_imagem_sai_igual_a_pagina_inteira() {
+        // O hayro em vendor/ pula o que cai fora do trecho e guarda a imagem pronta entre um desenho e outro.
+        let (l, a) = (400u32, 300u32);
+        let rgb = (0..l * a).flat_map(|i| [(i % l) as u8, (i / l) as u8, ((i * 7) % 251) as u8]).collect();
+        let mut pdf = criar_a4().unwrap();
+        pdf.so_imagens(vec![(featherpdf_core::ImagemNova::Pixels { largura: l, altura: a, rgb, alfa: None }, l, a)],
+            featherpdf_core::AjusteImagem::A4).unwrap();
+        let v = Visualizador::novo(pdf.serializar().unwrap()).unwrap();
+        let inteira = v.desenhar(1, 1.0).unwrap();
+        // O segundo trecho já pega a imagem do cache; o terceiro fica numa borda.
+        for t in [[100u32, 200, 300, 250], [150, 250, 300, 250], [0, 0, 80, 60]] {
+            let p = v.desenhar_trecho(1, 1.0, t).unwrap();
+            for y in 0..t[3] { for x in 0..t[2] {
+                let i = (((y + t[1]) * inteira.largura + x + t[0]) * 4) as usize;
+                let j = ((y * p.largura + x) * 4) as usize;
+                assert!((0..3).all(|c| inteira.rgba[i + c].abs_diff(p.rgba[j + c]) <= 2), "trecho {t:?} pixel {x},{y}");
+            }}
+        }
+    }
+
+    #[test]
     fn webp_sem_perda_volta_igual() {
         let destino = std::env::temp_dir().join(format!("featherpdf-teste-{}.webp", std::process::id()));
         let rgba = vec![10, 20, 30, 255, 200, 100, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255];
@@ -870,3 +968,14 @@ mod testes {
         assert_eq!(xml("a\u{3}b\u{0}<\t\n"), "ab&lt;\t\n");
     }
 }
+
+
+
+
+
+
+
+
+
+
+

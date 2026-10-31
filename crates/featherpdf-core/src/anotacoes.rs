@@ -187,15 +187,20 @@ impl DocumentoPdf {
             }
             AnotacaoNova::Marcacao { tipo, caixas, texto } => {
                 if caixas.is_empty() { return Err("Nenhum texto debaixo da marca.".into()); }
-                let c = caixas.iter().fold(caixas[0], |k, c| [k[0].min(c[0]), k[1].min(c[1]), k[2].max(c[2]), k[3].max(c[3])]);
                 let (sub, tinta) = match tipo { Marcacao::Destacar => ("Highlight", AMARELO), Marcacao::Sublinhar => ("Underline", AZUL), Marcacao::Riscar => ("StrikeOut", VERMELHO), Marcacao::Ondulado => ("Squiggly", VERMELHO) };
+                // A mesma marca duas vezes no mesmo trecho só escurecia o destaque: fica a parte nova.
+                let ja = self.trechos_marcados(id, sub.as_bytes());
+                let cobre = |q: &[f32; 4]| ja.iter().any(|j| j[0] <= q[0] + 1.0 && j[1] <= q[1] + 1.0 && j[2] >= q[2] - 1.0 && j[3] >= q[3] - 1.0);
+                let caixas: Vec<[f32; 4]> = caixas.iter().copied().filter(|q| !cobre(q)).collect();
+                if caixas.is_empty() { return Err("Esse trecho já tem essa marca.".into()); }
+                let c = caixas.iter().fold(caixas[0], |k, c| [k[0].min(c[0]), k[1].min(c[1]), k[2].max(c[2]), k[3].max(c[3])]);
                 d.set("Subtype", sub);
                 if !texto.is_empty() { d.set("Contents", texto_pdf(texto)); }
                 d.set("C", tinta.iter().map(|&v| v.into()).collect::<Vec<Object>>());
                 d.set("QuadPoints", caixas.iter().flat_map(|q| [q[0], q[3], q[2], q[3], q[0], q[1], q[2], q[1]]).map(Object::from).collect::<Vec<Object>>());
                 let mut conteudo = String::new();
                 let mut rec = Dictionary::new();
-                for q in caixas {
+                for q in &caixas {
                     let alto = q[3] - q[1];
                     conteudo += &match tipo {
                         Marcacao::Destacar => format!("/G0 gs {} rg {:.2} {:.2} {:.2} {:.2} re f\n", cor(tinta), q[0], q[1], q[2] - q[0], alto),
@@ -256,6 +261,19 @@ impl DocumentoPdf {
         d.set("AP", dictionary! { "N" => Object::Reference(ap) });
         let anotacao = self.documento.add_object(d);
         self.por_anotacao(id, anotacao)
+    }
+
+    /// Caixas (dos QuadPoints) das marcas `sub` (Highlight, Underline…) que a página já tem.
+    fn trechos_marcados(&self, pagina: lopdf::ObjectId, sub: &[u8]) -> Vec<[f32; 4]> {
+        self.lista_anotacoes(pagina).iter().filter_map(|o| match o { Object::Reference(r) => self.documento.get_dictionary(*r).ok(), o => o.as_dict().ok() })
+            .filter(|d| d.get(b"Subtype").and_then(Object::as_name).ok() == Some(sub))
+            .flat_map(|d| {
+                let n: Vec<f32> = d.get(b"QuadPoints").and_then(Object::as_array).map(|v| v.iter().filter_map(|x| x.as_float().ok()).collect()).unwrap_or_default();
+                n.chunks_exact(8).map(|q| {
+                    let (xs, ys) = ([q[0], q[2], q[4], q[6]], [q[1], q[3], q[5], q[7]]);
+                    [xs.iter().copied().fold(f32::MAX, f32::min), ys.iter().copied().fold(f32::MAX, f32::min), xs.iter().copied().fold(f32::MIN, f32::max), ys.iter().copied().fold(f32::MIN, f32::max)]
+                }).collect::<Vec<_>>()
+            }).collect()
     }
 
     /// Comentários de todas as páginas (sem links, campos de formulário e balões).
@@ -372,6 +390,10 @@ mod testes {
         let pdf = DocumentoPdf::de_bytes(&pdf.serializar().unwrap(), None).unwrap();
         let lista = pdf.anotacoes();
         assert_eq!(lista.iter().map(|a| a.tipo).collect::<Vec<_>>(), ["Destaque", "Nota", "Carimbo"]);
+        // Destacar de novo o mesmo trecho não empilha outro destaque.
+        let mut outra = pdf.clone();
+        let (caixas, texto) = outra.caixas_de_texto(1, [60.0, 690.0, 300.0, 720.0]).unwrap();
+        assert!(outra.anotar(1, &AnotacaoNova::Marcacao { tipo: Marcacao::Destacar, caixas, texto }, "Ana").is_err());
         assert_eq!((lista[1].texto.as_str(), lista[1].autor.as_str()), ("Olá", "Ana"));
         let mut pdf = pdf;
         pdf.apagar_anotacao(1, 1).unwrap();

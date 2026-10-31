@@ -398,7 +398,8 @@ impl App {
                 .width(l).height(a));
         if let Some(ed) = self.edicao.as_ref().filter(|e| e.pagina == n) {
             if let Some((r, _)) = caixas.get(ed.objeto) {
-                let tamanho = (r.height * 0.95).clamp(10.0, 72.0);
+                // A caixa da linha vai de -0,22 a +0,78 do corpo (objetos.rs): a altura dela é o tamanho da letra.
+                let tamanho = r.height.clamp(6.0, 200.0);
                 // Mesma família e peso da fonte da linha, sobre a cor do papel em volta dela.
                 let nome = match o.lista.get(ed.objeto).map(|ob| &ob.tipo) { Some(TipoObjeto::Texto { fonte, .. }) => fonte.to_lowercase(), _ => String::new() };
                 let fonte = Font {
@@ -443,7 +444,7 @@ impl App {
             for i in 0..40 {
                 let (px, py) = ((r.x + r.width * (i as f32 + 0.5) / 40.0) * k - ox, (r.y + r.height * (j as f32 + 0.5) / 12.0) * k - oy);
                 if px < 0.0 || py < 0.0 || px >= d.largura as f32 || py >= d.altura as f32 { continue; }
-                let at = (py as usize * d.largura as usize + px as usize) * 4;
+                let at = d.indice(px, py);
                 let Some(c) = pixels.get(at..at + 3) else { continue };
                 let dist = distancia(c);
                 if melhor.is_none_or(|(m, _)| dist > m) { melhor = Some((dist, [c[0], c[1], c[2]])); }
@@ -461,7 +462,7 @@ impl App {
         let ponto = |x: f32, y: f32| -> Option<Color> {
             let (px, py) = (x * k - ox, y * k - oy);
             if px < 0.0 || py < 0.0 || px >= d.largura as f32 || py >= d.altura as f32 { return None; }
-            let i = (py as usize * d.largura as usize + px as usize) * 4;
+            let i = d.indice(px, py);
             let p = pixels.get(i..i + 3)?;
             Some(Color::rgb8(p[0], p[1], p[2]))
         };

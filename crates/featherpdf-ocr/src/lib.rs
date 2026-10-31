@@ -128,14 +128,14 @@ impl Ocr {
     }
 
     fn plano<K: std::hash::Hash + Eq + Copy>(planos: &std::sync::Mutex<std::collections::HashMap<K, Plano>>, chave: K,
-        modelo: &InferenceModel, forma: [usize; 4]) -> Result<Plano, String> {
+        modelo: &InferenceModel, forma: [usize; 4], teto: usize) -> Result<Plano, String> {
         let mut planos = planos.lock().map_err(|e| e.to_string())?;
         if let Some(p) = planos.get(&chave) { return Ok(p.clone()); }
         let p = modelo.clone().with_input_fact(0, f32::fact(forma).into())
             .and_then(|m| m.into_optimized()).and_then(|m| m.into_runnable()).map_err(|e| format!("{e:?}"))?;
-        // Cada plano pesa centenas de MB e o OCR de área quase nunca repete o tamanho: sem teto, a memória só cresce.
-        // shortcut: esvazia tudo ao passar de 4; arredondar o tamanho para poucos degraus aproveitaria mais os planos.
-        if planos.len() >= 4 { planos.clear(); }
+        // Cada plano pesa centenas de MB. A detecção quase nunca repete o tamanho (OCR de área), então guarda só o último;
+        // o reconhecimento usa as faixas fixas de LARGURAS.
+        if planos.len() >= teto { planos.clear(); }
         planos.insert(chave, p.clone());
         Ok(p)
     }
@@ -152,7 +152,7 @@ impl Ocr {
             let v = amostra(img, x as f32 * img.largura as f32 / w as f32, y as f32 * img.altura as f32 / h as f32, 2 - c);
             (v / 255.0 - media[c]) / desvio[c]
         });
-        let plano = Self::plano(&self.deteccao, (h, w), &self.det, [1, 3, h, w])?;
+        let plano = Self::plano(&self.deteccao, (h, w), &self.det, [1, 3, h, w], 1)?;
         let saida = plano.run(tvec!(Tensor::from(entrada).into())).map_err(|e| e.to_string())?;
         let mapa = saida[0].to_plain_array_view::<f32>().map_err(|e| e.to_string())?;
         let mapa = mapa.into_shape_with_order((h, w)).map_err(|e| e.to_string())?;
@@ -175,7 +175,7 @@ impl Ocr {
             let v = amostra(img, x0 + (x as f32 + 0.5) * lc / w as f32, y0 + (y as f32 + 0.5) * ac / h as f32, 2 - c);
             (v / 255.0 - 0.5) / 0.5
         });
-        let plano = Self::plano(&self.reconhecimento, faixa, &self.rec, [1, 3, h, faixa])?;
+        let plano = Self::plano(&self.reconhecimento, faixa, &self.rec, [1, 3, h, faixa], LARGURAS.len())?;
         let saida = plano.run(tvec!(Tensor::from(entrada).into())).map_err(|e| e.to_string())?;
         let p = saida[0].to_plain_array_view::<f32>().map_err(|e| e.to_string())?;
         let (passos, classes) = (p.shape()[1], p.shape()[2]);

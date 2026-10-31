@@ -29,7 +29,8 @@ pub(crate) fn pasta_config() -> Option<PathBuf> {
     }
 }
 
-fn arquivo() -> Option<PathBuf> { pasta_config().map(|p| p.join("recentes.tsv")) }
+// Testes que salvam PDFs não podem encher a lista real do usuário.
+fn arquivo() -> Option<PathBuf> { if cfg!(test) { None } else { pasta_config().map(|p| p.join("recentes.tsv")) } }
 
 pub fn agora() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)

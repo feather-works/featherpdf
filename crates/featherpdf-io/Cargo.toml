@@ -12,6 +12,10 @@ featherpdf-core = { path = "../featherpdf-core" }
 feather-draw = { git = "https://github.com/feather-works/feather-draw", tag = "v0.1.1" }
 feather-io = { git = "https://github.com/feather-works/feather-io", tag = "v0.1.3" }
 hayro = "0.8.0"
+# Pinta cada trecho com várias threads (o rasterizador era ~25% do tempo do trecho no zoom alto).
+vello_cpu = { version = "0.3", features = ["multithreading"] }
+# O desenhador lê o PDF aberto direto do disco (páginas do arquivo, que o sistema pode liberar).
+memmap2 = "0.9"
 # Comprimir: reamostrar as fotos e regravar em JPEG.
 image = { version = "0.25", default-features = false, features = ["jpeg", "webp"] }
 jpeg-encoder = "0.7"

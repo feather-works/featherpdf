@@ -38,7 +38,7 @@ pub struct NivelZoom(u32);
 impl std::fmt::Display for NivelZoom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{}%", self.0) }
 }
-const NIVEIS: [NivelZoom; 9] = [NivelZoom(25), NivelZoom(50), NivelZoom(75), NivelZoom(100), NivelZoom(125), NivelZoom(150), NivelZoom(200), NivelZoom(300), NivelZoom(400)];
+const NIVEIS: [NivelZoom; 11] = [NivelZoom(25), NivelZoom(50), NivelZoom(75), NivelZoom(100), NivelZoom(125), NivelZoom(150), NivelZoom(200), NivelZoom(300), NivelZoom(400), NivelZoom(600), NivelZoom(800)];
 
 /// Cartão branco que flutua sobre o fundo cinza da janela.
 fn cartao(_: &Theme) -> Style {
@@ -56,6 +56,7 @@ fn divisoria<'a>(altura: f32) -> Element<'a, Msg> {
 }
 
 pub fn janela(app: &App) -> Element<'_, Msg> {
+    if app.aberto.is_none() { return app.view_inicio(); }
     let corpo: Element<'_, Msg> = if app.leitura {
         let sair = button(text("Sair da leitura (Esc)").size(12)).padding([5u16, 12]).style(estilo_botao_secundario).on_press(Msg::Leitura);
         column![barra_documento(app), stack![mesa(app), container(sair).width(Length::FILL).align_x(Align::End).padding(12u16)]].into()
@@ -75,9 +76,9 @@ pub fn janela(app: &App) -> Element<'_, Msg> {
             .push(container(rodape(app)).padding(Padding { top: 0.0, right: 12.0, bottom: 10.0, left: 12.0 }))
             .into()
     };
-    let tela = app.com_dialogo_campo(app.com_dialogo_comentario(app.com_protecao(app.com_dialogo_escala(
-        app.com_menu_ins(app.com_menu_contexto(app.com_dialogo_link(corpo)))))));
-    let mut camadas = stack![app.com_pedido_senha(tela), alcas()];
+    let tela = app.com_pergunta_fechar(app.com_dialogo_campo(app.com_dialogo_comentario(app.com_protecao(app.com_dialogo_escala(
+        app.com_menu_ins(app.com_menu_contexto(app.com_dialogo_link(corpo))))))));
+    let mut camadas = stack![app.com_pedido_senha(tela), alcas(Msg::Puxar)];
     if app.menu { camadas = camadas.push(menu_arquivo(app)); }
     if !app.busca_comandos.trim().is_empty() { camadas = camadas.push(resultados_comandos(app)); }
     if let Some((qual, canto)) = app.suspenso { camadas = camadas.push(menu_suspenso(qual, canto)); }
@@ -87,7 +88,7 @@ pub fn janela(app: &App) -> Element<'_, Msg> {
 }
 
 /// Linha de cima: pena, abas dos documentos, "+" e os botões da janela; o resto arrasta.
-fn barra_documento(app: &App) -> Element<'_, Msg> {
+pub(crate) fn barra_documento(app: &App) -> Element<'_, Msg> {
     // shortcut: abas demais passam da largura da janela (cada uma encolhe só até o nome com "…"); rolar a faixa de abas se alguém abrir dezenas.
     let mut abas = row![].spacing(2).height(Length::FILL).align(Align::End);
     for i in 0..app.guias.len() {
@@ -96,13 +97,17 @@ fn barra_documento(app: &App) -> Element<'_, Msg> {
             .style(|_, s| Style::default().border(Border::rounded(5.0)).text_color(COR_TEXTO_MUTED())
                 .background(if matches!(s, Status::Hovered | Status::Pressed) { COR_HOVER() } else { Color::TRANSPARENT }))
             .on_press(Msg::FecharGuia(i));
-        let mut conteudo = row![text(app.nome_da_aba(i)).size(13.5).font(if ativa { Font::SEMIBOLD } else { Font::DEFAULT }).no_wrap().ellipsis()]
+        // Sem documento (página inicial): a aba é o "Início", sem × nem "salvo".
+        let inicio = ativa && app.aberto.is_none();
+        let nome = if inicio { "Início".to_string() } else { app.nome_da_aba(i) };
+        let mut conteudo = row![text(nome).size(13.5).font(if ativa { Font::SEMIBOLD } else { Font::DEFAULT }).no_wrap().ellipsis()]
             .spacing(8).align(Align::Center);
-        if ativa {
+        if ativa && !inicio {
             let alterado = app.aberto.as_ref().is_some_and(|a| a.pdf.modificado() || a.pdf.origem().is_none());
             conteudo = conteudo.push(text(if alterado { "• não salvo" } else { "salvo" }).size(11.5).color(COR_TEXTO_MUTED()).no_wrap());
         }
-        let aba = container(conteudo.push(Element::from(fechar).access_label("Fechar aba")))
+        if !inicio { conteudo = conteudo.push(Element::from(fechar).access_label("Fechar aba")); }
+        let aba = container(conteudo)
             .padding(Padding { top: 0.0, right: 8.0, bottom: 0.0, left: 18.0 }).height(36.0).max_width(if ativa { 400.0 } else { 240.0 }).align_y(Align::Center)
             .style(move |_| {
                 let s = Style::default().border(Border { radius: [10.0, 10.0, 0.0, 0.0], ..Default::default() });
@@ -114,7 +119,7 @@ fn barra_documento(app: &App) -> Element<'_, Msg> {
         .style(|_, s| Style::default().background(if s == Status::Hovered { COR_HOVER() } else { COR_PAINEL() }).border(Border::rounded(8.0)).text_color(COR_TEXTO()))
         .on_press(Msg::NovoA4)).access_label("Novo PDF A4");
     let esquerda = container(row![
-        container(marca::icone_atual(26.)).padding([0u16, 10]),
+        container(marca::pena_atual(26.)).padding([0u16, 10]),
         abas,
         novo,
     ].spacing(8).align(Align::Center).height(Length::FILL)).padding(Padding { top: 6.0, left: 6.0, ..Padding::ZERO });
@@ -122,7 +127,15 @@ fn barra_documento(app: &App) -> Element<'_, Msg> {
     // ocupava a linha inteira e empurrava os botões da janela para fora.
     container(stack![
         mouse_area(Space::new(Length::FILL, Length::FILL)).on_press(Msg::Arrastar(WindowId::MAIN)).on_double_click(Msg::Maximizar(WindowId::MAIN)),
-        row![esquerda, horizontal_space(), feather_ui::cromo::controles_janela(App::acoes_janela(WindowId::MAIN))].height(Length::FILL).align(Align::Center),
+        row![esquerda, horizontal_space(),
+            // Na página inicial não há a faixa (que tem a engrenagem): ela fica aqui em cima.
+            Element::from(if app.aberto.is_none() {
+                container(Element::from(button(icone_traco("settings", 18.)).padding([6u16, 8])
+                    .style(|_, s| Style::default().border(Border::rounded(8.0)).text_color(COR_TEXTO_MUTED())
+                        .background(if matches!(s, Status::Hovered | Status::Pressed) { COR_HOVER() } else { Color::TRANSPARENT }))
+                    .on_press(Msg::AbrirConfiguracoes)).access_label("Configurações")).padding([0u16, 6])
+            } else { container(Space::new(0.0, 0.0)) }),
+            feather_ui::cromo::controles_janela(App::acoes_janela(WindowId::MAIN))].height(Length::FILL).align(Align::Center),
     ]).height(44.0).width(Length::FILL).style(|_| Style::default().background(COR_CROMO())).into()
 }
 
@@ -742,7 +755,7 @@ fn mesa(app: &App) -> Element<'_, Msg> {
     let conteudo: Element<'_, Msg> = if app.aba == Aba::Paginas && !app.leitura {
         app.organizador()
     } else {
-        let paginas = responsive(move |tamanho| paginas(app, tamanho.width));
+        let paginas = responsive(move |tamanho| { app.tamanho_mesa.set(tamanho); paginas(app, tamanho.width) });
         if app.busca.aberta {
             stack![paginas, container(app.barra_busca()).width(Length::FILL).align_x(Align::End).padding([10u16, 24])].into()
         } else {
@@ -772,10 +785,19 @@ fn paginas(app: &App, largura_visivel: f32) -> Element<'_, Msg> {
                     let img = image(d.imagem.clone()).width(d.largura as f32 * f).height(d.altura as f32 * f).content_fit(ContentFit::Fill);
                     match d.trecho {
                         None => img.into(),
-                        Some([x, y, ..]) => column![Space::new(0.0, y as f32 * f), row![Space::new(x as f32 * f, 0.0), img]].into(),
+                        Some([x, y, ..]) => {
+                            let trecho = column![Space::new(0.0, y as f32 * f), row![Space::new(x as f32 * f, 0.0), img]];
+                            match app.fundos.get(&n) {
+                                Some(fundo) => stack![image(fundo.clone()).width(l).height(a).content_fit(ContentFit::Fill), trecho].into(),
+                                None => trecho.into(),
+                            }
+                        }
                     }
                 }
-                None => Space::new(l, a).into(),
+                None => match app.fundos.get(&n) {
+                    Some(fundo) => image(fundo.clone()).width(l).height(a).content_fit(ContentFit::Fill).into(),
+                    None => Space::new(l, a).into(),
+                },
             };
             let folha = container(conteudo).width(l).height(a).clip(true).style(|_| Style::default().background(Color::WHITE)
                 .border(Border::default().color(COR_BORDA_SUAVE(), 1.0))
@@ -787,7 +809,10 @@ fn paginas(app: &App, largura_visivel: f32) -> Element<'_, Msg> {
         coluna = coluna.push(linha);
     }
     let largura = (mais_larga + 2.0 * VAO_PAGINAS).max(largura_visivel);
-    let mut rolagem = scrollable(coluna.width(largura)).id(ID_MESA).direction(Direction::Both).on_scroll(Msg::Rolou)
+    // Ctrl+roda é zoom: a área pega a roda antes do scrollable, senão ele também rola e a tela treme.
+    let mut dentro = mouse_area(coluna.width(largura));
+    if app.modificadores.control_key() { dentro = dentro.on_scroll(|_, dy, _| Msg::Roda(dy.signum())); }
+    let mut rolagem = scrollable(dentro).id(ID_MESA).direction(Direction::Both).on_scroll(Msg::Rolou)
         .width(Length::FILL).height(Length::FILL);
     // O padrão (cor do texto translúcida) fica claro demais sobre a mesa escura.
     if escuro() { rolagem = rolagem.scrollbar_color(Color::rgb8(0x45, 0x48, 0x4e)); }
@@ -944,9 +969,9 @@ fn menu_arquivo(app: &App) -> Element<'_, Msg> {
     ].into()
 }
 
-/// Bordas finas para redimensionar a janela sem moldura.
-fn alcas<'a>() -> Element<'a, Msg> {
-    let alca = |w: Length, h: Length, d: ResizeDirection, i: CursorIcon| mouse_area(Space::new(w, h)).on_press(Msg::Puxar(d)).cursor_icon(i);
+/// Bordas finas para redimensionar a janela sem moldura (a principal e as auxiliares).
+pub(crate) fn alcas<'a>(puxar: impl Fn(ResizeDirection) -> Msg) -> Element<'a, Msg> {
+    let alca = |w: Length, h: Length, d: ResizeDirection, i: CursorIcon| mouse_area(Space::new(w, h)).on_press(puxar(d)).cursor_icon(i);
     stack![
         container(alca(Length::Fixed(5.0), Length::FILL, ResizeDirection::East, CursorIcon::EResize)).width(Length::FILL).height(Length::FILL).align_x(Align::End),
         container(alca(Length::Fixed(5.0), Length::FILL, ResizeDirection::West, CursorIcon::WResize)).width(Length::FILL).height(Length::FILL),

@@ -179,7 +179,8 @@ impl App {
             let vis = aberto.vis.clone();
             let geracao = self.geracao;
             tarefas.push(Task::perform(async move {
-                tokio::task::spawn_blocking(move || vis.desenhar(pagina, escala)).await
+                let _vez = crate::DESENHOS.acquire().await;
+                tokio::task::spawn_blocking(move || { crate::alocador::prioridade_baixa(); vis.desenhar(pagina, escala) }).await
                     .unwrap_or_else(|e| Err(format!("Falha na tarefa de desenho: {e}")))
             }, move |resultado| Msg::Pag(Pag::Miniatura { geracao, pagina, resultado })));
         }

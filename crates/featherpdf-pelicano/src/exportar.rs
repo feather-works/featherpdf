@@ -219,7 +219,7 @@ impl App {
                             Formato::Slides => {
                                 // ~150 dpi: nítido no projetor sem a apresentação pesar demais.
                                 let tamanhos = vis.tamanhos();
-                                featherpdf_io::gravar_pptx(&destino, &paginas, |n| vis.desenhar(n, 150.0 / 72.0).map(|r| (r.largura, r.altura, r.rgba, tamanhos[n as usize - 1])))?;
+                                featherpdf_io::gravar_pptx(&destino, &paginas, |n| vis.desenhar_grande(n, 150.0 / 72.0).map(|r| (r.largura, r.altura, r.rgba, tamanhos[n as usize - 1])))?;
                                 Ok(format!("{} slide(s) em {}", paginas.len(), destino.display()))
                             }
                             Formato::Word => {
@@ -254,7 +254,7 @@ impl App {
                                 Ok(salvo)
                             }
                             _ if tipo == TipoImagem::Tiff => {
-                                featherpdf_io::gravar_tiff(&destino, &paginas, dpi, |n| vis.desenhar(n, dpi as f32 / 72.0).map(|r| (r.largura, r.altura, r.rgba)))?;
+                                featherpdf_io::gravar_tiff(&destino, &paginas, dpi, |n| vis.desenhar_grande(n, dpi as f32 / 72.0).map(|r| (r.largura, r.altura, r.rgba)))?;
                                 Ok(format!("{} página(s) em {}", paginas.len(), destino.display()))
                             }
                             _ => {
@@ -270,7 +270,7 @@ impl App {
                                         featherpdf_io::gravar_atomico(&arquivo, vis.svg(n)?.as_bytes()).map_err(|e| format!("{}: {e}", arquivo.display()))?;
                                         continue;
                                     }
-                                    let r = vis.desenhar(n, dpi as f32 / 72.0)?;
+                                    let r = vis.desenhar_grande(n, dpi as f32 / 72.0)?;
                                     if tipo == TipoImagem::Webp { featherpdf_io::gravar_webp(&arquivo, r.largura, r.altura, r.rgba)?; continue; }
                                     let img = image::RgbaImage::from_raw(r.largura, r.altura, r.rgba).ok_or("Página com tamanho incoerente.")?;
                                     let mut bytes = std::io::Cursor::new(Vec::new());
