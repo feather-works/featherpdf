@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=FeatherPDF
+GenericName=Editor de PDF
+Comment=Editor de PDF da suíte FeatherWorks — tudo local, sem conta
+Exec=featherpdf %F
+Icon=featherpdf
+Terminal=false
+Categories=Office;Viewer;
+Keywords=pdf;assinar;ocr;formulário;juntar;
+StartupWMClass=featherpdf
+MimeType=application/pdf;

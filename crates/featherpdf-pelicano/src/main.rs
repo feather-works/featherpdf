@@ -1150,7 +1150,7 @@ impl App {
             Msg::Abrir => {
                 self.menu = false;
                 return Task::perform(async {
-                    rfd::AsyncFileDialog::new().add_filter("PDF", &["pdf", "PDF"]).add_filter("Imagem (vira PDF)", &juntar::EXTENSOES_IMAGEM).pick_files().await
+                    rfd::AsyncFileDialog::new().add_filter("PDF", &["pdf", "PDF"]).add_filter("Imagem (vira PDF)", &juntar::EXTENSOES_IMAGEM).add_filter("Todos os arquivos", &["*"]).pick_files().await
                         .map(|hs| hs.iter().map(|h| h.path().to_path_buf()).collect())
                 }, Msg::CaminhoEscolhido);
             }
