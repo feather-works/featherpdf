@@ -1994,8 +1994,8 @@ source = "git+https://github.com/feather-works/feather-io?tag=v0.1.3#ba7dad98ada
 
 [[package]]
 name = "feather-ui"
-version = "0.3.10"
-source = "git+https://github.com/feather-works/feather-ui.git?rev=f5192cd#f5192cd50b143e71d69a293355b9143b28bb410e"
+version = "0.3.11"
+source = "git+https://github.com/feather-works/feather-ui.git?rev=daeb89b#daeb89b9d58c21c5ffd2c606f452818ef01ab76a"
 dependencies = [
  "pelicano",
  "windows-sys 0.59.0",
@@ -2004,7 +2004,7 @@ dependencies = [
 
 [[package]]
 name = "featherpdf-core"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "cms",
  "der",
@@ -2022,7 +2022,7 @@ dependencies = [
 
 [[package]]
 name = "featherpdf-io"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "feather-draw",
  "feather-io",
@@ -2042,7 +2042,7 @@ dependencies = [
 
 [[package]]
 name = "featherpdf-ocr"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "featherpdf-core",
  "featherpdf-io",
@@ -2052,7 +2052,7 @@ dependencies = [
 
 [[package]]
 name = "featherpdf-pelicano"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "ab_glyph",
  "arboard",
@@ -4053,8 +4053,8 @@ dependencies = [
 
 [[package]]
 name = "pelicano"
-version = "0.1.22"
-source = "git+https://github.com/feather-works/pelicano.git?tag=v0.1.22#44a22e2a696ca26bdb56256328b353ef3e409f41"
+version = "0.1.23"
+source = "git+https://github.com/feather-works/pelicano.git?tag=v0.1.23#ab798116523d17b77d2e135044aa04f8ba934234"
 dependencies = [
  "accesskit",
  "accesskit_winit",
@@ -4068,6 +4068,7 @@ dependencies = [
  "tokio",
  "wgpu",
  "window_clipboard",
+ "windows-sys 0.59.0",
  "winit",
 ]
 

@@ -1673,6 +1673,10 @@ impl pelicano::App for App {
             Some(Auxiliar::Fluxos) => self.view_fluxos(id),
             None => return tela::janela(self),
         };
+        // A auxiliar é transparente (cantos arredondados): sem este fundo, o que a tela não pinta
+        // (o vão entre os cartões do F12) ficava vazado.
+        let corpo = container(corpo).width(Length::FILL).height(Length::FILL).clip(true)
+            .style(|_| Style::default().background(tema::COR_FUNDO_JANELA()).border(Border::rounded(cromo::RAIO_JANELA).color(tema::COR_BORDA(), 1.0)));
         // Sem moldura do sistema, a auxiliar só muda de tamanho pelas bordas desenhadas aqui.
         pelicano::stack![corpo, tela::alcas(move |d| Msg::PuxarJanela(id, d))].into()
     }
