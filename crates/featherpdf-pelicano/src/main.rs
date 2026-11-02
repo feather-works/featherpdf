@@ -406,6 +406,8 @@ pub struct App {
     ajuda: feather_ui::ajuda::Estado,
     inicio_render: HashMap<u32, Instant>,
     monitor: monitor::EstadoMonitor,
+    /// Quando um painel (F1, F12) abriu ou fechou pelo teclado: ver `painel_cedo`.
+    painel_alternado: Option<std::time::Instant>,
     /// Menu Arquivo aberto.
     pub menu: bool,
     /// Menu suspenso aberto e o canto de cima à esquerda dele.
@@ -525,6 +527,7 @@ impl App {
             ajuda: feather_ui::ajuda::Estado::default(),
             inicio_render: HashMap::new(),
             monitor: monitor::EstadoMonitor::default(),
+            painel_alternado: None,
             menu: false,
             suspenso: None,
             mao: None,
@@ -1526,6 +1529,16 @@ impl App {
         }
     }
 
+    /// O mesmo atalho de painel logo depois de abrir ou fechar um: ignora. No Windows a janela que
+    /// ganha o foco com a tecla ainda apertada recebe de novo o aperto (sintético), e segurar
+    /// repete; o F12 abria o monitor, o monitor recebia o F12 e fechava, e assim seguia piscando.
+    fn painel_cedo(&mut self) -> bool {
+        let agora = std::time::Instant::now();
+        if self.painel_alternado.is_some_and(|t| agora.duration_since(t) < Duration::from_millis(500)) { return true; }
+        self.painel_alternado = Some(agora);
+        false
+    }
+
     fn tratar_tecla(&mut self, id: WindowId, key: Key, mods: Modifiers) -> Task<Msg> {
         if let Some(tipo) = self.janelas.tipo(id) {
             if tipo == Auxiliar::Fluxos && matches!(key, Key::Named(NamedKey::Delete)) { return self.update(Msg::Fluxos(fluxos::Fx::TirarEscolhido)); }
@@ -1534,10 +1547,14 @@ impl App {
                 Auxiliar::Monitor => atalhos::PainelGlobal::Monitor,
                 Auxiliar::Configuracoes | Auxiliar::Converter | Auxiliar::Ocr | Auxiliar::Imprimir | Auxiliar::Fluxos => atalhos::PainelGlobal::Configuracoes,
             };
-            if atalhos::fechar_painel(painel, &key, mods) { return self.update(Msg::FecharJanela(id)); }
+            if atalhos::fechar_painel(painel, &key, mods) {
+                if self.painel_cedo() { return Task::none(); }
+                return self.update(Msg::FecharJanela(id));
+            }
             return Task::none();
         }
         if let Some(acao) = atalhos::acao_global(&key, mods) {
+            if acao != atalhos::AcaoGlobal::AlternarFaixa && self.painel_cedo() { return Task::none(); }
             return match acao {
                 atalhos::AcaoGlobal::Ajuda => self.update(Msg::AbrirAjuda),
                 atalhos::AcaoGlobal::Monitor => self.update(Msg::AbrirMonitor),
