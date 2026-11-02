@@ -1,3 +1,4 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
 //! FeatherPDF no pelicano. A manipulação do PDF pertence ao core, o desenho das páginas ao
 //! featherpdf-io (Hayro) e tema, marca e diálogos ao feather-ui. A janela (barra com as abas
 //! de documento, faixa, painel de ferramentas, mesa, trilho e rodapé) fica em `tela.rs`; cada
