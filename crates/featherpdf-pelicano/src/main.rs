@@ -1985,11 +1985,23 @@ mod testes {
     fn captura() {
         use pelicano::App as _;
         let destino = std::env::var("FEATHERPDF_CAPTURA").expect("FEATHERPDF_CAPTURA=caminho.png");
-        let mut app = com_a4();
+        // `FEATHERPDF_CAPTURA_PDF=arquivo.pdf`: abre esse PDF (como o app abre) em vez do A4 em branco.
+        let mut app = match std::env::var_os("FEATHERPDF_CAPTURA_PDF").map(PathBuf::from) {
+            Some(caminho) => {
+                let (mut app, _) = App::novo();
+                let pdf = featherpdf_io::abrir_com_senha(&caminho, None).unwrap();
+                let vis = Visualizador::do_arquivo(&caminho, pdf.total_paginas()).unwrap_or_else(|| Visualizador::novo(pdf.serializar().unwrap()).unwrap());
+                let _ = app.update(Msg::Aberto(Ok((pdf, vis))));
+                app
+            }
+            None => com_a4(),
+        };
         app.viewport = Some((0.0, 1000.0, 640.0));
-        let resultado = app.aberto.as_ref().unwrap().vis.desenhar(1, 1.0);
-        let geracao = app.geracao;
-        let _ = app.update(Msg::Desenhada { geracao, pagina: 1, escala: 1.0, trecho: None, resultado });
+        for pagina in 1..=app.total_paginas().min(4) as u32 {
+            let resultado = app.aberto.as_ref().unwrap().vis.desenhar(pagina, 1.0);
+            let geracao = app.geracao;
+            let _ = app.update(Msg::Desenhada { geracao, pagina, escala: 1.0, trecho: None, resultado });
+        }
         let foto = |app: &App| capture(&app.view(), Size::new(1672.0, 941.0), 1.0, &app.theme(), &mut Renderer::new(), None);
         std::fs::write(&destino, foto(&app)).unwrap();
         if std::env::var_os("FEATHERPDF_CAPTURA_ABAS").is_some() {
