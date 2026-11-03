@@ -1,6 +1,19 @@
 # FeatherPDF
 
-**Produto FeatherOffice independente · versão 0.1.0 (pré-alpha)**
+**Produto FeatherOffice independente · versão 0.1.4**
+
+## Baixar
+
+[![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/featherpdf)
+
+| Sistema | Arquivo | Como instalar |
+|---|---|---|
+| **Windows 10/11** | [FeatherPDF-windows-x64.exe](https://github.com/feather-works/featherpdf/releases/latest/download/FeatherPDF-windows-x64.exe) | rode o instalador; ou use o [zip portátil](https://github.com/feather-works/featherpdf/releases/latest/download/FeatherPDF-windows-x64-portatil.zip) |
+| **Linux** (Snap Store) | [snapcraft.io/featherpdf](https://snapcraft.io/featherpdf) | `sudo snap install featherpdf` (atualiza sozinho) |
+| **Linux** (Ubuntu, Debian, Mint…) | [featherpdf-linux-amd64.deb](https://github.com/feather-works/featherpdf/releases/latest/download/featherpdf-linux-amd64.deb) | `sudo apt install ./featherpdf-linux-amd64.deb` |
+| **Linux** (qualquer distribuição) | [featherpdf-linux-x86_64.tar.gz](https://github.com/feather-works/featherpdf/releases/latest/download/featherpdf-linux-x86_64.tar.gz) | extraia e rode `./instalar.sh` |
+
+Todas as versões e os `SHA256SUMS` ficam na [página de releases](https://github.com/feather-works/featherpdf/releases).
 
 Editor nativo em **Rust + pelicano**. A página é exibida como PDF de verdade
 (textos, imagens e elementos gráficos), e o documento permanece vetorial para
