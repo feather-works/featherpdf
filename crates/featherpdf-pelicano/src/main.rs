@@ -702,8 +702,7 @@ impl App {
     fn descartar(&mut self) {
         self.geracao = self.geracao.wrapping_add(1);
         // Fica só o desenho em volta da página atual, para cobrir a tela enquanto o novo vem.
-        let atual = self.pagina;
-        self.desenhadas.retain(|&p, _| p.abs_diff(atual) <= 1);
+        self.soltar_longe();
         self.pedidas.clear();
         GERACAO.store(self.geracao, std::sync::atomic::Ordering::Relaxed);
     }
@@ -804,12 +803,26 @@ impl App {
         lista
     }
 
+    /// Páginas na tela e uma altura de página de cada lado: as que `pedir_visiveis` desenha e as que ficam na memória.
+    fn perto_da_tela(&self) -> Vec<(u32, Rect)> {
+        let (topo, _, altura) = self.viewport.unwrap_or((0.0, 0.0, 900.0));
+        self.posicoes().into_iter().filter(|(_, r)| r.y + r.height >= topo - r.height && r.y <= topo + altura + r.height).collect()
+    }
+
+    /// Guarda só o desenho das páginas perto da tela. Com "atual ± 1" a página da folga era
+    /// desenhada, jogada fora no `Rolou` seguinte e desenhada de novo, sem parar, durante a rolagem.
+    fn soltar_longe(&mut self) {
+        let perto: HashSet<u32> = self.perto_da_tela().into_iter().map(|(p, _)| p).collect();
+        self.desenhadas.retain(|p, _| perto.contains(p));
+        self.fundos.retain(|p, _| perto.contains(p));
+        self.fundos_pedidos.retain(|p| perto.contains(p));
+    }
+
     /// Pede as páginas na tela e uma de cada lado; as outras ficam como papel em branco.
     /// Página grande demais para um desenho só (zoom alto) é pedida só no trecho à vista.
     fn pedir_visiveis(&mut self) -> Task<Msg> {
         let (topo, largura, altura) = self.viewport.unwrap_or((0.0, 0.0, 900.0));
-        let visiveis: Vec<(u32, Rect)> = self.posicoes().into_iter()
-            .filter(|(_, r)| r.y + r.height >= topo - r.height && r.y <= topo + altura + r.height).collect();
+        let visiveis = self.perto_da_tela();
         self.ler_objetos(&visiveis.iter().map(|v| v.0).collect::<Vec<_>>());
         let Some(aberto) = &self.aberto else { return Task::none() };
         let escala = (self.zoom * self.escala_tela).clamp(0.1, 16.0);
@@ -1310,11 +1323,7 @@ impl App {
                 self.viewport = Some((vp.offset.y, vp.bounds.width, vp.bounds.height));
                 self.rolagem_x = vp.offset.x;
                 self.pagina = self.pagina_no_meio();
-                // Só o desenho em volta da página atual fica na memória.
-                let atual = self.pagina;
-                self.desenhadas.retain(|&p, _| p.abs_diff(atual) <= 1);
-                self.fundos.retain(|&p, _| p.abs_diff(atual) <= 1);
-                self.fundos_pedidos.retain(|&p| p.abs_diff(atual) <= 1);
+                self.soltar_longe();
                 // No meio do zoom, desenho novo chegaria num zoom que já passou e trocaria a imagem esticada.
                 if self.zoom_animado.is_some() || self.zoom_esperando { return Task::none(); }
                 return self.pedir_visiveis();
@@ -1936,6 +1945,24 @@ mod testes {
         let _ = app.update(Msg::DestinoEscolhido(app.id_aberto().unwrap(), Some(c.clone())));
         assert!(c.exists());
         let _ = std::fs::remove_file(&c);
+    }
+
+    #[test]
+    fn rolar_nao_joga_fora_a_pagina_da_folga() {
+        let mut app = com_a4();
+        for _ in 0..4 { let _ = app.update(Msg::Pag(organizar::Pag::InserirBranco)); }
+        app.viewport = Some((0.0, 1000.0, 900.0));
+        app.pagina = 1;
+        let perto: Vec<u32> = app.perto_da_tela().iter().map(|p| p.0).collect();
+        assert!(perto.contains(&3) && !perto.contains(&5), "{perto:?}");
+        for p in 1..=5 {
+            let d = Desenho { imagem: Image::from_rgba(1, 1, vec![0; 4]).unwrap(), pixels: Default::default(), passo: 1, largura: 1, altura: 1, geracao: app.geracao, escala: 1.0, trecho: None };
+            app.desenhadas.insert(p, d);
+        }
+        app.soltar_longe();
+        let mut ficou: Vec<u32> = app.desenhadas.keys().copied().collect();
+        ficou.sort();
+        assert_eq!(ficou, perto);
     }
 
     #[test]

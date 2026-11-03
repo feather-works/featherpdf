@@ -1,5 +1,5 @@
 ; Instalador do FeatherPDF para Windows (NSIS). Gerado por pacote/gerar.sh:
-;   makensis -DVERSAO=0.1.0 -DEXE=caminho/featherpdf-pelicano.exe -DSAIDA=caminho/instalador.exe pacote/featherpdf.nsi
+;   makensis -DVERSAO=0.1.0 -DEXE=caminho/featherpdf.exe -DSAIDA=caminho/instalador.exe pacote/featherpdf.nsi
 ; Instala para todos os usuários em "Arquivos de Programas\FeatherWorks\FeatherPDF" (pede
 ; administrador uma vez: só o administrador altera os .exe; a pasta FeatherWorks é da suíte), cria atalhos, entra no "Abrir com" do .pdf
 ; (sem tomar o lugar do leitor padrão) e registra o desinstalador em "Aplicativos instalados".

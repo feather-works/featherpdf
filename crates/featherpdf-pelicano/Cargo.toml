@@ -7,18 +7,18 @@ publish.workspace = true
 description = "Interface do FeatherPDF no pelicano (a nova tela; a versão Iced fica até tudo ser portado)"
 
 [[bin]]
-name = "featherpdf-pelicano"
+name = "featherpdf"
 path = "src/main.rs"
 
 [dependencies]
 featherpdf-core = { path = "../featherpdf-core" }
 featherpdf-io = { path = "../featherpdf-io" }
 featherpdf-ocr = { path = "../featherpdf-ocr" }
-# pelicano v0.1.23: pintura pela CPU bem mais rápida (rolagem no Intel HD 2500) e roda do Windows.
-pelicano = { git = "https://github.com/feather-works/pelicano.git", tag = "v0.1.23" }
-# Branch `featherpdf-v0.3.11` do feather-ui: o v0.3.11 (pelicano v0.1.23) mais a marca FeatherPDF e o F12;
+# pelicano v0.1.26: no Windows sem pintura na placa (Intel HD 2500), o quadro da CPU vai direto para a janela.
+pelicano = { git = "https://github.com/feather-works/pelicano.git", tag = "v0.1.26" }
+# Branch `featherpdf-v0.3.11` do feather-ui: o v0.3.11 (agora com o pelicano v0.1.26) mais a marca FeatherPDF e o F12;
 # trocar por uma tag quando a marca entrar no main.
-feather-ui = { git = "https://github.com/feather-works/feather-ui.git", rev = "daeb89b" }
+feather-ui = { git = "https://github.com/feather-works/feather-ui.git", rev = "49258d4" }
 feather-draw = { git = "https://github.com/feather-works/feather-draw", tag = "v0.1.1" }
 feather-shapes = { git = "https://github.com/feather-works/feather-shapes", tag = "v0.1.2" }
 rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "tokio"] }

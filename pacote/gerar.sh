@@ -29,7 +29,7 @@ compilar_linux() {
   if [[ -z $motor ]]; then
     echo "Sem podman nem docker: compilando aqui (o .deb vai pedir a glibc desta máquina)." >&2
     cargo build --release -p featherpdf-pelicano --manifest-path "$raiz/Cargo.toml"
-    bin="$alvo/release/featherpdf-pelicano"
+    bin="$alvo/release/featherpdf"
     return
   fi
   # A imagem com o Rust sai uma vez só; o registro de crates fica guardado num volume.
@@ -43,7 +43,7 @@ IMG
   fi
   "$motor" run --rm -v "$raiz":/src:z -v featherpdf-registro:/root/.cargo/registry -e CARGO_TARGET_DIR=/src/target/debian12 -e CARGO_BUILD_JOBS -w /src \
     featherpdf-debian12 cargo build --release -p featherpdf-pelicano
-  bin="$raiz/target/debian12/release/featherpdf-pelicano"
+  bin="$raiz/target/debian12/release/featherpdf"
 }
 
 linux() {
@@ -120,7 +120,7 @@ SH
 
 windows() {
   cargo build --release -p featherpdf-pelicano --target x86_64-pc-windows-gnu --manifest-path "$raiz/Cargo.toml"
-  local exe="$alvo/x86_64-pc-windows-gnu/release/featherpdf-pelicano.exe"
+  local exe="$alvo/x86_64-pc-windows-gnu/release/featherpdf.exe"
   x86_64-w64-mingw32-strip "$exe" 2>/dev/null || true
   (cd "$pacote" && makensis -V2 -DVERSAO="$versao" -DEXE="$exe" -DSAIDA="$saida/FeatherPDF-windows-x64.exe" featherpdf.nsi)
 }
