@@ -177,7 +177,9 @@ fn barra_abas(app: &App) -> Element<'_, Msg> {
         .style(|_| Style::default().background(COR_PAINEL()).border(Border::rounded(8.0).color(COR_BORDA(), 1.0)));
     let b = |nome: &str, dica: &str, msg: Option<Msg>| botao_icone(icone(nome, 20.), dica, msg, false);
     container(row![
-        menu, abas, horizontal_space(), pesquisa, Space::new(8.0, 0.0),
+        // Janela estreita: as abas rolam de lado e os botões da direita continuam à vista.
+        scrollable(row![menu, abas].spacing(6).align(Align::Center)).direction(Direction::Horizontal).scrollbar_width(3.0).width(Length::FILL).height(Length::Shrink),
+        pesquisa, Space::new(8.0, 0.0),
         b("arrow-back-up", "Desfazer (Ctrl+Z)", app.pode_desfazer().then_some(Msg::Desfazer)),
         b("arrow-forward-up", "Refazer (Ctrl+Y)", app.pode_refazer().then_some(Msg::Refazer)),
         b("device-floppy", "Salvar (Ctrl+S)", Some(Msg::Salvar)),
@@ -578,6 +580,7 @@ fn faixa_converter(app: &App) -> Vec<Element<'_, Msg>> {
             grande("file-text", Some(AZUL), "FeatherDocs", Some(Msg::ParaFeatherDocs), false),
             column![
                 pequeno("photo", None, "Imagens", Some(Msg::Exp(Ex::Abrir(Formato::Imagens))), false),
+                regiao("crop", "Copiar área", Uso::Imagem),
                 regiao("table", "Tabela do scan", Uso::Tabela),
                 regiao("chart-bar", "Gráfico para dados", Uso::Grafico),
             ],

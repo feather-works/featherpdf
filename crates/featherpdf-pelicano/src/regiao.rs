@@ -2,7 +2,8 @@
 //! - **OCR da área**: ler só aquele pedaço (o carimbo de uma prancha, uma nota no canto), copiar
 //!   ou deixar pesquisável;
 //! - **Tabela do scan**: ler a tabela escaneada da área e levar para planilha (.xlsx);
-//! - **Gráfico para dados**: tirar os pontos de um gráfico vetorial para planilha.
+//! - **Gráfico para dados**: tirar os pontos de um gráfico vetorial para planilha;
+//! - **Copiar como imagem**: o pedaço da página vai para a área de transferência (WhatsApp, Word).
 
 use std::path::PathBuf;
 
@@ -15,7 +16,7 @@ use crate::compat::*;
 use crate::{App, Ferramenta, Msg, Painel};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Uso { Ocr, Tabela, Grafico }
+pub enum Uso { Ocr, Tabela, Grafico, Imagem }
 
 #[derive(Debug, Clone)]
 pub enum Rr {
@@ -27,6 +28,8 @@ pub enum Rr {
     Salvar(Vec<TabelaPdf>, Option<PathBuf>),
     Copiar,
     Pesquisavel,
+    /// A área foi para a área de transferência: largura × altura em pixels.
+    ImagemCopiada(Result<(u32, u32), String>),
 }
 
 /// O texto lido da última área: página, linhas (caixa em fração da página vista) e o giro da leitura.
@@ -50,6 +53,7 @@ impl App {
                         Uso::Ocr => "Arraste um retângulo em volta do texto escaneado que quer ler.",
                         Uso::Tabela => "Arraste um retângulo em volta da tabela escaneada.",
                         Uso::Grafico => "Arraste um retângulo em volta do gráfico, incluindo os números dos eixos.",
+                        Uso::Imagem => "Arraste um retângulo em volta do que quer copiar como imagem.",
                     }.into();
                 }
                 return self.update_interno(Msg::Ferramenta(f));
@@ -64,6 +68,15 @@ impl App {
                 let (pl, pa) = aberto.tamanhos[pagina as usize - 1];
                 let (l, h) = (pl * self.zoom, pa * self.zoom);
                 let f = [a.x.min(b.x) / l, a.y.min(b.y) / h, a.x.max(b.x) / l, a.y.max(b.y) / h].map(|v| v.clamp(0.0, 1.0));
+                if uso == Uso::Imagem {
+                    let vis = aberto.vis.clone();
+                    let escala = escala_da_copia(((f[2] - f[0]) * pl, (f[3] - f[1]) * pa), self.zoom);
+                    self.status = "Copiando a área…".into();
+                    return Task::perform(async move {
+                        tokio::task::spawn_blocking(move || copiar_area(&vis, pagina, (pl, pa), f, escala))
+                            .await.unwrap_or_else(|e| Err(e.to_string()))
+                    }, |r| Msg::Regiao(Rr::ImagemCopiada(r)));
+                }
                 let Ok((geometria, giro)) = aberto.pdf.geometria(pagina) else { return Task::none() };
                 let vis = aberto.vis.clone();
                 let lingua = self.ocr.lingua;
@@ -118,6 +131,10 @@ impl App {
                 self.status = "Texto da área copiado.".into();
                 return Task::write_clipboard(v.iter().map(|x| x.0.as_str()).collect::<Vec<_>>().join("\n"));
             },
+            Rr::ImagemCopiada(r) => self.status = match r {
+                Ok((l, a)) => format!("Área copiada como imagem ({l} × {a} pixels): cole com Ctrl+V."),
+                Err(e) => e,
+            },
             Rr::Pesquisavel => if let Some((pagina, v, giro)) = self.regiao.lida.clone() {
                 return self.editar(move |pdf| {
                     let n = pdf.inserir_camada_ocr_girada(pagina, &v, giro)?;
@@ -147,6 +164,27 @@ impl App {
         ].spacing(10);
         scrollable(corpo.padding([0, 4])).height(Length::FILL).into()
     }
+}
+
+/// Pixels por ponto da cópia: o dobro do zoom da tela (nítida colada em outro lugar), de 2 a 8,
+/// e no máximo ~16 MP (uma área enorme não estoura a memória nem a área de transferência).
+fn escala_da_copia((l, a): (f32, f32), zoom: f32) -> f32 {
+    let teto = (16_000_000.0 / (l * a).max(1.0)).sqrt();
+    (zoom * 2.0).clamp(2.0, 8.0).min(teto)
+}
+
+/// Bloqueante: desenha o trecho `f` (fração da página vista) e põe na área de transferência.
+fn copiar_area(vis: &featherpdf_io::Visualizador, pagina: u32, (pl, pa): (f32, f32), f: [f32; 4], escala: f32) -> Result<(u32, u32), String> {
+    let (dl, dh) = (pl * escala, pa * escala);
+    let t = [(f[0] * dl) as u32, (f[1] * dh) as u32, ((f[2] - f[0]) * dl).ceil().max(1.0) as u32, ((f[3] - f[1]) * dh).ceil().max(1.0) as u32];
+    let r = vis.desenhar_trecho(pagina, escala, t)?;
+    // No Linux o conteúdo some quando o `Clipboard` é solto: este fica vivo até a próxima cópia.
+    static AREA: std::sync::Mutex<Option<arboard::Clipboard>> = std::sync::Mutex::new(None);
+    let mut area = AREA.lock().unwrap_or_else(|e| e.into_inner());
+    if area.is_none() { *area = Some(arboard::Clipboard::new().map_err(|e| format!("Área de transferência indisponível: {e}"))?); }
+    let imagem = arboard::ImageData { width: r.largura as usize, height: r.altura as usize, bytes: r.rgba.into() };
+    area.as_mut().expect("criado acima").set_image(imagem).map_err(|e| format!("Não consegui copiar a imagem: {e}"))?;
+    Ok((r.largura, r.altura))
 }
 
 /// Lê o texto do trecho `f` (fração da página vista) com o OCR. Para tabela, cada palavra com a
@@ -196,6 +234,15 @@ pub(crate) fn ler_area(vis: &featherpdf_io::Visualizador, pagina: u32, (pl, pa):
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    #[test]
+    fn copia_nitida_mas_com_teto_de_pixels() {
+        assert_eq!(escala_da_copia((100.0, 100.0), 0.5), 2.0);
+        assert_eq!(escala_da_copia((100.0, 100.0), 8.0), 8.0);
+        // Folha A1 inteira (2384 × 1684 pt): cai para caber em ~16 MP.
+        let e = escala_da_copia((2384.0, 1684.0), 2.0);
+        assert!(2384.0 * e * 1684.0 * e <= 16_000_001.0 && e > 1.0, "{e}");
+    }
 
     #[test]
     fn area_lida_fica_dentro_da_pagina_ao_tornar_pesquisavel() {

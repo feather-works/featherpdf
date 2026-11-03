@@ -1,4 +1,4 @@
-//! PDFs abertos recentemente: caminho, número de páginas e quando foi aberto.
+//! PDFs abertos recentemente: caminho, número de páginas, quando foi aberto e a página onde parou.
 //! Um arquivo de texto por usuário (`recentes.tsv` na pasta de configuração).
 
 use std::path::{Path, PathBuf};
@@ -12,6 +12,8 @@ pub struct Recente {
     pub paginas: u32,
     /// Segundos desde 1970 (UTC).
     pub aberto_em: u64,
+    /// Página onde a pessoa estava ao sair do documento (1 = começo).
+    pub pagina: u32,
 }
 
 #[derive(Debug, Default)]
@@ -48,14 +50,16 @@ impl Recentes {
             let caminho = PathBuf::from(partes.next()?);
             let paginas = partes.next()?.parse().ok()?;
             let aberto_em = partes.next()?.parse().ok()?;
-            Some(Recente { caminho, paginas, aberto_em })
+            // Coluna nova: listas gravadas antes dela voltam para o começo.
+            let pagina = partes.next().and_then(|p| p.parse().ok()).unwrap_or(1);
+            Some(Recente { caminho, paginas, aberto_em, pagina })
         }).take(MAXIMO).collect();
         Self { itens }
     }
 
     fn para_texto(&self) -> String {
         self.itens.iter()
-            .map(|r| format!("{}\t{}\t{}\n", r.caminho.display(), r.paginas, r.aberto_em))
+            .map(|r| format!("{}\t{}\t{}\t{}\n", r.caminho.display(), r.paginas, r.aberto_em, r.pagina))
             .collect()
     }
 
@@ -67,9 +71,27 @@ impl Recentes {
 
     /// Põe o arquivo no topo da lista e grava. Falha ao gravar não é erro de quem abriu.
     pub fn registrar(&mut self, caminho: &Path, paginas: u32) {
+        let pagina = self.pagina(caminho).filter(|&p| p <= paginas).unwrap_or(1);
         self.itens.retain(|r| r.caminho != caminho);
-        self.itens.insert(0, Recente { caminho: caminho.to_path_buf(), paginas, aberto_em: agora() });
+        self.itens.insert(0, Recente { caminho: caminho.to_path_buf(), paginas, aberto_em: agora(), pagina });
         self.itens.truncate(MAXIMO);
+        self.gravar();
+    }
+
+    /// Onde a pessoa parou neste arquivo, se ele está na lista.
+    pub fn pagina(&self, caminho: &Path) -> Option<u32> {
+        self.itens.iter().find(|r| r.caminho == caminho).map(|r| r.pagina)
+    }
+
+    /// Guarda a página onde a pessoa saiu do documento (só grava se mudou).
+    pub fn lembrar(&mut self, caminho: &Path, pagina: u32) {
+        let Some(r) = self.itens.iter_mut().find(|r| r.caminho == caminho) else { return };
+        if r.pagina == pagina { return; }
+        r.pagina = pagina;
+        self.gravar();
+    }
+
+    fn gravar(&self) {
         if let Some(a) = arquivo() {
             let _ = a.parent().map(std::fs::create_dir_all);
             let _ = featherpdf_io::gravar_atomico(&a, self.para_texto().as_bytes());
@@ -114,9 +136,22 @@ mod testes {
 
     #[test]
     fn texto_ida_e_volta_e_linha_quebrada_ignorada() {
-        let r = Recentes::de_texto("/a/x.pdf\t3\t100\nlixo\n/b/y.pdf\t1\t50\n");
+        let r = Recentes::de_texto("/a/x.pdf\t3\t100\t2\nlixo\n/b/y.pdf\t1\t50\n");
         assert_eq!(r.itens.len(), 2);
+        assert_eq!((r.itens[0].pagina, r.itens[1].pagina), (2, 1), "sem a coluna, começa na 1");
         assert_eq!(Recentes::de_texto(&r.para_texto()).itens, r.itens);
+    }
+
+    #[test]
+    fn lembra_a_pagina_e_esquece_se_o_arquivo_encolheu() {
+        let mut r = Recentes::default();
+        let c = Path::new("/a/x.pdf");
+        r.registrar(c, 10);
+        r.lembrar(c, 7);
+        r.registrar(c, 10);
+        assert_eq!(r.pagina(c), Some(7));
+        r.registrar(c, 5);
+        assert_eq!(r.pagina(c), Some(1));
     }
 
     #[test]

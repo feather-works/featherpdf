@@ -57,6 +57,80 @@ impl DocumentoPdf {
         mapa
     }
 
+    /// Links da página (começando em 1): caixa em pontos do PDF e para onde vão. Só endereço
+    /// http(s)/mailto e página do próprio documento; o resto (abrir arquivo, rodar programa) fica de fora.
+    pub fn links(&self, pagina: u32) -> Vec<([f32; 4], crate::Destino)> {
+        let doc = &self.documento;
+        let Ok(id) = self.id_pagina(pagina) else { return Vec::new() };
+        let numeros: std::collections::HashMap<lopdf::ObjectId, u32> = self.ids_paginas().into_iter().zip(1..).collect();
+        let mut saida = Vec::new();
+        for anotacao in self.lista_anotacoes(id) {
+            let Some(d) = resolver(doc, &anotacao).and_then(|o| o.as_dict().ok()) else { continue };
+            if d.get(b"Subtype").and_then(Object::as_name).ok() != Some(b"Link") { continue; }
+            let Ok(caixa) = d.get(b"Rect").and_then(Object::as_array) else { continue };
+            let v: Vec<f32> = caixa.iter().filter_map(|n| resolver(doc, n)).filter_map(|n| n.as_float().ok()).collect();
+            let [x0, y0, x1, y1] = v[..] else { continue };
+            let caixa = [x0.min(x1), y0.min(y1), x0.max(x1), y0.max(y1)];
+            let acao = d.get(b"A").ok().and_then(|a| resolver(doc, a)).and_then(|a| a.as_dict().ok());
+            let destino = match acao {
+                Some(a) => match a.get(b"S").and_then(Object::as_name).ok() {
+                    Some(b"URI") => a.get(b"URI").ok().and_then(|u| resolver(doc, u)).and_then(|u| u.as_str().ok())
+                        .map(|u| String::from_utf8_lossy(u).trim().to_string())
+                        .filter(|u| ["http://", "https://", "mailto:"].iter().any(|e| u.to_ascii_lowercase().starts_with(e)))
+                        .map(crate::Destino::Endereco),
+                    Some(b"GoTo") => a.get(b"D").ok().and_then(|x| self.pagina_do_destino(x, &numeros)).map(crate::Destino::Pagina),
+                    _ => None,
+                },
+                None => d.get(b"Dest").ok().and_then(|x| self.pagina_do_destino(x, &numeros)).map(crate::Destino::Pagina),
+            };
+            if let Some(destino) = destino { saida.push((caixa, destino)); }
+        }
+        saida
+    }
+
+    /// Página de um destino: `[página /Fit…]`, `<< /D [...] >>` ou um nome (catálogo `/Dests` ou árvore `/Names /Dests`).
+    fn pagina_do_destino(&self, destino: &Object, numeros: &std::collections::HashMap<lopdf::ObjectId, u32>) -> Option<u32> {
+        let doc = &self.documento;
+        let mut atual = resolver(doc, destino)?;
+        // Nome → valor → (dicionário com /D) → vetor; o limite evita volta em círculo.
+        for _ in 0..4 {
+            match atual {
+                Object::Array(v) => return v.first().and_then(|p| p.as_reference().ok()).and_then(|p| numeros.get(&p).copied())
+                    .or_else(|| v.first().and_then(|p| p.as_i64().ok()).and_then(|i| u32::try_from(i + 1).ok())),
+                Object::Dictionary(d) => atual = d.get(b"D").ok().and_then(|x| resolver(doc, x))?,
+                Object::Name(n) | Object::String(n, _) => atual = self.destino_com_nome(n)?,
+                _ => return None,
+            }
+        }
+        None
+    }
+
+    fn destino_com_nome(&self, nome: &[u8]) -> Option<&Object> {
+        let doc = &self.documento;
+        let catalogo = doc.catalog().ok()?;
+        let antigo = catalogo.get(b"Dests").ok().and_then(|d| resolver(doc, d)).and_then(|d| d.as_dict().ok())
+            .and_then(|d| d.get(nome).ok()).and_then(|o| resolver(doc, o));
+        if antigo.is_some() { return antigo; }
+        let raiz = catalogo.get(b"Names").ok().and_then(|n| resolver(doc, n)).and_then(|n| n.as_dict().ok())
+            .and_then(|n| n.get(b"Dests").ok()).and_then(|d| resolver(doc, d)).and_then(|d| d.as_dict().ok())?;
+        let mut pilha = vec![raiz];
+        let mut visitados = 0;
+        while let (Some(no), true) = (pilha.pop(), visitados < 10_000) {
+            visitados += 1;
+            if let Ok(nomes) = no.get(b"Names").and_then(Object::as_array) {
+                for par in nomes.chunks(2) {
+                    if let [chave, valor] = par {
+                        if resolver(doc, chave).and_then(|c| c.as_str().ok()) == Some(nome) { return resolver(doc, valor); }
+                    }
+                }
+            }
+            if let Ok(filhos) = no.get(b"Kids").and_then(Object::as_array) {
+                pilha.extend(filhos.iter().filter_map(|k| resolver(doc, k)).filter_map(|k| k.as_dict().ok()));
+            }
+        }
+        None
+    }
+
     /// Especificações de arquivo da árvore EmbeddedFiles, na ordem dos nomes.
     fn especificacoes(&self) -> Vec<(String, &Dictionary)> {
         let doc = &self.documento;
@@ -131,5 +205,25 @@ mod testes {
         assert_eq!(pdf.anexos(), [crate::Anexo { nome: "dados.csv".into(), tamanho: 7 }]);
         assert_eq!(pdf.anexo(0).unwrap().1, b"a;b\n1;2");
         assert_eq!(pdf.marcadores(), [crate::Marcador { nivel: 1, titulo: "POLÍCIA".into(), pagina: 1 }]);
+    }
+
+    #[test]
+    fn links_da_pagina_endereco_pagina_e_nome() {
+        let mut pdf = crate::testes::pdf_teste();
+        pdf.inserir_link(1, [10.0, 10.0, 50.0, 20.0], crate::Destino::Endereco("exemplo.com".into())).unwrap();
+        pdf.inserir_link(1, [10.0, 30.0, 50.0, 40.0], crate::Destino::Pagina(1)).unwrap();
+        let doc = &mut pdf.documento;
+        let pagina = *doc.get_pages().get(&1).unwrap();
+        // Destino com nome (árvore /Names /Dests) e um link que tenta abrir programa.
+        let nomeado = doc.add_object(dictionary! { "Type" => "Annot", "Subtype" => "Link", "Rect" => vec![0.into(), 0.into(), 5.into(), 5.into()], "Dest" => Object::string_literal("cap1") });
+        let programa = doc.add_object(dictionary! { "Type" => "Annot", "Subtype" => "Link", "Rect" => vec![0.into(), 0.into(), 5.into(), 5.into()],
+            "A" => dictionary! { "S" => "URI", "URI" => Object::string_literal("file:///c:/windows/calc.exe") } });
+        doc.catalog_mut().unwrap().set("Names", dictionary! { "Dests" => dictionary! { "Names" => vec![Object::string_literal("cap1"), vec![pagina.into(), "Fit".into()].into()] } });
+        let annots = doc.get_dictionary(pagina).unwrap().get(b"Annots").unwrap().clone();
+        let mut lista = match annots { Object::Array(v) => v, Object::Reference(r) => doc.get_object(r).unwrap().as_array().unwrap().clone(), _ => vec![] };
+        lista.extend([nomeado.into(), programa.into()]);
+        doc.get_dictionary_mut(pagina).unwrap().set("Annots", lista);
+        let destinos: Vec<crate::Destino> = pdf.links(1).into_iter().map(|l| l.1).collect();
+        assert_eq!(destinos, [crate::Destino::Endereco("https://exemplo.com".into()), crate::Destino::Pagina(1), crate::Destino::Pagina(1)]);
     }
 }

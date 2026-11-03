@@ -1,9 +1,10 @@
-//! Painéis Marcadores (o sumário do PDF, clicar leva à página) e Anexos (salvar o arquivo anexado).
+//! Painéis Marcadores (o sumário do PDF, clicar leva à página) e Anexos (salvar o arquivo anexado),
+//! e os links do próprio PDF clicáveis na página.
 
 use std::path::PathBuf;
 
 use feather_ui::{icones, tema};
-use featherpdf_core::{numero, Anexo, Marcador};
+use featherpdf_core::{numero, Anexo, Destino, Marcador};
 
 use pelicano::*;
 use pelicano::column;
@@ -15,6 +16,8 @@ pub enum Nv {
     Salvar(usize),
     /// Id do documento (`Aberto::id`), anexo e destino.
     Destino(u64, usize, Option<PathBuf>),
+    /// Link de site do PDF (já filtrado para http/https/mailto em `DocumentoPdf::links`).
+    Site(String),
 }
 
 /// O que os dois painéis mostram, lido quando o painel abre.
@@ -42,6 +45,10 @@ impl App {
             }
             Nv::Destino(_, _, None) => {}
             Nv::Destino(doc, _, Some(_)) if Some(doc) != self.id_aberto() => self.status = "O documento mudou: o anexo não foi salvo.".into(),
+            Nv::Site(url) => self.status = match abrir_site(&url) {
+                Ok(()) => format!("Abrindo {url} no navegador."),
+                Err(e) => format!("Não consegui abrir {url}: {e}"),
+            },
             Nv::Destino(_, i, Some(destino)) => if let Some(a) = &self.aberto {
                 self.status = match a.pdf.anexo(i).and_then(|(_, b)| featherpdf_io::gravar_atomico(&destino, &b)) {
                     Ok(()) => format!("Anexo salvo em {}", destino.display()),
@@ -50,6 +57,30 @@ impl App {
             },
         }
         Task::none()
+    }
+
+    /// Áreas clicáveis por cima dos links da página `n` (tamanho na tela `l` × `a`), na ferramenta Selecionar.
+    // shortcut: relê os links do lopdf a cada desenho da tela (poucas anotações por página); guardar por página se pesar.
+    pub fn camada_links(&self, n: u32, l: f32, a: f32) -> Option<Element<'_, Msg>> {
+        if self.ferramenta != crate::Ferramenta::Selecionar { return None; }
+        let ab = self.aberto.as_ref()?;
+        let links = ab.pdf.links(n);
+        if links.is_empty() { return None; }
+        let (pagina, giro) = ab.pdf.geometria(n).ok()?;
+        let mut pilha = Stack::new().width(l).height(a);
+        for (caixa, destino) in links {
+            let r = crate::edicao::na_tela(caixa, pagina, giro, self.zoom);
+            let (msg, dica) = match destino {
+                Destino::Pagina(p) => (Msg::IrPagina(p), format!("Ir para a página {p}")),
+                Destino::Endereco(url) => (Msg::Nav(Nv::Site(url.clone())), url),
+            };
+            let area = mouse_area(Space::new(r.width.max(4.0), r.height.max(4.0))).on_press(msg).cursor_icon(CursorIcon::Pointer);
+            pilha = pilha.push(column![
+                Space::with_height(r.y.max(0.0)),
+                row![Space::with_width(r.x.max(0.0)), tooltip(area, dica, TooltipPosition::Bottom).style(tema::estilo_dica)],
+            ]);
+        }
+        Some(pilha.into())
     }
 
     pub fn painel_marcadores(&self) -> Element<'_, Msg> {
@@ -89,5 +120,35 @@ impl App {
             ].spacing(8).align_y(Align::Center));
         }
         scrollable(lista).height(Length::FILL).into()
+    }
+}
+
+/// Abre o endereço no navegador padrão. Só http, https e mailto: link de PDF não abre arquivo nem programa.
+fn abrir_site(url: &str) -> Result<(), String> {
+    let minusculo = url.to_ascii_lowercase();
+    if !["http://", "https://", "mailto:"].iter().any(|e| minusculo.starts_with(e)) { return Err("endereço não é de site".into()); }
+    // O rundll32 recebe o endereço inteiro como um argumento (o `cmd /c start` quebraria no `&`).
+    let mut comando = if cfg!(windows) {
+        let mut c = std::process::Command::new("rundll32");
+        c.args(["url.dll,FileProtocolHandler", url]);
+        c
+    } else if cfg!(target_os = "macos") {
+        let mut c = std::process::Command::new("open");
+        c.arg(url);
+        c
+    } else {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(url);
+        c
+    };
+    comando.spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod testes_site {
+    #[test]
+    fn site_recusa_o_que_nao_e_endereco() {
+        assert!(super::abrir_site("file:///c:/windows/calc.exe").is_err());
+        assert!(super::abrir_site("javascript:alert(1)").is_err());
     }
 }

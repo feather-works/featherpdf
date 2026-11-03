@@ -43,6 +43,8 @@ pub struct Medidas {
     pub dialogo: Option<DialogoEscala>,
     /// O imã (grudar nos cantos do desenho) vem ligado; isto o desliga.
     pub sem_ima: bool,
+    /// A pessoa escolheu a escala na mão: a gravada pelo CAD na planta não passa por cima.
+    pub escala_manual: bool,
     /// Vértices de cada página na tela, guardados pelo zoom e pela versão do documento.
     ima: std::cell::RefCell<std::collections::HashMap<u32, (f32, u64, std::sync::Arc<Vec<Point>>)>>,
 }
@@ -284,7 +286,15 @@ impl App {
             Med::Ponto { pagina, p } => {
                 let Some(ponto) = self.ponto_na_pagina(pagina, p) else { return Task::none() };
                 let Some(medidor) = self.medidor() else { return Task::none() };
+                let comecando = !matches!(&self.medidas.atual, Some((pag, _)) if *pag == pagina);
+                // Planta do CAD com escala gravada onde a medida começa: usa ela (calibrar continua mandando).
+                let da_planta = (comecando && !self.medidas.escala_manual && medidor != Medidor::Calibrar)
+                    .then(|| self.aberto.as_ref()?.pdf.escala_da_planta(pagina, ponto)).flatten();
                 let m = &mut self.medidas;
+                if let Some(e) = da_planta.filter(|e| *e != m.escala) {
+                    m.escala = e;
+                    self.status = format!("Escala lida da planta: {}.", e.rotulo());
+                }
                 match &mut m.atual {
                     Some((pag, pts)) if *pag == pagina => pts.push(ponto),
                     _ => m.atual = Some((pagina, vec![ponto])),
@@ -337,6 +347,7 @@ impl App {
                 let Some(d) = &m.dialogo else { return Task::none() };
                 let Some(escala) = escala_do_dialogo(d) else { return Task::none() };
                 m.escala = escala;
+                m.escala_manual = true;
                 m.dialogo = None;
                 self.status = format!("Escala {}.", escala.rotulo());
                 if self.medidor() == Some(Medidor::Calibrar) { self.ferramenta = Ferramenta::Medir(Medidor::Medir(TipoMedida::Distancia)); }

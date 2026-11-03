@@ -14,11 +14,11 @@ path = "src/main.rs"
 featherpdf-core = { path = "../featherpdf-core" }
 featherpdf-io = { path = "../featherpdf-io" }
 featherpdf-ocr = { path = "../featherpdf-ocr" }
-# pelicano v0.1.26: no Windows sem pintura na placa (Intel HD 2500), o quadro da CPU vai direto para a janela.
-pelicano = { git = "https://github.com/feather-works/pelicano.git", tag = "v0.1.26" }
-# Branch `featherpdf-v0.3.11` do feather-ui: o v0.3.11 (agora com o pelicano v0.1.26) mais a marca FeatherPDF e o F12;
+# pelicano v0.1.27: Image::pixel (a edição lê a cor da letra sem guardar uma segunda cópia da página).
+pelicano = { git = "https://github.com/feather-works/pelicano.git", tag = "v0.1.27" }
+# Branch `featherpdf-v0.3.11` do feather-ui: o v0.3.11 (agora com o pelicano v0.1.27) mais a marca FeatherPDF e o F12;
 # trocar por uma tag quando a marca entrar no main.
-feather-ui = { git = "https://github.com/feather-works/feather-ui.git", rev = "49258d4" }
+feather-ui = { git = "https://github.com/feather-works/feather-ui.git", rev = "9ae4c34" }
 feather-draw = { git = "https://github.com/feather-works/feather-draw", tag = "v0.1.1" }
 feather-shapes = { git = "https://github.com/feather-works/feather-shapes", tag = "v0.1.2" }
 rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "tokio"] }
@@ -31,6 +31,10 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg"]
 # Scripts: o mesmo motor de macros (Boa, sandbox) do FeatherSheet.
 feather-macros = { git = "https://github.com/feather-works/feather-io", tag = "v0.1.3" }
 serde_json = "1"
+
+[target.'cfg(windows)'.dependencies]
+# Imprimir no Windows pelo GDI (imprimir_windows.rs); a mesma versão que o winit já traz.
+windows-sys = { version = "0.61", features = ["Win32_Graphics_Gdi", "Win32_Graphics_Printing", "Win32_Storage_Xps", "Win32_Foundation"] }
 
 [build-dependencies]
 # Ícone, manifesto e nome do .exe do Windows (build.rs).

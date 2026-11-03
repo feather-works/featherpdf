@@ -16,6 +16,8 @@ mod contexto;
 mod copias;
 mod desbloquear;
 mod edicao;
+mod imprimir_windows;
+mod instancia;
 mod equacao;
 mod exportar;
 mod fluxos;
@@ -75,20 +77,12 @@ pub fn id_mesa() -> &'static str { ID_MESA }
 /// Desenho de uma página inteira, ou só do trecho à vista quando a página
 /// inteira passaria de [`LIMITE_INTEIRA`] pixels (zoom alto numa planta A1).
 impl Desenho {
-    /// Onde está, em `pixels`, o pixel (`x`, `y`) do desenho inteiro.
-    pub fn indice(&self, x: f32, y: f32) -> usize {
-        let p = self.passo.max(1) as usize;
-        let largura = (self.largura as usize).div_ceil(p);
-        ((y as usize / p) * largura + x as usize / p) * 4
-    }
+    /// Cor RGBA do pixel (`x`, `y`) do desenho, lida da própria imagem da tela (sem segunda cópia).
+    pub fn cor(&self, x: f32, y: f32) -> Option<[u8; 4]> { self.imagem.pixel(x as u32, y as u32) }
 }
 
 pub struct Desenho {
     pub imagem: Image,
-    /// Os pixels em RGBA, um a cada `passo` em cada direção, para a edição pegar a cor da
-    /// letra e do papel (a imagem da tela não devolve os dela; inteira seria o dobro da memória).
-    pub pixels: std::sync::Arc<Vec<u8>>,
-    pub passo: u32,
     pub largura: u32,
     pub altura: u32,
     pub geracao: u64,
@@ -125,6 +119,8 @@ pub enum Msg {
     NovoA4,
     Abrir,
     AbrirCaminho(PathBuf),
+    /// Dois cliques num PDF com o app aberto: chegou da outra instância (`instancia.rs`).
+    DeOutraInstancia(PathBuf),
     CaminhoEscolhido(Option<Vec<PathBuf>>),
     Aberto(Result<(DocumentoPdf, Visualizador), String>),
     Salvar,
@@ -583,6 +579,7 @@ impl App {
 
     /// O documento da frente vai para a gaveta com zoom, rolagem e Ctrl+Z dele.
     fn guardar_guia(&mut self) -> Option<Guia> {
+        self.lembrar_pagina();
         Some(Guia {
             aberto: self.aberto.take()?,
             historico: std::mem::take(&mut self.historico),
@@ -592,6 +589,11 @@ impl App {
             pagina: self.pagina,
             rolagem: Point::new(self.rolagem_x, self.viewport.map_or(0.0, |v| v.0)),
         })
+    }
+
+    /// O documento da frente sai da tela: os recentes guardam a página para voltar nela.
+    fn lembrar_pagina(&mut self) {
+        if let Some(c) = self.aberto.as_ref().and_then(|a| a.pdf.origem()) { self.recentes.lembrar(c, self.pagina); }
     }
 
     /// Põe a aba `i` na frente.
@@ -672,6 +674,7 @@ impl App {
         self.fechar_pendente = None;
         if self.guias.len() == 1 {
             // Última aba: volta para a página inicial.
+            self.lembrar_pagina();
             self.aberto = None;
             self.historico.clear();
             self.refeitos.clear();
@@ -1043,7 +1046,12 @@ impl App {
         let do_disco = pdf.origem().is_some();
         let entrar = self.entrar_sem_registro(pdf, vis);
         if !do_disco { return entrar; }
-        Task::batch([entrar, self.zoom_ao_abrir()])
+        let zoom = self.zoom_ao_abrir();
+        // Volta para onde parou da última vez (depois do zoom: a posição depende dele).
+        let parou = self.aberto.as_ref().and_then(|a| a.pdf.origem()).and_then(|c| self.recentes.pagina(c)).filter(|&p| p > 1);
+        let Some(p) = parou else { return Task::batch([entrar, zoom]) };
+        self.pagina = p;
+        Task::batch([entrar, zoom, self.rolar_para(p)])
     }
 
     /// Põe o documento na frente e recomeça as ferramentas, sem mexer nas abas.
@@ -1172,6 +1180,7 @@ impl App {
                 }, Msg::CaminhoEscolhido);
             }
             Msg::CaminhoEscolhido(Some(caminhos)) => return Task::batch(caminhos.into_iter().map(|c| Self::abrir_caminho(c, None))),
+            Msg::DeOutraInstancia(caminho) => return Task::batch([self.update_interno(Msg::AbrirCaminho(caminho)), Task::window(WindowCmd::Focus)]),
             Msg::AbrirCaminho(caminho) => {
                 self.status = format!("Abrindo {}…", caminho.display());
                 return Self::abrir_caminho(caminho, None);
@@ -1305,13 +1314,10 @@ impl App {
                 }
                 match resultado.and_then(|r| {
                     let (l, a) = (r.largura, r.altura);
-                    // Página grande (planta A1 com zoom): a amostra pula um pixel; sem mistura, a cor da letra fica pura.
-                    let passo = if l as u64 * a as u64 > 4_000_000 { 2 } else { 1 };
-                    let pixels = std::sync::Arc::new(amostra_rgba(&r.rgba, l, a, passo));
-                    Image::from_rgba(l, a, r.rgba).map(|i| (i, pixels, passo, l, a)).ok_or_else(|| "imagem inválida".to_string())
+                    Image::from_rgba(l, a, r.rgba).map(|i| (i, l, a)).ok_or_else(|| "imagem inválida".to_string())
                 }) {
-                    Ok((imagem, pixels, passo, largura, altura)) => {
-                        self.desenhadas.insert(pagina, Desenho { imagem, pixels, passo, largura, altura, geracao, escala, trecho });
+                    Ok((imagem, largura, altura)) => {
+                        self.desenhadas.insert(pagina, Desenho { imagem, largura, altura, geracao, escala, trecho });
                         alocador::devolver();
                     }
                     Err(e) => self.status = format!("Página {pagina}: {e}"),
@@ -1507,6 +1513,7 @@ impl App {
                     self.perguntar_fechar = Some(usize::MAX);
                     return Task::none();
                 }
+                self.lembrar_pagina();
                 return Task::window(WindowCmd::Close);
             }
             Msg::Teclado(id, key, mods) => return self.tratar_tecla(id, key, mods),
@@ -1693,7 +1700,8 @@ impl pelicano::App for App {
     fn theme(&self) -> Theme { tema::tema() }
 
     fn subscription(&self) -> Subscription<Msg> {
-        let mut subs = Vec::new();
+        use pelicano::futures::StreamExt;
+        let mut subs = vec![Subscription::run_with_id("instancia", instancia::recebidos().map(Msg::DeOutraInstancia))];
         if self.janelas.aberta(Auxiliar::Monitor) {
             subs.push(Subscription::every(Duration::from_secs(1)).map(|_| Msg::MonitorTick));
         }
@@ -1747,16 +1755,6 @@ impl pelicano::App for App {
     }
 }
 
-/// Um pixel RGBA a cada `passo`, em cada direção (`passo` 1 copia tudo).
-fn amostra_rgba(rgba: &[u8], largura: u32, altura: u32, passo: u32) -> Vec<u8> {
-    let (l, p) = (largura as usize, passo.max(1) as usize);
-    let mut v = Vec::with_capacity(rgba.len() / (p * p) + 4);
-    for y in (0..altura as usize).step_by(p) {
-        for x in (0..l).step_by(p) { v.extend_from_slice(&rgba[(y * l + x) * 4..(y * l + x) * 4 + 4]); }
-    }
-    v
-}
-
 /// O glibc guarda a memória liberada para reaproveitar e não devolve ao sistema: cada desenho de página
 /// em zoom alto (dezenas de MB) deixava o RSS em 2–3 GB com só ~100 MB em uso de verdade.
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
@@ -1800,6 +1798,9 @@ static GERACAO: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new
 
 fn main() -> Result<(), Error> {
     alocador::configurar();
+    // Já aberto: o PDF vira aba lá, e este processo nem abre janela.
+    if std::env::args_os().nth(1).is_some_and(|c| instancia::mandar_para_aberta(std::path::Path::new(&c))) { return Ok(()); }
+    instancia::escutar();
     // shortcut: o winit 0.30 não entrega arquivo solto no Wayland (só X11), então roda pelo XWayland;
     // tirar quando o pelicano tratar wl_data_device. Sem DISPLAY (sem XWayland) fica no Wayland mesmo.
     if std::env::var_os("DISPLAY").is_some() && std::env::var_os("FEATHER_WAYLAND").is_none() {
@@ -1956,7 +1957,7 @@ mod testes {
         let perto: Vec<u32> = app.perto_da_tela().iter().map(|p| p.0).collect();
         assert!(perto.contains(&3) && !perto.contains(&5), "{perto:?}");
         for p in 1..=5 {
-            let d = Desenho { imagem: Image::from_rgba(1, 1, vec![0; 4]).unwrap(), pixels: Default::default(), passo: 1, largura: 1, altura: 1, geracao: app.geracao, escala: 1.0, trecho: None };
+            let d = Desenho { imagem: Image::from_rgba(1, 1, vec![0; 4]).unwrap(), largura: 1, altura: 1, geracao: app.geracao, escala: 1.0, trecho: None };
             app.desenhadas.insert(p, d);
         }
         app.soltar_longe();
@@ -2043,15 +2044,12 @@ mod testes {
     }
 
     #[test]
-    fn amostra_da_pagina_acha_o_mesmo_pixel() {
+    fn cor_do_desenho_acha_o_mesmo_pixel() {
         // 5 × 3 pixels, cada um com o próprio número no vermelho.
         let rgba: Vec<u8> = (0..15u8).flat_map(|i| [i, 0, 0, 255]).collect();
-        let pixels = std::sync::Arc::new(amostra_rgba(&rgba, 5, 3, 2));
-        assert_eq!(pixels.len(), 3 * 2 * 4, "3 colunas (0, 2, 4) × 2 linhas (0, 2)");
-        let d = Desenho { imagem: Image::from_rgba(5, 3, rgba).unwrap(), pixels, passo: 2, largura: 5, altura: 3, geracao: 0, escala: 1.0, trecho: None };
-        // (4, 2) é o pixel 14; (3, 1) cai na amostra (2, 0), o pixel 2.
-        assert_eq!(d.pixels[d.indice(4.0, 2.0)], 14);
-        assert_eq!(d.pixels[d.indice(3.0, 1.0)], 2);
+        let d = Desenho { imagem: Image::from_rgba(5, 3, rgba).unwrap(), largura: 5, altura: 3, geracao: 0, escala: 1.0, trecho: None };
+        assert_eq!(d.cor(4.0, 2.0).map(|c| c[0]), Some(14));
+        assert_eq!(d.cor(3.5, 1.2).map(|c| c[0]), Some(8));
     }
 
 }

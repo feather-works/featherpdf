@@ -1,6 +1,7 @@
 //! Imprimir (Ctrl+P): janela própria, como a do Acrobat, que manda o documento (com as
-//! edições ainda não salvas) para o CUPS pelo `lp`. Impressora, cópias, páginas, frente
-//! e verso, preto e branco, ajustar à folha, páginas por folha e ordem inversa.
+//! edições ainda não salvas) para o CUPS pelo `lp` ou, no Windows, pelo GDI
+//! (`imprimir_windows.rs`). Impressora, cópias, páginas, frente e verso, preto e branco,
+//! ajustar à folha, páginas por folha e ordem inversa.
 
 use feather_ui::dialogo as dlg;
 use feather_ui::{cromo, tema};
@@ -84,7 +85,11 @@ fn ler_intervalo(texto: &str, total: u32) -> Option<Vec<u32>> {
     (!v.is_empty()).then_some(v)
 }
 
-/// Impressoras do CUPS e a padrão (`lpstat`). Sem CUPS (Windows), lista vazia.
+#[cfg(windows)]
+use crate::imprimir_windows::impressoras;
+
+/// Impressoras do CUPS e a padrão (`lpstat`).
+#[cfg(not(windows))]
 fn impressoras() -> (Vec<String>, Option<String>) {
     let saida = |args: &[&str]| std::process::Command::new("lpstat").args(args).env("LC_ALL", "C").output().ok()
         .filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
@@ -105,6 +110,7 @@ impl Impressao {
     }
 
     /// Argumentos do `lp` (sem o arquivo).
+    #[cfg_attr(windows, allow(dead_code))]
     fn argumentos(&self, impressora: &str, atual: u32) -> Vec<String> {
         let mut a = vec!["-d".into(), impressora.into(), "-n".into(), self.copias.to_string(), "-t".into(), "FeatherPDF".into()];
         let mut o = |op: String| { a.push("-o".into()); a.push(op); };
@@ -190,10 +196,22 @@ impl App {
             Im::Imprimir => {
                 let (Some(a), Some(impressora)) = (&self.aberto, p.impressora.clone()) else { return Task::none() };
                 if p.escolhidas(total, atual).is_none() { return Task::none(); }
-                let args = p.argumentos(&impressora, atual);
-                let pdf = a.pdf.clone();
                 p.enviando = true;
                 p.resultado = None;
+                #[cfg(windows)]
+                {
+                    let pedido = crate::imprimir_windows::Pedido { impressora, paginas: p.escolhidas(total, atual).unwrap_or_default(), copias: p.copias,
+                        agrupar: p.agrupar, lados: p.lados, orientacao: p.orientacao, cinza: p.cinza, ajustar: p.ajustar, por_folha: p.por_folha, inversa: p.inversa };
+                    let (vis, tamanhos) = (a.vis.clone(), a.tamanhos.clone());
+                    return Task::perform(async move {
+                        tokio::task::spawn_blocking(move || crate::imprimir_windows::imprimir(&vis, &tamanhos, pedido)).await.unwrap_or_else(|e| Err(e.to_string()))
+                    }, |r| Msg::Imp(Im::Pronto(r)));
+                }
+                #[cfg(not(windows))]
+                let args = p.argumentos(&impressora, atual);
+                #[cfg(not(windows))]
+                let pdf = a.pdf.clone();
+                #[cfg(not(windows))]
                 return Task::perform(async move {
                     tokio::task::spawn_blocking(move || -> Result<String, String> {
                         // O documento como está na tela, com as edições ainda não salvas.
@@ -232,7 +250,8 @@ impl App {
         let escolha_impressora: Element<'_, Msg> = if p.procurando {
             text("Procurando impressoras…").size(13).color(muted).into()
         } else if p.impressoras.is_empty() {
-            text("Nenhuma impressora instalada (CUPS). Instale uma nas configurações do sistema.").size(12.5).color(muted).into()
+            text(if cfg!(windows) { "Nenhuma impressora instalada. Instale uma em Configurações → Impressoras." }
+                else { "Nenhuma impressora instalada (CUPS). Instale uma nas configurações do sistema." }).size(12.5).color(muted).into()
         } else {
             suspensa(p.impressoras.clone(), p.impressora.clone(), |i| Msg::Imp(Im::Impressora(i))).text_size(13).padding([8, 4])
                 .width(Length::FILL).into()

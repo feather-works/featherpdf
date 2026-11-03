@@ -137,9 +137,70 @@ pub fn medir(tipo: TipoMedida, pontos: &[(f32, f32)], escala: &Escala) -> (f64, 
     }
 }
 
+impl Unidade {
+    /// O rótulo de unidade que o CAD grava no `/Measure` ("m", "mm", "in", "ft"…).
+    fn do_rotulo(r: &str) -> Option<Self> {
+        Some(match r.trim().to_lowercase().as_str() {
+            "mm" => Unidade::Mm, "cm" => Unidade::Cm, "m" => Unidade::M, "km" => Unidade::Km,
+            "in" | "pol" | "\"" => Unidade::Pol, "ft" | "pé" | "pe" | "'" => Unidade::Pe,
+            _ => return None,
+        })
+    }
+}
+
+impl crate::DocumentoPdf {
+    /// Escala que o CAD gravou na folha (viewport `/VP` com `/Measure /RL`, PDF 1.6) na área
+    /// do ponto `(x, y)` em pontos da página. `None`: sem escala gravada ali ou numa unidade que não conhecemos.
+    pub fn escala_da_planta(&self, pagina: u32, (x, y): (f32, f32)) -> Option<Escala> {
+        use lopdf::Object;
+        let doc = &self.documento;
+        let r = |o: &'_ Object| -> Option<Object> { match o { Object::Reference(id) => doc.get_object(*id).ok().cloned(), o => Some(o.clone()) } };
+        let id = self.id_pagina(pagina).ok()?;
+        let vps = r(doc.get_dictionary(id).ok()?.get(b"VP").ok()?)?.as_array().ok()?.clone();
+        // Os últimos da lista valem por cima dos primeiros (PDF 32000, 12.9).
+        vps.iter().rev().filter_map(|v| r(v)?.as_dict().ok().cloned()).find_map(|vp| {
+            let caixa: Vec<f32> = r(vp.get(b"BBox").ok()?)?.as_array().ok()?.iter().filter_map(|n| r(n)?.as_float().ok()).collect();
+            let [x0, y0, x1, y1] = caixa[..] else { return None };
+            if x < x0.min(x1) || x > x0.max(x1) || y < y0.min(y1) || y > y0.max(y1) { return None; }
+            let medida = r(vp.get(b"Measure").ok()?)?.as_dict().ok()?.clone();
+            if medida.get(b"Subtype").ok().and_then(|s| s.as_name().ok()).is_some_and(|s| s != b"RL") { return None; }
+            // Distância (/D) se houver; senão o eixo X. Só o primeiro formato converte do papel; os outros são subdivisões.
+            let formatos = medida.get(b"D").ok().or_else(|| medida.get(b"X").ok()).and_then(r)?;
+            let primeiro = r(formatos.as_array().ok()?.first()?)?.as_dict().ok()?.clone();
+            let fator = r(primeiro.get(b"C").ok()?)?.as_float().ok()? as f64;
+            let rotulo = r(primeiro.get(b"U").ok()?)?;
+            let unidade = Unidade::do_rotulo(&lopdf::decode_text_string(&rotulo).ok()?)?;
+            if !(fator > 0.0 && fator.is_finite()) { return None; }
+            // 1:50 vira proporção; um fator quebrado fica como calibrado.
+            let n = fator / unidade.por_ponto();
+            let proporcao = ((n - n.round()).abs() < n * 1e-3).then(|| n.round());
+            Some(Escala { unidade, fator, proporcao })
+        })
+    }
+}
+
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    #[test]
+    fn escala_gravada_pelo_cad_na_area_do_ponto() {
+        use lopdf::{dictionary, Object};
+        let mut pdf = crate::testes::pdf_teste();
+        let doc = &mut pdf.documento;
+        let pagina = *doc.get_pages().get(&1).unwrap();
+        // Planta 1:50 em metros: 1 pt = 25,4/72 mm × 50 = 0,017638… m.
+        let c = 25.4 / 72.0 / 1000.0 * 50.0;
+        let medida = |c: f32, u: &str| dictionary! { "Type" => "Measure", "Subtype" => "RL", "R" => Object::string_literal("1:50"),
+            "X" => vec![dictionary! { "U" => Object::string_literal(u), "C" => c }.into()] };
+        let vp = |caixa: [i64; 4], m: lopdf::Dictionary| Object::from(dictionary! { "Type" => "Viewport",
+            "BBox" => caixa.iter().map(|&v| v.into()).collect::<Vec<Object>>(), "Measure" => m });
+        doc.get_dictionary_mut(pagina).unwrap().set("VP", vec![vp([0, 0, 300, 400], medida(c, "m")), vp([300, 0, 595, 400], medida(0.123, "furlong"))]);
+        let e = pdf.escala_da_planta(1, (100.0, 100.0)).unwrap();
+        assert_eq!((e.unidade, e.proporcao), (super::Unidade::M, Some(50.0)));
+        assert!(pdf.escala_da_planta(1, (400.0, 100.0)).is_none(), "unidade desconhecida");
+        assert!(pdf.escala_da_planta(1, (100.0, 600.0)).is_none(), "fora das janelas");
+    }
 
     #[test]
     fn medidas_na_escala() {

@@ -380,9 +380,11 @@ impl App {
             let assinatura = self.camada_assinatura(n, l, a);
             let selecao = self.camada_selecao(n, l, a);
             let regiao = self.camada_regiao(n, l, a);
-            if destaques.is_none() && medidas.is_none() && tarjas.is_none() && comentar.is_none() && campos.is_none() && assinatura.is_none() && selecao.is_none() && regiao.is_none() { return pagina; }
+            let links = self.camada_links(n, l, a);
+            if destaques.is_none() && medidas.is_none() && tarjas.is_none() && comentar.is_none() && campos.is_none() && assinatura.is_none() && selecao.is_none() && regiao.is_none() && links.is_none() { return pagina; }
+            // Os links por cima da seleção de texto: clicar no link segue, como num navegador.
             return Stack::new().width(l).height(a).push(pagina).push_maybe(destaques).push_maybe(selecao).push_maybe(medidas)
-                .push_maybe(tarjas).push_maybe(comentar).push_maybe(campos).push_maybe(assinatura).push_maybe(regiao).into();
+                .push_maybe(tarjas).push_maybe(comentar).push_maybe(campos).push_maybe(assinatura).push_maybe(regiao).push_maybe(links).into();
         };
         let caixas: Vec<(Rect, bool)> = o.lista.iter()
             .map(|ob| (na_tela(ob.caixa, o.caixa, o.giro, self.zoom), matches!(ob.tipo, TipoObjeto::Texto { .. })))
@@ -435,7 +437,6 @@ impl App {
     /// A cor mais distante do papel dentro de `r`: a da letra (preta, vermelha de botão, branca sobre fundo escuro).
     fn cor_da_tinta(&self, pagina: u32, r: Rect, papel: Color) -> Option<Color> {
         let d = self.desenhadas.get(&pagina)?;
-        let pixels = &d.pixels;
         let k = d.escala / self.zoom;
         let (ox, oy) = d.trecho.map_or((0.0, 0.0), |t| (t[0] as f32, t[1] as f32));
         let distancia = |c: &[u8]| (c[0] as f32 / 255.0 - papel.r).abs() + (c[1] as f32 / 255.0 - papel.g).abs() + (c[2] as f32 / 255.0 - papel.b).abs();
@@ -444,9 +445,8 @@ impl App {
             for i in 0..40 {
                 let (px, py) = ((r.x + r.width * (i as f32 + 0.5) / 40.0) * k - ox, (r.y + r.height * (j as f32 + 0.5) / 12.0) * k - oy);
                 if px < 0.0 || py < 0.0 || px >= d.largura as f32 || py >= d.altura as f32 { continue; }
-                let at = d.indice(px, py);
-                let Some(c) = pixels.get(at..at + 3) else { continue };
-                let dist = distancia(c);
+                let Some(c) = d.cor(px, py) else { continue };
+                let dist = distancia(&c);
                 if melhor.is_none_or(|(m, _)| dist > m) { melhor = Some((dist, [c[0], c[1], c[2]])); }
             }
         }
@@ -456,14 +456,12 @@ impl App {
     /// Cor do desenho da página logo à esquerda do retângulo `r` (na tela, sem o zoom da janela).
     fn cor_do_papel(&self, pagina: u32, r: Rect) -> Option<Color> {
         let d = self.desenhadas.get(&pagina)?;
-        let pixels = &d.pixels;
         let k = d.escala / self.zoom;
         let (ox, oy) = d.trecho.map_or((0.0, 0.0), |t| (t[0] as f32, t[1] as f32));
         let ponto = |x: f32, y: f32| -> Option<Color> {
             let (px, py) = (x * k - ox, y * k - oy);
             if px < 0.0 || py < 0.0 || px >= d.largura as f32 || py >= d.altura as f32 { return None; }
-            let i = d.indice(px, py);
-            let p = pixels.get(i..i + 3)?;
+            let p = d.cor(px, py)?;
             Some(Color::rgb8(p[0], p[1], p[2]))
         };
         let meio = r.y + r.height / 2.0;
