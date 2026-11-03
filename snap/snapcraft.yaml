@@ -1,0 +1,95 @@
+name: featherpdf
+title: FeatherPDF
+base: core26 # mesma base e mesma placa de vídeo (gpu-2604) do snap do FeatherSheet
+version: '0.1.4' # trocar junto com a tag em `source:` a cada versão
+summary: Light local PDF editor, no account needed
+description: |
+  A PDF editor written in Rust with a native interface. Read, annotate,
+  fill forms, sign, merge and split pages, run OCR on scans and print.
+  Everything runs on your machine: no account, no login, no telemetry.
+license: GPL-3.0-only
+website: https://github.com/feather-works/featherpdf
+issues: https://github.com/feather-works/featherpdf/issues
+source-code: https://github.com/feather-works/featherpdf
+contact: https://github.com/feather-works/featherpdf/issues
+icon: pacote/icones/featherpdf-512.png
+grade: stable
+confinement: strict
+platforms:
+  amd64:
+
+plugs:
+  gpu-2604:
+    interface: content
+    target: $SNAP/gpu-2604
+    default-provider: mesa-2604
+
+layout:
+  /usr/share/libdrm:
+    bind: $SNAP/gpu-2604/libdrm
+  /usr/share/drirc.d:
+    symlink: $SNAP/gpu-2604/drirc.d
+  # O Compose do pt_BR inclui o do en_US por caminho absoluto (acentos com tecla morta).
+  /usr/share/X11/locale:
+    bind: $SNAP/gpu-2604/mesa-2604/usr/share/X11/locale
+
+apps:
+  featherpdf:
+    command: usr/bin/featherpdf
+    command-chain: [bin/gpu-2604-wrapper, bin/janela.sh]
+    desktop: usr/share/applications/featherpdf.desktop
+    common-id: featherpdf
+    plugs:
+      - desktop
+      - desktop-legacy
+      - wayland
+      - x11
+      - opengl
+      - home
+      - removable-media # arquivos em /media e /run/media
+      - network # baixar os modelos do OCR (curl)
+      - cups # imprimir (lp/lpstat)
+
+parts:
+  featherpdf:
+    # Reaproveita o .deb da release (feito pelo pacote/gerar.sh), sem recompilar.
+    plugin: dump
+    source: https://github.com/feather-works/featherpdf/releases/download/v0.1.4/featherpdf-linux-amd64.deb
+    source-type: deb
+    # Bibliotecas que o winit/wgpu e as fontes abrem por dlopen; curl (modelos do OCR)
+    # e lp/lpstat (impressão) que o FeatherPDF chama.
+    stage-packages:
+      - libxkbcommon0
+      - libxkbcommon-x11-0
+      - libwayland-client0
+      - libwayland-cursor0
+      - libwayland-egl1
+      - libx11-6
+      - libx11-xcb1
+      - libxcursor1
+      - libxi6
+      - libxrandr2
+      - libvulkan1
+      - libfontconfig1
+      - curl
+      - cups-client
+    override-build: |
+      craftctl default
+      sed -i 's#^Icon=.*#Icon=${SNAP}/usr/share/icons/hicolor/512x512/apps/featherpdf.png#' \
+        ${CRAFT_PART_INSTALL}/usr/share/applications/featherpdf.desktop
+
+  janela:
+    plugin: dump
+    source: snap/local
+    organize:
+      janela.sh: bin/janela.sh
+
+  gpu-2604:
+    after: [featherpdf]
+    source: https://github.com/canonical/gpu-snap.git
+    plugin: dump
+    override-prime: |
+      craftctl default
+      ${CRAFT_PART_SRC}/bin/gpu-2604-cleanup mesa-2604
+    prime:
+      - bin/gpu-2604-wrapper
