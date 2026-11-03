@@ -4,12 +4,13 @@
 #   featherpdf-linux-x86_64.tar.gz   Linux portátil (instalar.sh na pasta do usuário)
 #   featherpdf-linux-amd64.deb       Debian, Ubuntu, Mint…
 #   FeatherPDF-windows-x64.exe       Windows 10/11 (instalador em Program Files\FeatherWorks, pede administrador)
+#   FeatherPDF-windows-x64-portatil.zip  Windows sem instalar (descompactar e abrir o featherpdf.exe)
 #   SHA256SUMS
 #
 # Uso: pacote/gerar.sh [linux|windows ...]   (sem argumentos = todos)
 # Precisa de: cargo, dpkg-deb, objdump; podman ou docker para o Linux (sem eles compila aqui,
 # e o .deb só instala em distros com a glibc desta máquina); para Windows, o alvo
-# x86_64-pc-windows-gnu, mingw-w64 e makensis.
+# x86_64-pc-windows-gnu, mingw-w64, makensis e zip.
 set -euo pipefail
 
 pacote="$(cd "$(dirname "$0")" && pwd)"
@@ -123,6 +124,12 @@ windows() {
   local exe="$alvo/x86_64-pc-windows-gnu/release/featherpdf.exe"
   x86_64-w64-mingw32-strip "$exe" 2>/dev/null || true
   (cd "$pacote" && makensis -V2 -DVERSAO="$versao" -DEXE="$exe" -DSAIDA="$saida/FeatherPDF-windows-x64.exe" featherpdf.nsi)
+  # Portátil: o mesmo .exe numa pasta FeatherPDF, sem instalar nem pedir administrador.
+  local t; t="$(mktemp -d)"
+  mkdir "$t/FeatherPDF" && cp "$exe" "$t/FeatherPDF/featherpdf.exe"
+  rm -f "$saida/FeatherPDF-windows-x64-portatil.zip"
+  (cd "$t" && zip -qr9 "$saida/FeatherPDF-windows-x64-portatil.zip" FeatherPDF)
+  rm -rf "$t"
 }
 
 for a in "${alvos[@]}"; do
