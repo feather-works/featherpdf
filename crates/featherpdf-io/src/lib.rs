@@ -152,8 +152,17 @@ pub fn clarear_fundo_jpeg(img: featherpdf_core::ImagemCrua<'_>) -> Option<(Vec<u
 pub fn limpar_caderno_jpeg(img: featherpdf_core::ImagemCrua<'_>) -> Option<(Vec<u8>, u32, u32)> {
     let mut rgb = decodificar(img)?.to_rgb8();
     let (l, h) = rgb.dimensions();
+    if !parece_papel(image::DynamicImage::ImageRgb8(rgb.clone()).to_luma8().as_raw(), l, h) { return None; }
     featherpdf_core::limpar_caderno(&mut rgb, l, h);
     em_jpeg(image::DynamicImage::ImageRgb8(rgb))
+}
+
+/// Foto de folha, não foto comum nem logotipo: grande, com contraste e com a maior parte
+/// dos pixels perto do branco do papel.
+fn parece_papel(brilho: &[u8], largura: u32, altura: u32) -> bool {
+    let Some((_, branco)) = niveis_do_papel(brilho) else { return false };
+    let claros = brilho.iter().filter(|&&v| v as f32 >= branco - 40.0).count();
+    largura.min(altura) >= 500 && claros * 2 >= brilho.len()
 }
 
 /// Pontos preto e branco do papel pelo histograma do brilho.
@@ -742,6 +751,17 @@ pub fn dados_do_computador() -> String {
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    #[test]
+    fn caderno_so_mexe_em_folha() {
+        // Folha: papel claro com linhas de tinta. Foto: degradê. Logotipo: pequeno.
+        let folha: Vec<u8> = (0..600 * 800).map(|i| if (i / 600) % 40 == 0 { 30 } else { 200 }).collect();
+        let foto: Vec<u8> = (0..600 * 800).map(|i| ((i % 600) * 255 / 600) as u8).collect();
+        let logo: Vec<u8> = (0..100 * 100).map(|i| if i % 7 == 0 { 0 } else { 255 }).collect();
+        assert!(parece_papel(&folha, 600, 800));
+        assert!(!parece_papel(&foto, 600, 800));
+        assert!(!parece_papel(&logo, 100, 100));
+    }
 
     #[test]
     fn pagina_grande_sai_em_pedacos_colados() {

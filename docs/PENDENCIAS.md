@@ -7,7 +7,7 @@ usuário (19/10), e com ele o achado sobre `\alphax`.
 
 ### Precisa corrigir
 
-1. **"Limpar caderno" estraga fotos e logotipos.** `featherpdf-io/src/lib.rs`
+1. ✅ (04/11) **"Limpar caderno" estraga fotos e logotipos.** Agora só limpa imagem grande e quase toda papel (`parece_papel`). `featherpdf-io/src/lib.rs`
    `limpar_caderno_jpeg` (chamado por `Msg::LimparCaderno` e pelo bloco do fluxo). O
    `limpar_fundo` passa *toda* imagem pelo filtro; o `clarear_fundo_jpeg` testa antes se a
    imagem parece papel (`niveis_do_papel`), o caderno não. Correção: a mesma checagem no
@@ -16,7 +16,7 @@ usuário (19/10), e com ele o achado sobre `\alphax`.
    linha só = folga da esquerda espelhada). Em artigo de duas colunas a linha da esquerda
    cresce até a borda da página, por cima da direita. Correção: com uma linha, usar o maior
    `caixa[2]` das linhas de texto da página que começam no mesmo x (±2 pt).
-3. **Falso "pode faltar rubrica".** `featherpdf-pelicano/src/reconhecer.rs` (`CANTO`) +
+3. ✅ (já corrigido, conferido em 04/11) **Falso "pode faltar rubrica".** `featherpdf-pelicano/src/reconhecer.rs` (`CANTO`) +
    `featherpdf-core/src/reconhecer.rs` (`rubricas_faltando`). Número de página e rodapé
    impressos contam como tinta: num documento numerado a partir da página 2, a capa é
    apontada. Correção: passar como `ignorar` as caixas de texto do canto (o `conteudo(p)`
@@ -24,10 +24,10 @@ usuário (19/10), e com ele o achado sobre `\alphax`.
 
 ### Deveria corrigir
 
-4. **Fluxo em lote recarrega as fontes do sistema a cada PDF.**
+4. ✅ (04/11) **Fluxo em lote recarrega as fontes do sistema a cada PDF.** Agora `OnceLock`.
    `featherpdf-io/src/fontes.rs` `embutir_fontes_do_sistema` cria `fontdb::Database` e
    varre o sistema em toda chamada. Correção: `OnceLock<fontdb::Database>`.
-5. **Script trava a janela em PDF grande.** `featherpdf-pelicano/src/scripts.rs` `Sc::Rodar`
+5. ✅ (já corrigido, conferido em 04/11: roda em `spawn_blocking`) **Script trava a janela em PDF grande.** `featherpdf-pelicano/src/scripts.rs` `Sc::Rodar`
    roda na thread da janela e grava o documento inteiro duas vezes só para saber se mudou.
    Correção: o hospedeiro marca `mudou` nas operações que escrevem.
 6. **Testes novos da GUI nunca rodaram:** `edicao.rs` (`arrasto_gruda_na_guia_e_na_grade`)

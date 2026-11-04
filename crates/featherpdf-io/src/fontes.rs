@@ -35,8 +35,9 @@ fn candidatas(familia: &str) -> Vec<String> {
 /// Embute cada fonte de fora que achar. Devolve (original, a que entrou) de cada uma e as que
 /// não acharam nenhuma.
 pub fn embutir_fontes_do_sistema(pdf: &mut DocumentoPdf) -> Result<(Vec<(String, String)>, Vec<String>), String> {
-    let mut db = fontdb::Database::new();
-    db.load_system_fonts();
+    // Varre as fontes do sistema uma vez só: o fluxo em lote chama isto a cada PDF.
+    static FONTES: std::sync::OnceLock<fontdb::Database> = std::sync::OnceLock::new();
+    let db = FONTES.get_or_init(|| { let mut db = fontdb::Database::new(); db.load_system_fonts(); db });
     let (mut feitas, mut faltaram) = (Vec::new(), Vec::new());
     for (id, base) in pdf.fontes_sem_embutir() {
         let (familia, negrito, italico) = ler_nome(&base);
