@@ -1022,8 +1022,17 @@ impl App {
         let rolar = self.mudar_zoom_e(zoom, move |app| {
             let Some((_, r)) = app.posicoes().into_iter().find(|p| p.0 == n) else { return app.rolar_para(n) };
             // Pixel inteiro: meio pixel de rolagem faz a imagem tremer a cada quadro.
-            let alvo = Point::new((r.x + fx * r.width - local.x).max(0.0).round(), (r.y + fy * r.height - local.y).max(0.0).round());
-            app.rolar_mesa(alvo)
+            let quer = Point::new(r.x + fx * r.width - local.x, r.y + fy * r.height - local.y);
+            let tarefa = app.rolar_mesa(Point::new(quer.x.max(0.0).round(), quer.y.max(0.0).round()));
+            // Página menor que a tela fica no meio e a rolagem não segura o ponto: a âncora passa a ser o que
+            // está embaixo do mouse agora. Senão, quando a página enchia a tela, a rolagem pulava de uma vez.
+            let topo = app.viewport.map_or(0.0, |v| v.0);
+            // Só onde a rolagem bateu no limite: refazer sempre acumulava o meio pixel do arredondamento.
+            if let Some(z) = app.zoom_animado.as_mut() {
+                if (app.rolagem_x - quer.x).abs() > 1.0 { z.ancora.1 = (app.rolagem_x + local.x - r.x) / r.width; }
+                if (topo - quer.y).abs() > 1.0 { z.ancora.2 = (topo + local.y - r.y) / r.height; }
+            }
+            tarefa
         });
         // Fim da animação: desenha já, sem os 60 ms do ZoomParou (que ficam para a rodinha sem animação).
         if !chegou { return rolar; }
@@ -2179,12 +2188,15 @@ mod testes {
         use pelicano::App as _;
         let mut app = com_a4();
         app.viewport = Some((0.0, 1000.0, 640.0));
-        app.zoom_animado = Some(ZoomAnimado { alvo: 3.0, ancora: (1, 0.5, 0.5, Point::new(500.0, 320.0)) });
+        // Mouse no centro da página, para o ponto caber na tela desde o começo (rolagem não fica negativa).
+        let c = app.posicoes()[0].1;
+        let meio = Point::new(c.x + c.width / 2.0, c.y + c.height / 2.0);
+        app.zoom_animado = Some(ZoomAnimado { alvo: 3.0, ancora: (1, 0.5, 0.5, meio) });
         while app.zoom_animado.is_some() { let _ = app.update(Msg::ZoomQuadro); }
-        // O centro da página tem que estar no ponto (500, 320) da mesa, pela posição anotada.
+        // O centro da página tem que continuar embaixo do mouse, pela posição anotada.
         let r = app.posicoes()[0].1;
         let (topo, ..) = app.viewport.unwrap();
-        assert!((r.x + r.width / 2.0 - app.rolagem_x - 500.0).abs() <= 1.0 && (r.y + r.height / 2.0 - topo - 320.0).abs() <= 1.0,
+        assert!((r.x + r.width / 2.0 - app.rolagem_x - meio.x).abs() <= 1.0 && (r.y + r.height / 2.0 - topo - meio.y).abs() <= 1.0,
             "rolagem anotada {:?} / {}", app.viewport, app.rolagem_x);
     }
 
@@ -2215,6 +2227,25 @@ mod testes {
         assert!(app.zoom_animado.is_none() && (app.zoom - 2.0).abs() < 1e-6, "parou em {} após {quadros} quadros", app.zoom);
         assert!(quadros <= 18, "{quadros} quadros: lento demais");
         assert!(!app.zoom_esperando, "no fim da animação desenha já, sem esperar o ZoomParou");
+    }
+
+    #[test]
+    fn zoom_de_pagina_pequena_nao_pula_ao_encher_a_tela() {
+        use pelicano::App as _;
+        let mut app = com_a4();
+        let _ = app.mudar_zoom(0.2);
+        app.viewport = Some((0.0, 1000.0, 640.0));
+        app.rolagem_x = 0.0;
+        // Mouse à direita da página centralizada (fora dela).
+        app.zoom_animado = Some(ZoomAnimado { alvo: 3.0, ancora: (1, 0.5, 0.5, Point::new(800.0, 320.0)) });
+        let mut antes = (app.rolagem_x, app.posicoes()[0].1.width);
+        while app.zoom_animado.is_some() {
+            let _ = app.update(Msg::ZoomQuadro);
+            let agora = (app.rolagem_x, app.posicoes()[0].1.width);
+            assert!((agora.0 - antes.0).abs() <= (agora.1 - antes.1).abs() + 2.0, "rolagem pulou: {antes:?} -> {agora:?}");
+            antes = agora;
+        }
+        assert!(app.rolagem_x > 0.0, "página maior que a tela segue o mouse");
     }
 
     #[test]
