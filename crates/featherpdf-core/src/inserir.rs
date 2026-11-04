@@ -336,7 +336,10 @@ impl DocumentoPdf {
                 let url = url.trim();
                 if url.is_empty() { return Err("Endereço vazio.".into()); }
                 // Sem esquema, o leitor trataria como arquivo local.
-                let url = if url.contains("://") || url.starts_with("mailto:") { url.to_string() } else { format!("https://{url}") };
+                // Só o e-mail ("fulano@site.com") vira mailto:, não https://fulano@….
+                let email = url.contains('@') && !url.contains(['/', ':', ' ']);
+                let url = if url.contains("://") || url.starts_with("mailto:") { url.to_string() }
+                    else if email { format!("mailto:{url}") } else { format!("https://{url}") };
                 dictionary! { "S" => "URI", "URI" => Object::string_literal(url) }
             }
             Destino::Pagina(n) => {
@@ -439,6 +442,10 @@ mod testes {
         assert!(pdf.texto_pagina(1).unwrap().contains("Olá, ação"));
         let mut pdf = pdf;
         assert!(pdf.inserir_texto(1, 0.0, 0.0, "π ✓", 12.0, false, [0.0; 3]).unwrap_err().contains('π'));
+        // Só o e-mail vira mailto:, o resto ganha https://.
+        pdf.inserir_link(1, [200.0, 50.0, 300.0, 100.0], Destino::Endereco("fulano@site.com".into())).unwrap();
+        let enderecos: Vec<String> = pdf.links(1).into_iter().filter_map(|(_, d)| match d { Destino::Endereco(u) => Some(u), _ => None }).collect();
+        assert!(enderecos.contains(&"mailto:fulano@site.com".to_string()) && enderecos.contains(&"https://gov.br".to_string()), "{enderecos:?}");
     }
 
     #[test]

@@ -21,7 +21,7 @@ pub struct Sanitizar {
 pub enum Sz { Abrir, Opcao(usize, bool), Aplicar }
 
 /// (rótulo, explicação) de cada opção, na ordem de `campo`.
-const OPCOES: [(&str, &str); 7] = [
+const OPCOES: [(&str, &str); 8] = [
     ("Metadados", "Autor, título, programa e datas guardados no arquivo."),
     ("Histórico de edição", "Dados privados de programas, miniaturas e revisões anteriores."),
     ("Anexos", "Arquivos embutidos no PDF."),
@@ -29,11 +29,12 @@ const OPCOES: [(&str, &str); 7] = [
     ("Autores dos comentários", "Os comentários ficam, sem o nome de quem escreveu."),
     ("Camadas ocultas", "Conteúdo de camadas desligadas, que não aparece mas está lá."),
     ("Links externos", "Links para sites, para outros arquivos e envio de formulário."),
+    ("Comentários", "Notas, marcações e desenhos de revisão saem inteiros (links, campos e vídeos ficam)."),
 ];
 
 fn campo(o: &mut OpcoesLimpeza, i: usize) -> &mut bool {
     match i { 0 => &mut o.metadados, 1 => &mut o.historico, 2 => &mut o.anexos, 3 => &mut o.javascript,
-        4 => &mut o.autores, 5 => &mut o.camadas_ocultas, _ => &mut o.links_externos }
+        4 => &mut o.autores, 5 => &mut o.camadas_ocultas, 6 => &mut o.links_externos, _ => &mut o.comentarios }
 }
 
 impl App {

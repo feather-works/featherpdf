@@ -129,6 +129,19 @@ impl DocumentoPdf {
     /// Veio com senha ou restrições (e elas voltam ao salvar).
     pub fn tem_senha(&self) -> bool { self.documento.encryption_state.is_some() }
 
+    /// Como o arquivo aberto está protegido (cifra e o que ele não deixa fazer); `None` sem proteção.
+    pub fn seguranca(&self) -> Option<String> {
+        use lopdf::Permissions as P;
+        let e = self.documento.encryption_state.as_ref()?;
+        let cifra = match e.version() { 5 => "AES-256", 4 => "128 bits (AES ou RC4)", _ => "RC4 antigo (fraco)" };
+        let p = e.permissions();
+        let negadas: Vec<&str> = [(P::PRINTABLE, "imprimir"), (P::COPYABLE, "copiar"), (P::MODIFIABLE, "alterar"),
+            (P::ANNOTABLE, "comentar"), (P::FILLABLE, "preencher campos"), (P::ASSEMBLABLE, "mexer nas páginas")]
+            .into_iter().filter(|(f, _)| !p.contains(*f)).map(|(_, n)| n).collect();
+        Some(if negadas.is_empty() { format!("Cifrado com {cifra}, sem restrições.") }
+            else { format!("Cifrado com {cifra}; não deixa {}.", negadas.join(", ")) })
+    }
+
     /// A cópia salva sai sem senha nem restrições (quem abriu com a senha pode).
     pub fn tirar_senha(&mut self) {
         if self.documento.encryption_state.take().is_some() { self.modificado = true; }
@@ -180,6 +193,13 @@ impl DocumentoPdf {
             .map_err(|e| format!("Falha ao serializar PDF: {e}"))?;
         Ok(bytes)
     }
+
+    /// Gravação em segundo plano começou: daqui em diante só uma edição nova marca de novo
+    /// (se a gravação falhar, quem chama usa `marcar_modificado`).
+    pub fn comecar_a_salvar(&mut self) { self.modificado = false; }
+    /// A gravação em segundo plano terminou em `destino`: o arquivo passa a ser esse, sem
+    /// mexer em `modificado` (uma edição feita durante a gravação continua por salvar).
+    pub fn gravado_em(&mut self, destino: PathBuf) { self.origem = Some(destino); }
 
     /// Apenas o adaptador de IO confirma que a gravacao atomica terminou.
     pub fn confirmar_salvo(&mut self, destino: PathBuf) {

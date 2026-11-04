@@ -74,7 +74,8 @@ pub enum Ins {
     ImagemLida(Result<(Arc<ImagemNova>, u32, u32), String>),
     /// Ctrl+V: a imagem da área de transferência (`None` = não havia imagem).
     Colar,
-    Colada(Option<(Arc<ImagemNova>, u32, u32)>),
+    /// Imagem (pixels, largura, altura) ou, sem imagem, o texto da área de transferência.
+    Colada(Option<Result<(Arc<ImagemNova>, u32, u32), String>>),
     /// Arrasto terminado na página, em pixels da tela a partir do canto dela.
     Colocar { pagina: u32, a: Point, b: Point },
     Texto(String),
@@ -452,10 +453,30 @@ impl App {
                 self.ferramenta = Ferramenta::Inserir(Insercao::Imagem);
             }
             Ins::ImagemLida(Err(e)) => self.status = e,
-            Ins::Colar => return Task::perform(tokio::task::spawn_blocking(imagem_da_area_de_transferencia),
+            Ins::Colar => return Task::perform(tokio::task::spawn_blocking(|| imagem_da_area_de_transferencia().map(Ok).or_else(|| texto_da_area_de_transferencia().map(Err))),
                 |r| Msg::Ins(Ins::Colada(r.ok().flatten()))),
-            Ins::Colada(None) => self.status = "A área de transferência não tem imagem.".into(),
-            Ins::Colada(Some((imagem, w, h))) => {
+            Ins::Colada(None) => self.status = "A área de transferência não tem imagem nem texto.".into(),
+            Ins::Colada(Some(Err(texto))) => {
+                // Texto colado: uma linha do PDF por linha, a partir da margem de cima da página atual.
+                let pagina = self.pagina;
+                let Some(&(pl, pa)) = self.aberto.as_ref().and_then(|a| a.tamanhos.get(pagina as usize - 1)) else { return Task::none() };
+                // TAB (texto vindo de planilha) vira espaço; o que não cabe na página é recusado, não some.
+                let texto = texto.replace('\t', "    ");
+                let linhas: Vec<&str> = texto.lines().map(str::trim_end).collect();
+                let cabem = ((pa - 144.0) / 14.0).max(1.0) as usize;
+                let larga = linhas.iter().any(|l| feather_draw::largura_texto(l, feather_draw::FontePdf::Helvetica, 12.0) > pl - 144.0);
+                if linhas.len() > cabem || larga {
+                    self.status = format!("Texto grande demais para uma página (cabem {cabem} linhas, sem passar da margem): cole em partes.");
+                    return Task::none();
+                }
+                return self.inserir(pagina, |pdf| {
+                    for (i, l) in linhas.iter().enumerate().filter(|(_, l)| !l.is_empty()) {
+                        pdf.inserir_texto(pagina, 72.0, pa - 72.0 - i as f32 * 14.0, l, 12.0, false, [0.0; 3])?;
+                    }
+                    Ok(format!("{} linha(s) de texto coladas. Arraste para mover; Ctrl+Z desfaz.", linhas.len()))
+                });
+            }
+            Ins::Colada(Some(Ok((imagem, w, h)))) => {
                 self.ins.largura_imagem = None;
                 // No meio da página atual, a 96 dpi, até metade da largura (como um clique da ferramenta Imagem).
                 let pagina = self.pagina;
@@ -724,7 +745,7 @@ impl App {
             Err(_) => Ok(format!("Abre {} no navegador.", alvo.trim())),
         };
         let mut corpo = column![
-            text_input("https://www.gov.br ou um número de página", alvo).id(id_link())
+            text_input("https://www.gov.br, um e-mail ou um número de página", alvo).id(id_link())
                 .on_input(|t| Msg::Ins(Ins::Link(t))).on_submit(Msg::Ins(Ins::GravarLink)).padding([6, 8]).size(13),
         ].spacing(10);
         match &destino {
@@ -933,6 +954,11 @@ impl App {
         let pode = if matches!(msg, Ins::Distribuir(_)) { n >= 3 } else { n >= 1 };
         componentes::botao_icone(ic::icone(icone, 20.), dica, pode.then_some(Msg::Ins(msg)), false)
     }
+}
+
+/// Bloqueante. Texto não vazio da área de transferência.
+fn texto_da_area_de_transferencia() -> Option<String> {
+    arboard::Clipboard::new().ok()?.get_text().ok().filter(|t| !t.trim().is_empty())
 }
 
 /// Bloqueante: chamar fora da thread da janela.

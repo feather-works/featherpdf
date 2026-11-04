@@ -1995,7 +1995,7 @@ source = "git+https://github.com/feather-works/feather-io?tag=v0.1.3#ba7dad98ada
 [[package]]
 name = "feather-ui"
 version = "0.3.11"
-source = "git+https://github.com/feather-works/feather-ui.git?rev=9ae4c34#9ae4c34abfa14a844e99b436a2969899958f7454"
+source = "git+https://github.com/feather-works/feather-ui.git?rev=cb692b6#cb692b6b404fdddd0082d8c8bcde013ade2d2c3f"
 dependencies = [
  "pelicano",
  "windows-sys 0.59.0",
@@ -2411,6 +2411,16 @@ name = "gif"
 version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ae047235e33e2829703574b54fdec96bfbad892062d97fed2f76022287de61b"
+dependencies = [
+ "color_quant",
+ "weezl 0.1.12",
+]
+
+[[package]]
+name = "gif"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
 dependencies = [
  "color_quant",
  "weezl 0.1.12",
@@ -2887,6 +2897,8 @@ checksum = "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104"
 dependencies = [
  "bytemuck",
  "byteorder-lite",
+ "color_quant",
+ "gif 0.14.2",
  "image-webp",
  "moxcms",
  "num-traits",
@@ -4054,8 +4066,9 @@ dependencies = [
 
 [[package]]
 name = "pelicano"
-version = "0.1.27"
-source = "git+https://github.com/feather-works/pelicano.git?tag=v0.1.27#32009b7fa0582773dd2f0f9bb8c393d7c476f5c0"
+version = "0.1.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ba9228933ed4ddd4a506213628f2107c0e975d89851b336a626db416673db81"
 dependencies = [
  "accesskit",
  "accesskit_winit",
@@ -4772,7 +4785,7 @@ version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "944d052815156ac8fa77eaac055220e95ba0b01fa8887108ca710c03805d9051"
 dependencies = [
- "gif",
+ "gif 0.13.3",
  "jpeg-decoder",
  "log",
  "pico-args",

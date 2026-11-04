@@ -250,7 +250,7 @@ impl App {
     pub fn com_protecao<'a>(&'a self, base: Element<'a, Msg>) -> Element<'a, Msg> {
         match &self.protecao {
             Some(Janela::Comprimir(c)) => self.dialogo_comprimir(c).sobre(base),
-            Some(Janela::Senha(s)) => dialogo_senha(s, self.aberto.as_ref().is_some_and(|a| a.pdf.tem_senha())).sobre(base),
+            Some(Janela::Senha(s)) => dialogo_senha(s, self.aberto.as_ref().and_then(|a| a.pdf.seguranca())).sobre(base),
             None => crate::inicio::sem_camada(base),
         }
     }
@@ -350,16 +350,19 @@ fn protecao_valida(s: &Senha) -> Option<Protecao> {
     })
 }
 
-fn dialogo_senha(s: &Senha, tem_senha: bool) -> Dialogo<'_, Msg> {
+fn dialogo_senha(s: &Senha, seguranca: Option<String>) -> Dialogo<'_, Msg> {
     let muted = tema::COR_TEXTO_MUTED();
     let marca = |rotulo: &'static str, v: bool, m: Marca| checkbox(rotulo, v).on_toggle(move |v| Msg::Prot(Pr::Marcar(m, v))).size(16).text_size(13);
     let campo = |dica: &'static str, valor: &str, c: Campo| text_input(dica, valor.to_owned()).secure(true)
         .on_input(move |t| Msg::Prot(Pr::Campo(c, t))).on_submit(Msg::Prot(Pr::Confirmar)).padding([6, 8]).size(13);
     let mut corpo = column![].spacing(10);
-    if tem_senha {
+    if let Some(seguranca) = seguranca {
         // Abriu com a senha (ou só tinha restrições): ela volta ao salvar, a menos que saia aqui.
         corpo = corpo.push(container(row![
-            text("Este PDF já tem senha ou restrições, e elas continuam ao salvar.").size(13).width(Length::FILL),
+            column![
+                text("Este PDF já tem senha ou restrições, e elas continuam ao salvar.").size(13),
+                text(seguranca).size(12).color(muted),
+            ].spacing(2).width(Length::FILL),
             button(text("Tirar a senha").size(13)).padding([5, 12]).style(tema::estilo_botao_secundario).on_press(Msg::Prot(Pr::TirarSenha)),
         ].spacing(10).align_y(Align::Center)).padding([8, 10]).style(|_| Style {
             background: Some(Background::Color(tema::COR_PAINEL_FAIXA())),

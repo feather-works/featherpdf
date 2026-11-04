@@ -282,7 +282,11 @@ fn grupo_zoom(app: &App) -> Element<'_, Msg> {
     let caixa_zoom = container(row![
         botao("zoom-out", "Diminuir zoom (Ctrl+-)", Msg::ZoomMenos),
         divisoria(26.0),
-        container(text(format!("{:.0}%", app.zoom * 100.0)).size(13.5)).width(66.0).align_x(Align::Center),
+        // Digitar o percentual (Enter aplica); fora da edição mostra o zoom atual.
+        container(text_input("", app.campo_zoom.clone().unwrap_or_else(|| format!("{:.0}", app.zoom * 100.0)))
+            .on_input(Msg::CampoZoom).on_submit(Msg::ConfirmarZoom).size(13.5).padding([4u16, 4]).width(44.0)
+            .style(|_, _| Style::default().text_color(COR_TEXTO()))).width(50.0).align_x(Align::Center),
+        text("%").size(13.5),
         divisoria(26.0),
         botao_icone(icone_traco("plus", 19.), "Aumentar zoom (Ctrl++)", Some(Msg::ZoomMais), false),
     ].align(Align::Center)).padding(2u16).width(Length::Shrink).style(caixa);
@@ -292,6 +296,7 @@ fn grupo_zoom(app: &App) -> Element<'_, Msg> {
         row![caixa_zoom, niveis].spacing(4).align(Align::Center),
         row![
             pequeno("arrows-horizontal", None, "Largura", Some(Msg::AjustarLargura), false),
+            pequeno("arrows-vertical", None, "Altura", Some(Msg::AjustarAltura), false),
             pequeno("arrows-maximize", None, "Inteira", Some(Msg::AjustarPagina), false),
         ],
     ].spacing(4), "Zoom")

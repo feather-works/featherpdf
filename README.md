@@ -77,7 +77,7 @@ documento PDF.
 
 ## Comandos
 
-Nesta pasta (o `feather-ui-pelicano` precisa estar na pasta irmã, ver `[patch]` no `Cargo.toml`):
+Nesta pasta (pelicano vem do crates.io e o feather-ui do git, ramo `featherpdf-v0.3.11`; o `[patch]` do `Cargo.toml` só troca o hayro pela cópia em `vendor/`):
 
 ```bash
 cargo run -p featherpdf-pelicano

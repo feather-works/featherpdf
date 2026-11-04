@@ -31,6 +31,16 @@ pub(crate) fn pasta_config() -> Option<PathBuf> {
     }
 }
 
+/// Pasta dos arquivos de passagem (imprimir, levar ao FeatherDocs ou ao FeatherSheet), só do usuário:
+/// o /tmp é de todos do computador, e esses arquivos levam o conteúdo do PDF (sem a senha dele).
+pub(crate) fn pasta_temporaria() -> std::io::Result<PathBuf> {
+    let pasta = pasta_config().map_or_else(|| std::env::temp_dir().join("featherpdf"), |p| p.join("temporarios"));
+    std::fs::create_dir_all(&pasta)?;
+    // Falha (e nada é gravado) se a pasta for de outro usuário.
+    #[cfg(unix)] { use std::os::unix::fs::PermissionsExt; std::fs::set_permissions(&pasta, std::fs::Permissions::from_mode(0o700))?; }
+    Ok(pasta)
+}
+
 // Testes que salvam PDFs não podem encher a lista real do usuário.
 fn arquivo() -> Option<PathBuf> { if cfg!(test) { None } else { pasta_config().map(|p| p.join("recentes.tsv")) } }
 

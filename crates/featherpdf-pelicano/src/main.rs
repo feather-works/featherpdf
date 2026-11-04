@@ -70,6 +70,28 @@ pub const ZOOM_MAX: f32 = 8.0;
 pub const VAO_PAGINAS: f32 = 16.0;
 /// Passos de Ctrl+Z guardados.
 const LIMITE_DESFAZER: usize = 20;
+/// Teto do Ctrl+Z pelo peso: 20 cópias de um PDF de 200 MB não cabem na memória.
+const LIMITE_DESFAZER_BYTES: usize = 512 << 20;
+
+/// Regravar o arquivo inteiro invalida as assinaturas: com elas, só "Salvar como". Todo
+/// dicionário de assinatura tem /ByteRange; procurar é linear. Sem conseguir ler o original,
+/// na dúvida, "Salvar como"; original apagado não tem assinatura a proteger.
+/// Erro: (pede "Salvar como", mensagem).
+fn original_sem_assinatura(d: &std::path::Path) -> Result<(), (bool, String)> {
+    match if d.exists() { featherpdf_io::ler_bytes(d) } else { Ok(vec![]) } {
+        Ok(b) if !b.windows(10).any(|w| w == b"/ByteRange") => Ok(()),
+        Ok(_) => Err((true, "Este PDF é assinado: gravar por cima invalidaria as assinaturas. Salve com outro nome.".into())),
+        Err(e) => Err((true, format!("Não consegui conferir se o original é assinado ({e}). Salve com outro nome."))),
+    }
+}
+
+/// Tira os passos mais antigos até caber em `LIMITE_DESFAZER` passos e `teto` bytes (fica ao menos um).
+fn aparar_historico(historico: &mut Vec<DocumentoPdf>, teto: usize) {
+    let mut peso: usize = historico.iter().map(DocumentoPdf::peso_na_memoria).sum();
+    while historico.len() > LIMITE_DESFAZER || (peso > teto && historico.len() > 1) {
+        peso -= historico.remove(0).peso_na_memoria();
+    }
+}
 pub const ID_MESA: &str = "featherpdf.mesa";
 
 pub fn id_mesa() -> &'static str { ID_MESA }
@@ -146,6 +168,8 @@ pub enum Msg {
     /// Destino do "Salvar como", com a aba que pediu.
     /// Id do documento (`Aberto::id`) que abriu o diálogo e o destino escolhido.
     DestinoEscolhido(u64, Option<PathBuf>),
+    /// Gravação em segundo plano terminou: (documento, destino, tinha assinatura, erro e se pede "Salvar como").
+    Salvo(u64, PathBuf, bool, Result<(), (bool, String)>),
     /// Fecha o documento da frente (Ctrl+W).
     IrInicio,
     BuscaRecentes(String),
@@ -162,6 +186,8 @@ pub enum Msg {
     /// Página inicial: escolhe um PDF e, aberto, segue para a ferramenta (OCR, Comprimir…).
     AbrirPara(Box<Msg>),
     Fundo(u64, u32, Result<featherpdf_io::PaginaRaster, String>),
+    /// O desenhador preparado em segundo plano ficou pronto: (documento, vez, tamanhos dele, erro).
+    VistaPronta(u64, u64, Vec<(f32, f32)>, Result<(), String>),
     Desenhada { geracao: u64, pagina: u32, escala: f32, trecho: Option<[u32; 4]>, resultado: Result<featherpdf_io::PaginaRaster, String> },
     Rolou(Viewport),
     IrPagina(u32),
@@ -174,6 +200,10 @@ pub enum Msg {
     AjustarPagina,
     /// Página digitada no rodapé (texto enquanto edita; Enter vai).
     CampoPagina(String),
+    /// Percentual digitado na caixa do zoom; Enter aplica.
+    CampoZoom(String),
+    ConfirmarZoom,
+    AjustarAltura,
     ConfirmarPagina,
     Disposicao(Disposicao),
     Pag(organizar::Pag),
@@ -312,6 +342,12 @@ pub struct App {
     pub perguntar_fechar: Option<usize>,
     /// Aba que fecha assim que o "Salvar como" dela terminar.
     fechar_depois_de_salvar: Option<u64>,
+    /// Documento gravando em segundo plano: a aba dele e a janela não fecham até terminar.
+    salvando: Option<u64>,
+    /// Salvar sem sair da thread da janela (antes de fechar: a aba fecha logo depois).
+    salvar_ja: bool,
+    /// Conta os desenhadores pedidos em segundo plano: só o último vale.
+    vez_da_vista: u64,
     /// A ferramenta que abre assim que o PDF escolhido na página inicial carregar.
     depois_de_abrir: Option<Msg>,
     pub pagina: u32,
@@ -376,6 +412,7 @@ pub struct App {
     arrastando_painel: bool,
     pub impressao: imprimir::Impressao,
     pub campo_pagina: Option<String>,
+    pub campo_zoom: Option<String>,
     pub selecao_texto: Option<(u32, selecao::Posicao, selecao::Posicao)>,
     pub navegacao: navegar::Navegacao,
     pub exportar: exportar::Exportar,
@@ -449,6 +486,9 @@ impl App {
             fechar_pendente: None,
             perguntar_fechar: None,
             fechar_depois_de_salvar: None,
+            vez_da_vista: 0,
+            salvando: None,
+            salvar_ja: false,
             depois_de_abrir: None,
             pagina: 1,
             zoom: 1.0,
@@ -501,6 +541,7 @@ impl App {
             selecao_texto: None,
             impressao: Default::default(),
             campo_pagina: None,
+            campo_zoom: None,
             navegacao: navegar::Navegacao::default(),
             exportar: exportar::Exportar::default(),
             validacao: None,
@@ -551,9 +592,8 @@ impl App {
         if fluxo.iter().all(|p| p.blocos.is_empty()) { return Err("Este PDF não tem texto nem imagem para levar ao documento.".into()); }
         let nome = self.nome_documento().unwrap_or_default();
         let base = std::path::Path::new(&nome).file_stem().map_or("PDF".into(), |n| n.to_string_lossy().into_owned());
-        let pasta = std::env::temp_dir().join("featherpdf");
+        let pasta = recentes::pasta_temporaria().map_err(|e| format!("Não consegui gravar o documento: {e}"))?;
         let destino = pasta.join(format!("{base}.docx"));
-        std::fs::create_dir_all(&pasta).map_err(|e| format!("Não consegui gravar o documento: {e}"))?;
         featherpdf_io::gravar_docx(&a.pdf, &fluxo, &destino)?;
         abrir_no("featherdocs", "FeatherDocs", &destino).map(|_| format!("{} página(s) abertas no FeatherDocs.", fluxo.len()))
     }
@@ -622,6 +662,7 @@ impl App {
 
     fn responder_fechar(&mut self, resposta: Option<bool>) -> Task<Msg> {
         let Some(alvo) = self.perguntar_fechar.take() else { return Task::none() };
+        if self.salvando.is_some() { self.status = "Espere terminar de salvar para fechar.".into(); return Task::none(); }
         match resposta {
             None => Task::none(),
             Some(false) => {
@@ -634,7 +675,7 @@ impl App {
                 let mut tarefas = Vec::new();
                 for i in abas {
                     tarefas.push(self.ir_para_aba(i));
-                    tarefas.push(self.update_interno(Msg::Salvar));
+                    tarefas.push(self.salvar(true));
                     if self.modificada(i) {
                         // Esperando o "Salvar como": a aba fecha quando ele terminar.
                         if alvo != usize::MAX { self.fechar_depois_de_salvar = self.id_aberto(); }
@@ -667,6 +708,8 @@ impl App {
     /// Fecha a aba `i`; com alterações não salvas, pergunta antes (`com_pergunta_fechar`).
     fn fechar_aba(&mut self, i: usize) -> Task<Msg> {
         if i >= self.guias.len() { return Task::none(); }
+        let id = if i == self.ativa { self.id_aberto() } else { self.guias[i].as_ref().map(|g| g.aberto.id) };
+        if self.salvando.is_some() && self.salvando == id { self.status = "Espere terminar de salvar para fechar.".into(); return Task::none(); }
         if self.modificada(i) && self.fechar_pendente != Some(i) {
             self.perguntar_fechar = Some(i);
             return Task::none();
@@ -713,7 +756,10 @@ impl App {
     /// Guarda o estado anterior a uma mudança feita aos poucos (digitar num campo).
     fn guardar_desfazer(&mut self, antes: DocumentoPdf) {
         self.historico.push(antes);
-        if self.historico.len() > LIMITE_DESFAZER { self.historico.remove(0); }
+        // O teto vale para o app todo: o Ctrl+Z das outras abas também ocupa memória.
+        let outras: usize = self.guias.iter().flatten().flat_map(|g| g.historico.iter().chain(&g.refeitos))
+            .map(DocumentoPdf::peso_na_memoria).sum();
+        aparar_historico(&mut self.historico, LIMITE_DESFAZER_BYTES.saturating_sub(outras));
         self.refeitos.clear();
         self.scripts.rodada += 1;
         // Alteração nova: o "clique de novo para fechar sem salvar" volta a avisar.
@@ -990,6 +1036,8 @@ impl App {
     }
 
     fn mudar_zoom_e(&mut self, zoom: f32, rolar: impl FnOnce(&mut Self) -> Task<Msg>) -> Task<Msg> {
+        // Zoom mudou por outro caminho: a caixa volta a mostrar o atual.
+        self.campo_zoom = None;
         let zoom = zoom.clamp(ZOOM_MIN, ZOOM_MAX);
         if (zoom - self.zoom).abs() < 0.001 { return Task::none(); }
         self.zoom = zoom;
@@ -1089,19 +1137,71 @@ impl App {
     /// Depois de mexer na estrutura (girar, excluir), a vista é refeita do PDF editado.
     fn refazer_vista(&mut self) -> Task<Msg> {
         let Some(aberto) = &mut self.aberto else { return Task::none() };
-        match aberto.pdf.serializar().and_then(Visualizador::novo) {
-            Ok(vis) => {
-                aberto.tamanhos = vis.tamanhos();
-                aberto.vis = vis;
-                self.monitor.insp.sujo = true;
-                // As tabelas lidas para o Converter eram do documento antes da mudança.
-                self.exportar.esquecer();
-                self.pagina = self.pagina.min(aberto.tamanhos.len() as u32).max(1);
-                let tabelas = if self.janelas.aberta(Auxiliar::Converter) { self.ler_tabelas() } else { Task::none() };
-                Task::batch([self.invalidar(), tabelas])
-            }
-            Err(e) => { self.status = e; Task::none() }
-        }
+        // Gravar e reinterpretar o PDF leva segundos num arquivo grande: vai para outra thread e a
+        // janela não para. Os tamanhos saem do documento na hora; quem desenhar, imprimir ou
+        // exportar antes espera o desenhador novo (nunca usa o velho).
+        let pdf = aberto.pdf.clone();
+        let (vis, pronto) = Visualizador::em_segundo_plano(&aberto.vis, move || pdf.serializar());
+        aberto.tamanhos = aberto.pdf.tamanhos();
+        aberto.vis = vis.clone();
+        self.vez_da_vista += 1;
+        let (id, vez) = (aberto.id, self.vez_da_vista);
+        self.monitor.insp.sujo = true;
+        // As tabelas lidas para o Converter eram do documento antes da mudança.
+        self.exportar.esquecer();
+        self.pagina = self.pagina.min(aberto.tamanhos.len() as u32).max(1);
+        let tabelas = if self.janelas.aberta(Auxiliar::Converter) { self.ler_tabelas() } else { Task::none() };
+        let conferir = Task::perform(async move {
+            tokio::task::spawn_blocking(move || {
+                let r = pronto.recv().unwrap_or_else(|_| Err("Falha ao preparar o desenho das páginas.".into()));
+                (vis.tamanhos(), r)
+            }).await.unwrap_or_else(|e| (Vec::new(), Err(e.to_string())))
+        }, move |(tamanhos, r)| Msg::VistaPronta(id, vez, tamanhos, r));
+        Task::batch([self.invalidar(), tabelas, conferir])
+    }
+
+    /// Ctrl+S. `ja`: grava sem sair da thread da janela (antes de fechar: a aba fecha logo
+    /// depois); senão em segundo plano.
+    fn salvar(&mut self, ja: bool) -> Task<Msg> {
+        if self.salvando.is_some() { self.status = "Ainda salvando o documento anterior…".into(); return Task::none(); }
+        let Some(a) = &self.aberto else { return Task::none() };
+        if !a.pdf.modificado() { self.status = "Nada para salvar.".into(); return Task::none(); }
+        let (id, origem) = (a.id, a.pdf.origem().map(PathBuf::from));
+        let Some(d) = origem else { return self.escolher_destino() };
+        if !ja { return self.gravar_em_segundo_plano(d, true); }
+        if let Err((_, e)) = original_sem_assinatura(&d) { self.status = e; return self.escolher_destino(); }
+        self.salvar_ja = true;
+        let tarefa = self.update_interno(Msg::DestinoEscolhido(id, Some(d)));
+        self.salvar_ja = false;
+        tarefa
+    }
+
+    /// Grava o documento da frente em `destino` numa thread à parte: num PDF grande isso leva
+    /// segundos. `conferir_assinatura`: é o próprio arquivo, e um original assinado pede "Salvar como".
+    fn gravar_em_segundo_plano(&mut self, destino: PathBuf, conferir_assinatura: bool) -> Task<Msg> {
+        if self.salvando.is_some() { self.status = "Ainda salvando o documento anterior…".into(); return Task::none(); }
+        let Some(a) = &mut self.aberto else { return Task::none() };
+        let (pdf, id) = (a.pdf.clone(), a.id);
+        let assinado = a.pdf.modificado() && assinar::tem_assinatura(&a.pdf);
+        a.pdf.comecar_a_salvar();
+        self.salvando = Some(id);
+        self.status = "Salvando…".into();
+        let alvo = destino.clone();
+        let gravar = move || -> Result<(), (bool, String)> {
+            if conferir_assinatura { original_sem_assinatura(&alvo)?; }
+            let mut pdf = pdf;
+            featherpdf_io::salvar_como(&mut pdf, &alvo).map_err(|e| (false, e))
+        };
+        // Nos testes a tarefa não roda: grava na hora, pelo mesmo caminho.
+        if cfg!(test) { let r = gravar(); return self.update_interno(Msg::Salvo(id, destino, assinado, r)); }
+        Task::perform(async move { tokio::task::spawn_blocking(gravar).await.unwrap_or_else(|e| Err((false, e.to_string()))) },
+            move |r| Msg::Salvo(id, destino.clone(), assinado, r))
+    }
+
+    /// O documento (da frente ou de outra aba) pelo id.
+    fn documento_mut(&mut self, id: u64) -> Option<&mut DocumentoPdf> {
+        if self.id_aberto() == Some(id) { return self.aberto.as_mut().map(|a| &mut a.pdf); }
+        self.guias.iter_mut().flatten().find(|g| g.aberto.id == id).map(|g| &mut g.aberto.pdf)
     }
 
     /// O documento na frente, para conferir na volta de um diálogo.
@@ -1192,29 +1292,19 @@ impl App {
                 return match self.depois_de_abrir.take() { Some(m) => Task::batch([entrar, self.update_interno(m)]), None => entrar };
             }
             Msg::Aberto(Err(e)) => { self.depois_de_abrir = None; self.status = e; }
-            Msg::Salvar => {
-                self.menu = false;
-                let Some(a) = &self.aberto else { return Task::none() };
-                if !a.pdf.modificado() { self.status = "Nada para salvar.".into(); return Task::none(); }
-                let Some(d) = a.pdf.origem().map(PathBuf::from) else { return self.escolher_destino() };
-                // Regravar o arquivo inteiro invalida as assinaturas: com elas, só "Salvar como".
-                // Todo dicionário de assinatura tem /ByteRange; procurar é linear, sem ler as versões.
-                // Sem conseguir ler o original, não dá para saber: na dúvida, "Salvar como".
-                // Original apagado: não há assinatura a proteger, grava no lugar.
-                match if d.exists() { featherpdf_io::ler_bytes(&d) } else { Ok(vec![]) } {
-                    Ok(b) if !b.windows(10).any(|w| w == b"/ByteRange") => {}
-                    Ok(_) => {
-                        self.status = "Este PDF é assinado: gravar por cima invalidaria as assinaturas. Salve com outro nome.".into();
-                        return self.escolher_destino();
-                    }
-                    Err(e) => {
-                        self.status = format!("Não consegui conferir se o original é assinado ({e}). Salve com outro nome.");
-                        return self.escolher_destino();
-                    }
-                }
-                return self.update_interno(Msg::DestinoEscolhido(a.id, Some(d)));
-            }
+            Msg::Salvar => { self.menu = false; return self.salvar(false); }
             Msg::SalvarComo => { self.menu = false; return self.escolher_destino(); }
+            Msg::VistaPronta(id, vez, tamanhos, r) => {
+                if vez != self.vez_da_vista { return Task::none(); }
+                let Some(a) = self.aberto.as_mut().filter(|a| a.id == id) else { return Task::none() };
+                if let Err(e) = r { self.status = e; return Task::none(); }
+                // Os tamanhos do documento são uma conta aproximada; valem os do desenhador.
+                if !tamanhos.is_empty() && tamanhos != a.tamanhos {
+                    a.tamanhos = tamanhos;
+                    self.pagina = self.pagina.min(a.tamanhos.len() as u32).max(1);
+                    return self.invalidar();
+                }
+            }
             Msg::Medir(m) => return self.update_medir(m),
             Msg::Prot(m) => return self.update_protecao(m),
             Msg::Assin(m) => return self.update_assinatura(m),
@@ -1252,6 +1342,9 @@ impl App {
             Msg::ParaFeatherDocs => self.status = self.para_featherdocs().unwrap_or_else(|e| e),
             // O documento da frente mudou enquanto o diálogo estava aberto: não grava o documento errado.
             Msg::DestinoEscolhido(id, Some(_)) if Some(id) != self.id_aberto() => self.status = "O documento mudou: nada foi salvo. Salve de novo.".into(),
+            // "Salvar como" escolhido: em segundo plano, a não ser antes de fechar a aba.
+            Msg::DestinoEscolhido(id, Some(destino)) if !self.salvar_ja && self.fechar_depois_de_salvar != Some(id) =>
+                return self.gravar_em_segundo_plano(destino, false),
             Msg::DestinoEscolhido(_, Some(destino)) => if let Some(a) = &mut self.aberto {
                 let assinado = a.pdf.modificado() && assinar::tem_assinatura(&a.pdf);
                 self.status = match featherpdf_io::salvar_como(&mut a.pdf, &destino) {
@@ -1268,6 +1361,24 @@ impl App {
                     Err(e) => e,
                 };
             },
+            Msg::Salvo(id, destino, assinado, r) => {
+                self.salvando = None;
+                let total = self.documento_mut(id).map_or(0, |p| p.total_paginas());
+                match r {
+                    Ok(()) => {
+                        if let Some(p) = self.documento_mut(id) { p.gravado_em(destino.clone()); }
+                        self.recentes.registrar(&destino, total);
+                        self.status = if assinado { format!("Salvo em {}. As assinaturas que o PDF tinha não valem nesta versão alterada.", destino.display()) }
+                            else { format!("Salvo em {}", destino.display()) };
+                    }
+                    Err((pedir_outro, e)) => {
+                        // Não gravou: o documento volta a ter alterações por salvar.
+                        if let Some(p) = self.documento_mut(id) { p.marcar_modificado(); }
+                        self.status = e;
+                        if pedir_outro && self.id_aberto() == Some(id) { return self.escolher_destino(); }
+                    }
+                }
+            }
             Msg::IrInicio => return self.fechar_aba(self.ativa),
             Msg::Guia(i) => return self.ir_para_aba(i),
             Msg::FecharGuia(i) => return self.fechar_aba(i),
@@ -1346,6 +1457,11 @@ impl App {
                 let p = self.campo_pagina.take().and_then(|t| t.parse().ok()).unwrap_or(self.pagina);
                 return self.update_interno(Msg::IrPagina(p.clamp(1, self.total_paginas().max(1))));
             }
+            Msg::CampoZoom(t) => self.campo_zoom = Some(t.chars().filter(char::is_ascii_digit).take(4).collect()),
+            Msg::ConfirmarZoom => {
+                let z = self.campo_zoom.take().and_then(|t| t.parse::<f32>().ok()).map_or(self.zoom, |p| p / 100.0);
+                return self.mudar_zoom(z);
+            }
             Msg::ZoomMais => return self.mudar_zoom((self.zoom * 1.25 * 20.0).round() / 20.0),
             Msg::ZoomMenos => return self.mudar_zoom((self.zoom / 1.25 * 20.0).round() / 20.0),
             Msg::Zoom(z) => return self.mudar_zoom(z),
@@ -1362,6 +1478,11 @@ impl App {
                 let por_linha = if self.disposicao == Disposicao::DuasPaginas { 2.0 } else { 1.0 };
                 let zoom = ((largura - 3.0 * VAO_PAGINAS) / (l * por_linha)).min((altura - 2.0 * VAO_PAGINAS) / a);
                 return self.mudar_zoom(zoom);
+            }
+            Msg::AjustarAltura => {
+                let a = self.aberto.as_ref().and_then(|x| x.tamanhos.get(self.pagina as usize - 1)).map_or(842.0, |t| t.1);
+                let (_, _, altura) = self.viewport.unwrap_or((0.0, 800.0, 600.0));
+                return self.mudar_zoom((altura - 2.0 * VAO_PAGINAS) / a);
             }
             Msg::Disposicao(d) => { self.disposicao = d; return self.invalidar(); }
             Msg::GirarEsquerda | Msg::GirarDireita | Msg::Girar(_) => {
@@ -1508,6 +1629,8 @@ impl App {
                     self.janelas.retirar(id);
                     return Task::window_of(id, WindowCmd::Close);
                 }
+                // Fechar no meio da gravação perderia o que estava sendo salvo.
+                if self.salvando.is_some() { self.status = "Espere terminar de salvar para fechar.".into(); return Task::none(); }
                 let alteradas = (0..self.guias.len()).filter(|&i| self.modificada(i)).count();
                 if alteradas > 0 && self.fechar_pendente != Some(usize::MAX) {
                     self.perguntar_fechar = Some(usize::MAX);
@@ -1922,6 +2045,31 @@ mod testes {
     }
 
     #[test]
+    fn salvar_em_segundo_plano_nao_perde_edicao() {
+        let (mut app, _) = App::novo();
+        let c = temporario("segundo-plano");
+        abrir_de(&mut app, &c);
+        let _ = app.update(Msg::Pag(organizar::Pag::Duplicar));
+        // Gravação em andamento (como a tarefa de verdade faria) e uma edição no meio dela.
+        let id = app.id_aberto().unwrap();
+        app.aberto.as_mut().unwrap().pdf.comecar_a_salvar();
+        app.salvando = Some(id);
+        let _ = app.update(Msg::FecharGuia(app.ativa));
+        assert!(app.aberto.is_some() && app.perguntar_fechar.is_none(), "não fecha no meio da gravação");
+        let _ = app.update(Msg::Pag(organizar::Pag::Duplicar));
+        let _ = app.update(Msg::Salvo(id, c.clone(), false, Ok(())));
+        let pdf = &app.aberto.as_ref().unwrap().pdf;
+        assert!(pdf.modificado(), "a edição feita durante a gravação continua por salvar");
+        assert_eq!(pdf.origem(), Some(c.as_path()));
+        // Falhou: volta a ter alterações por salvar.
+        app.aberto.as_mut().unwrap().pdf.comecar_a_salvar();
+        app.salvando = Some(id);
+        let _ = app.update(Msg::Salvo(id, c.clone(), false, Err((false, "disco cheio".into()))));
+        assert!(app.aberto.as_ref().unwrap().pdf.modificado() && app.salvando.is_none());
+        assert_eq!(app.status, "disco cheio");
+    }
+
+    #[test]
     fn desfazer_depois_de_salvar_continua_modificado() {
         let (mut app, _) = App::novo();
         let c = temporario("desfazer");
@@ -1933,6 +2081,20 @@ mod testes {
         let _ = app.update(Msg::Desfazer);
         assert!(app.aberto.as_ref().unwrap().pdf.modificado());
         let _ = std::fs::remove_file(&c);
+    }
+
+    #[test]
+    fn desfazer_tem_teto_de_peso() {
+        let pdf = com_a4().aberto.unwrap().pdf;
+        let peso = pdf.peso_na_memoria();
+        let mut h = vec![pdf.clone(); 5];
+        aparar_historico(&mut h, peso * 3);
+        assert_eq!(h.len(), 3);
+        aparar_historico(&mut h, 0);
+        assert_eq!(h.len(), 1, "fica ao menos um passo");
+        let mut h = vec![pdf; LIMITE_DESFAZER + 3];
+        aparar_historico(&mut h, usize::MAX);
+        assert_eq!(h.len(), LIMITE_DESFAZER);
     }
 
     #[test]

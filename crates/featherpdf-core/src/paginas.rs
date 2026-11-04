@@ -237,6 +237,22 @@ impl DocumentoPdf {
         copia.serializar()
     }
 
+    /// Largura e altura de cada página em pontos, já com o giro, lidas do documento (sem
+    /// interpretar o arquivo inteiro): a tela já sabe as páginas enquanto o desenhador se prepara.
+    pub fn tamanhos(&self) -> Vec<(f32, f32)> {
+        self.ids_paginas().into_iter().map(|id| {
+            let (x0, y0, x1, y1) = self.caixa(id);
+            let giro = self.herdado(id, b"Rotate").and_then(|g| g.as_i64().ok()).unwrap_or(0).rem_euclid(360);
+            let (l, a) = ((x1 - x0).max(1.0), (y1 - y0).max(1.0));
+            if giro == 90 || giro == 270 { (a, l) } else { (l, a) }
+        }).collect()
+    }
+
+    /// Bytes dos streams (conteúdo, imagens, fontes): quanto uma cópia do documento pesa na memória, mais ou menos.
+    pub fn peso_na_memoria(&self) -> usize {
+        self.documento.objects.values().map(|o| if let Object::Stream(s) = o { s.content.len() } else { 0 }).sum()
+    }
+
     /// Caixa visível da página (CropBox ou MediaBox) como (x0, y0, x1, y1).
     pub(crate) fn caixa(&self, id: ObjectId) -> (f32, f32, f32, f32) {
         let ler = |chave: &[u8]| -> Option<(f32, f32, f32, f32)> {
@@ -495,6 +511,15 @@ fn literal_pdf(texto: &str) -> String {
 mod testes {
     use super::*;
     use crate::testes::pdf_teste;
+
+    #[test]
+    fn tamanhos_seguem_o_giro() {
+        let mut pdf = pdf_teste();
+        assert_eq!(pdf.tamanhos(), vec![(595.0, 842.0)]);
+        pdf.girar_paginas(&[1], 90).unwrap();
+        assert_eq!(pdf.tamanhos(), vec![(842.0, 595.0)]);
+        assert!(pdf.peso_na_memoria() > 0);
+    }
 
     #[test]
     fn bates_capitulos_e_colunas() {

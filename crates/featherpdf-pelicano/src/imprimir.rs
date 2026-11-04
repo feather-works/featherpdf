@@ -72,7 +72,7 @@ impl Default for Impressao {
 }
 
 /// "1-3, 5" → páginas 1, 2, 3 e 5, todas dentro de 1..=total; `None` se algo não se lê.
-fn ler_intervalo(texto: &str, total: u32) -> Option<Vec<u32>> {
+pub(crate) fn ler_intervalo(texto: &str, total: u32) -> Option<Vec<u32>> {
     let mut v = Vec::new();
     for parte in texto.split([',', ';']).map(str::trim).filter(|p| !p.is_empty()) {
         let (a, b) = match parte.split_once('-') {
@@ -215,8 +215,7 @@ impl App {
                 return Task::perform(async move {
                     tokio::task::spawn_blocking(move || -> Result<String, String> {
                         // O documento como está na tela, com as edições ainda não salvas.
-                        let pasta = std::env::temp_dir().join("featherpdf");
-                        std::fs::create_dir_all(&pasta).map_err(|e| e.to_string())?;
+                        let pasta = crate::recentes::pasta_temporaria().map_err(|e| e.to_string())?;
                         let arquivo = pasta.join(format!("imprimir-{}.pdf", std::process::id()));
                         std::fs::write(&arquivo, pdf.serializar()?).map_err(|e| e.to_string())?;
                         let saida = std::process::Command::new("lp").args(&args).arg(&arquivo).output();

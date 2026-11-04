@@ -18,11 +18,13 @@ pub struct OpcoesLimpeza {
     pub autores: bool,
     pub camadas_ocultas: bool,
     pub links_externos: bool,
+    /// Tira os comentários inteiros (notas, marcações, desenhos de revisão); links e campos ficam.
+    pub comentarios: bool,
 }
 
 impl Default for OpcoesLimpeza {
     fn default() -> Self {
-        Self { metadados: true, historico: true, anexos: true, javascript: true, autores: true, camadas_ocultas: true, links_externos: true }
+        Self { metadados: true, historico: true, anexos: true, javascript: true, autores: true, camadas_ocultas: true, links_externos: true, comentarios: false }
     }
 }
 
@@ -106,6 +108,21 @@ impl DocumentoPdf {
                 }
             }
             if n > 0 { relatorio.push(format!("Autor de {n} comentário(s).")); }
+        }
+        if op.comentarios {
+            let mut n = 0;
+            for &id in &ids {
+                let mut lista = self.lista_anotacoes(id);
+                let antes = lista.len();
+                // Só os tipos de comentário: vídeo, som, 3D, links e campos ficam.
+                const COMENTARIOS: &[&[u8]] = &[b"Text", b"FreeText", b"Highlight", b"Underline", b"StrikeOut", b"Squiggly", b"Ink",
+                    b"Square", b"Circle", b"Line", b"Polygon", b"PolyLine", b"Stamp", b"Caret", b"Popup"];
+                lista.retain(|o| self.dicionario(o).is_none_or(|d| d.has(b"FT")
+                    || !d.get(b"Subtype").and_then(Object::as_name).is_ok_and(|s| COMENTARIOS.contains(&s))));
+                n += antes - lista.len();
+                if antes != lista.len() { if let Ok(p) = self.documento.get_dictionary_mut(id) { p.set("Annots", lista); } }
+            }
+            if n > 0 { relatorio.push(format!("{n} comentário(s) e marcação(ões).")); }
         }
         if op.camadas_ocultas {
             let (camadas, blocos) = self.tirar_camadas_ocultas(&ids)?;
@@ -337,6 +354,20 @@ mod testes {
         // Rendition sem /JS, só na cadeia, também conta.
         let d = dictionary! { "S" => "Rendition", "JS" => Object::string_literal("x") };
         assert!(acao_perigosa(&d, true, false));
+    }
+
+    #[test]
+    fn sanitizar_tira_comentarios_e_deixa_link() {
+        let mut pdf = pdf_com("BT /F1 12 Tf 72 700 Td (oi) Tj ET");
+        let id = pdf.id_pagina(1).unwrap();
+        let nota = pdf.documento.add_object(dictionary! { "Type" => "Annot", "Subtype" => "Text", "Contents" => Object::string_literal("nota") });
+        let link = pdf.documento.add_object(dictionary! { "Type" => "Annot", "Subtype" => "Link" });
+        let video = pdf.documento.add_object(dictionary! { "Type" => "Annot", "Subtype" => "Screen" });
+        pdf.documento.get_dictionary_mut(id).unwrap().set("Annots", vec![Object::Reference(nota), Object::Reference(link), Object::Reference(video)]);
+        assert!(pdf.sanitizar(OpcoesLimpeza::default()).unwrap().iter().all(|r| !r.contains("comentário(s) e")), "por padrão os comentários ficam");
+        let r = pdf.sanitizar(OpcoesLimpeza { comentarios: true, ..OpcoesLimpeza::default() }).unwrap();
+        assert!(r.iter().any(|r| r.starts_with("1 comentário")), "{r:?}");
+        assert_eq!(pdf.lista_anotacoes(id), vec![Object::Reference(link), Object::Reference(video)], "link e vídeo ficam");
     }
 
     #[test]

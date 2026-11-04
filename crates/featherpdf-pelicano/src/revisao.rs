@@ -86,10 +86,9 @@ impl App {
             }
             Rv::ParaSheet => {
                 let csv = self.aberto.as_ref().map(|a| comentarios_csv(&a.pdf.anotacoes())).unwrap_or_default();
-                let pasta = std::env::temp_dir().join("featherpdf");
-                let destino = pasta.join("comentarios.csv");
-                self.status = std::fs::create_dir_all(&pasta).and_then(|_| std::fs::write(&destino, csv)).map_err(|e| format!("Não consegui gravar a lista: {e}"))
-                    .and_then(|_| crate::abrir_no("feathersheet", "FeatherSheet", &destino))
+                let destino = crate::recentes::pasta_temporaria().map(|p| p.join("comentarios.csv"));
+                self.status = destino.and_then(|destino| std::fs::write(&destino, csv).map(|_| destino)).map_err(|e| format!("Não consegui gravar a lista: {e}"))
+                    .and_then(|destino| crate::abrir_no("feathersheet", "FeatherSheet", &destino))
                     .map_or_else(|e| e, |_| "Lista de comentários aberta no FeatherSheet.".into());
             }
         }

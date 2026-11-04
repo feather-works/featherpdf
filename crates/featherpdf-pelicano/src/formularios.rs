@@ -170,8 +170,7 @@ pub(crate) fn para_sheet(linhas: &[(String, Vec<(String, String)>)], base: &str)
         for n in &cabecalho[1..] { celulas.push(csv_campo(l.iter().find(|(k, _)| k == n).map_or("", |(_, v)| v.as_str()))); }
         csv += &(celulas.join(",") + "\n");
     }
-    let pasta = std::env::temp_dir().join("featherpdf");
-    std::fs::create_dir_all(&pasta).map_err(|e| format!("Não consegui gravar os dados: {e}"))?;
+    let pasta = crate::recentes::pasta_temporaria().map_err(|e| format!("Não consegui gravar os dados: {e}"))?;
     let destino = pasta.join(format!("{base} — campos.csv"));
     featherpdf_io::gravar_atomico(&destino, csv.as_bytes()).map_err(|e| format!("Não consegui gravar os dados: {e}"))?;
     crate::abrir_no("feathersheet", "FeatherSheet", &destino)

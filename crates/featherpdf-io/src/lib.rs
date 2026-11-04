@@ -220,15 +220,17 @@ fn pintar<P: image::Pixel>(i: &mut image::ImageBuffer<P, Vec<P::Subpixel>>, [x0,
 }
 
 /// PDF já interpretado pelo Hayro, para desenhar as páginas sem reler o
-/// arquivo a cada uma. Clonar é barato (compartilha o documento entre threads).
+/// arquivo a cada uma. Clonar é barato (compartilha o documento entre threads). Pode estar
+/// se preparando em outra thread (`em_segundo_plano`): quem usar antes espera ficar pronto.
 #[derive(Clone)]
 pub struct Visualizador {
-    pdf: std::sync::Arc<hayro::hayro_syntax::Pdf>,
+    pdf: std::sync::Arc<std::sync::OnceLock<std::sync::Arc<hayro::hayro_syntax::Pdf>>>,
 }
 
 impl std::fmt::Debug for Visualizador {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Visualizador({} páginas)", self.total_paginas())
+        // Sem esperar: o Debug pode rodar na thread da tela.
+        match self.pdf.get() { Some(p) => write!(f, "Visualizador({} páginas)", p.pages().len()), None => write!(f, "Visualizador(preparando)") }
     }
 }
 
@@ -240,11 +242,72 @@ pub struct PaginaRaster {
     pub rgba: Vec<u8>,
 }
 
+/// Um pedido de desenhador à espera: os bytes do mais novo e as vistas que ele vai preencher.
+struct Trabalho {
+    bytes: Box<dyn FnOnce() -> Result<Vec<u8>, String> + Send>,
+    celulas: Vec<std::sync::Arc<std::sync::OnceLock<std::sync::Arc<hayro::hayro_syntax::Pdf>>>>,
+    avisos: Vec<std::sync::mpsc::Sender<Result<(), String>>>,
+    anterior: Visualizador,
+}
+
+/// O pedido à espera e se a thread que prepara está viva (os dois sob a mesma trava).
+static FILA: std::sync::Mutex<(Option<Trabalho>, bool)> = std::sync::Mutex::new((None, false));
+
+fn preparar_na_fila() {
+    loop {
+        let Some(t) = ({
+            let mut fila = FILA.lock().unwrap_or_else(|e| e.into_inner());
+            let t = fila.0.take();
+            if t.is_none() { fila.1 = false; }
+            t
+        }) else { return };
+        // As vistas são preenchidas em qualquer caso (até em pânico), senão quem espera trava para sempre.
+        let Trabalho { bytes, celulas, avisos, anterior } = t;
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bytes().and_then(Visualizador::novo)))
+            .unwrap_or_else(|_| Err("Falha ao preparar o desenho das páginas.".into()));
+        let (pdf, r) = match r { Ok(v) => (v.pdf.wait().clone(), Ok(())), Err(e) => (anterior.pdf.wait().clone(), Err(e)) };
+        for c in celulas { let _ = c.set(pdf.clone()); }
+        for a in avisos { let _ = a.send(r.clone()); }
+    }
+}
+
 impl Visualizador {
     pub fn novo(bytes: Vec<u8>) -> Result<Self, String> {
         let pdf = hayro::hayro_syntax::Pdf::new(bytes)
             .map_err(|e| format!("Nao foi possivel interpretar o PDF para renderizacao: {e:?}"))?;
-        Ok(Self { pdf: std::sync::Arc::new(pdf) })
+        Ok(Self::pronto(std::sync::Arc::new(pdf)))
+    }
+
+    fn pronto(pdf: std::sync::Arc<hayro::hayro_syntax::Pdf>) -> Self {
+        Self { pdf: std::sync::Arc::new(std::sync::OnceLock::from(pdf)) }
+    }
+
+    fn doc(&self) -> &hayro::hayro_syntax::Pdf { self.pdf.wait() }
+
+    /// Interpreta em outra thread os bytes que `bytes` devolver e já volta: num PDF grande isso
+    /// leva segundos, e a janela não para. Quem usar antes espera ficar pronto. Se falhar, fica o
+    /// desenho de `anterior`, e o erro chega pelo canal devolvido.
+    ///
+    /// Um trabalho por vez, e só o mais novo espera a vez: segurar Ctrl+Z num PDF de 200 MB não
+    /// junta 30 cópias na memória. O pedido que fica para trás recebe o desenho do mais novo.
+    pub fn em_segundo_plano(anterior: &Self, bytes: impl FnOnce() -> Result<Vec<u8>, String> + Send + 'static)
+        -> (Self, std::sync::mpsc::Receiver<Result<(), String>>)
+    {
+        let celula = std::sync::Arc::new(std::sync::OnceLock::new());
+        let (aviso, recebe) = std::sync::mpsc::channel();
+        let mut fila = FILA.lock().unwrap_or_else(|e| e.into_inner());
+        let trabalho = match fila.0.take() {
+            // O que esperava é jogado fora (e a cópia dele com ele); a vista dele fica com a do novo.
+            // O `anterior` dele é o mais antigo, já pronto ou em preparo: esperar pelo do novo travaria.
+            Some(mut velho) => { velho.bytes = Box::new(bytes); velho.celulas.push(celula.clone()); velho.avisos.push(aviso); velho }
+            None => Trabalho { bytes: Box::new(bytes), celulas: vec![celula.clone()], avisos: vec![aviso], anterior: anterior.clone() },
+        };
+        fila.0 = Some(trabalho);
+        if !fila.1 {
+            fila.1 = true;
+            std::thread::spawn(preparar_na_fila);
+        }
+        (Self { pdf: celula }, recebe)
     }
 
     /// Lê o arquivo direto do disco, mapeado na memória: sem a segunda cópia de ~50 MB que
@@ -257,14 +320,14 @@ impl Visualizador {
         // SAFETY: só leitura; o risco é o arquivo mudar de tamanho por fora (ver shortcut acima).
         let mapa = unsafe { memmap2::Mmap::map(&arquivo) }.ok()?;
         let pdf = hayro::hayro_syntax::Pdf::new(std::sync::Arc::new(mapa)).ok()?;
-        (pdf.pages().len() as u32 == paginas).then(|| Self { pdf: std::sync::Arc::new(pdf) })
+        (pdf.pages().len() as u32 == paginas).then(|| Self::pronto(std::sync::Arc::new(pdf)))
     }
 
-    pub fn total_paginas(&self) -> u32 { self.pdf.pages().len() as u32 }
+    pub fn total_paginas(&self) -> u32 { self.doc().pages().len() as u32 }
 
     /// Tamanho de cada página em pontos, já com o giro aplicado.
     pub fn tamanhos(&self) -> Vec<(f32, f32)> {
-        self.pdf.pages().iter().map(|p| p.render_dimensions()).collect()
+        self.doc().pages().iter().map(|p| p.render_dimensions()).collect()
     }
 
     /// Desenha a página (começando em 1). Rodar fora da thread da interface.
@@ -297,7 +360,7 @@ impl Visualizador {
 
     /// A página (começando em 1) em SVG vetorial: texto, traços e imagens como no PDF.
     pub fn svg(&self, pagina: u32) -> Result<String, String> {
-        let p = pagina.checked_sub(1).and_then(|i| self.pdf.pages().get(i as usize))
+        let p = pagina.checked_sub(1).and_then(|i| self.doc().pages().get(i as usize))
             .ok_or_else(|| "Pagina solicitada nao existe.".to_string())?;
         let cache = hayro_svg::RenderCache::new();
         Ok(hayro_svg::convert(p, &cache, &hayro::hayro_interpret::InterpreterSettings::default(), &hayro_svg::SvgRenderSettings::default()))
@@ -328,7 +391,7 @@ impl Visualizador {
         }
         let indice = pagina.checked_sub(1)
             .ok_or_else(|| "Pagina deve ser maior que zero.".to_string())? as usize;
-        let pagina = self.pdf.pages().get(indice)
+        let pagina = self.doc().pages().get(indice)
             .ok_or_else(|| "Pagina solicitada nao existe.".to_string())?;
 
         let (largura, altura) = pagina.render_dimensions();
@@ -751,6 +814,25 @@ pub fn dados_do_computador() -> String {
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    #[test]
+    fn desenhador_em_segundo_plano_ou_fica_o_anterior() {
+        let a4 = criar_a4().unwrap();
+        let anterior = Visualizador::novo(a4.serializar().unwrap()).unwrap();
+        let (vis, t) = Visualizador::em_segundo_plano(&anterior, move || a4.serializar());
+        assert_eq!(vis.total_paginas(), 1);
+        assert!(t.recv().unwrap().is_ok());
+        // Erro (e até pânico): quem espera recebe o desenho anterior, não trava.
+        let (vis, t) = Visualizador::em_segundo_plano(&anterior, || Err("quebrou".into()));
+        assert_eq!(vis.total_paginas(), 1);
+        assert_eq!(t.recv().unwrap(), Err("quebrou".into()));
+        let (vis, t) = Visualizador::em_segundo_plano(&anterior, || panic!("pânico"));
+        assert_eq!(vis.total_paginas(), 1);
+        assert!(t.recv().unwrap().is_err());
+        // Vários pedidos seguidos: todos ficam prontos e avisam, sem travar.
+        let pedidos: Vec<_> = (0..20).map(|_| { let a4 = criar_a4().unwrap(); Visualizador::em_segundo_plano(&anterior, move || a4.serializar()) }).collect();
+        for (vis, t) in pedidos { assert_eq!(vis.total_paginas(), 1); assert!(t.recv().unwrap().is_ok()); }
+    }
 
     #[test]
     fn caderno_so_mexe_em_folha() {

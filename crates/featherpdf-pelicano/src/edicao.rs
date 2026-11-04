@@ -197,7 +197,8 @@ impl canvas::Program<Msg> for Camada {
             canvas::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let Some(p) = dentro else { return (event::Status::Ignored, None) };
                 // Da régua de cima sai uma guia horizontal; da esquerda, uma vertical.
-                if self.reguas && (p.y < REGUA || p.x < REGUA) {
+                // Objeto encostado na beirada ganha do clique: a guia só sai de régua vazia.
+                if self.reguas && (p.y < REGUA || p.x < REGUA) && self.achar(p).is_none() {
                     estado.guia = Some(if p.y < REGUA { (false, p.y) } else { (true, p.x) });
                     return (event::Status::Captured, None);
                 }

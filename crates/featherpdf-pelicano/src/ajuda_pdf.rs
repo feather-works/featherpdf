@@ -48,7 +48,7 @@ pub fn modelo() -> &'static Catalogo {
                         t("Troque palavras e mova objetos no próprio PDF."),
                         m("A troca usa a fonte do arquivo; letra que a fonte não tem é recusada para não estragar o texto."),
                         m("Ctrl+H localiza e substitui em todas as páginas."),
-                        m("Insira texto, imagem, tabela, equação, link, formas e ícones pela aba Editar."),
+                        m("Insira texto, imagem, tabela, equação, link, formas e ícones pela aba Editar. No link, um e-mail sozinho (fulano@site.com) vira link de e-mail."),
                         m("Escolha objetos para mover (setas; Shift move 10), alinhar, trazer para frente ou excluir (Delete)."),
                         m("Editar imagem ajusta brilho, contraste e recorte da foto escolhida."),
                         t("Ctrl+Z desfaz e Ctrl+Y refaz."),
@@ -77,10 +77,10 @@ pub fn modelo() -> &'static Catalogo {
                     ]),
                     topico("proteger", "Proteger e assinar", vec![
                         t("Senha, assinatura digital e limpeza."),
-                        m("Senha: senha para abrir (AES-256) e permissões de imprimir, copiar e editar. A senha de dono precisa ser diferente da de abrir."),
+                        m("Senha: senha para abrir (AES-256) e permissões de imprimir, copiar e editar. A senha de dono precisa ser diferente da de abrir. Num PDF que já tem senha, a janela mostra a cifra e o que ele não deixa fazer."),
                         m("Assinar: certificado A1 (.pfx/.p12), visível ou não. Validar confere se o arquivo mudou depois de assinado."),
                         m("O verificador não consulta a cadeia ICP-Brasil: identidade não verificada aparece em âmbar. Para valor jurídico, confira em validar.iti.gov.br."),
-                        m("Limpar e sanitizar tira JavaScript, links externos, anexos, metadados (inclusive EXIF de fotos) e camadas ocultas."),
+                        m("Limpar e sanitizar tira JavaScript, links externos, anexos, metadados (inclusive EXIF de fotos), camadas ocultas e, se marcado, os comentários."),
                         m("Achatar transforma campos e comentários em desenho fixo."),
                     ]),
                     topico("tarja", "Tarja definitiva", vec![
@@ -93,7 +93,7 @@ pub fn modelo() -> &'static Catalogo {
                     topico("converter", "Converter e exportar", vec![
                         t("Word, planilha, imagens, texto e mais."),
                         m("Word (.docx) e ODT, Excel (.xlsx) e CSV, apresentação (.pptx), texto, HTML e Markdown."),
-                        m("Imagens: PNG, JPG, WebP, TIFF de várias páginas e SVG vetorial."),
+                        m("Imagens: PNG, JPG, WebP, BMP, GIF, TIFF de várias páginas e SVG vetorial. Em Páginas, \"Escolher\" aceita intervalos como 1-3, 5."),
                         m("FeatherDocs e FeatherSheet abrem o resultado direto no app da suíte."),
                         m("Tabela do scan e Gráfico para dados: arraste em volta e os números vão para planilha."),
                         m("PDF/A para arquivamento, Comprimir (fotos a menos dpi), Embutir fontes e Para a web (linearizar)."),
@@ -131,7 +131,7 @@ pub fn modelo() -> &'static Catalogo {
                     ]),
                     topico("exibir", "Exibir e navegar", vec![
                         t("Zoom, duas páginas, leitura e tela cheia."),
-                        m("Ctrl++ e Ctrl+- mudam o zoom; Ctrl+0 volta a 100%. Largura e Inteira ajustam à janela."),
+                        m("Ctrl++ e Ctrl+- mudam o zoom; Ctrl+0 volta a 100%. Na caixa do zoom dá para digitar o percentual (Enter aplica). Largura, Altura e Inteira ajustam à janela."),
                         m("Página escura inverte as cores para ler à noite; Leitura esconde as barras."),
                         m("Painéis: Miniaturas, Marcadores, Comentários, Camadas e Anexos, na barra da direita."),
                         m("Ctrl+K pesquisa comandos pelo nome."),

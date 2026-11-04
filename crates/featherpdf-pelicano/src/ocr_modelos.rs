@@ -74,7 +74,8 @@ fn sha256(bytes: &[u8]) -> String { Sha256::digest(bytes).iter().map(|b| format!
 pub fn baixar(m: &Modelo) -> Result<(), String> {
     for &(remoto, local, hash, tamanho) in m.arquivos {
         let destino = m.caminho(local).ok_or("Sem pasta de configuração.")?;
-        if std::fs::metadata(&destino).is_ok_and(|x| x.len() == tamanho) { continue; }
+        // Confere o conteúdo, não só o tamanho: um arquivo estragado do mesmo tamanho é baixado de novo.
+        if std::fs::read(&destino).is_ok_and(|b| b.len() as u64 == tamanho && sha256(&b) == hash) { continue; }
         std::fs::create_dir_all(destino.parent().unwrap_or(&destino)).map_err(|e| e.to_string())?;
         let parcial = destino.with_extension("parcial");
         // Conexão parada (Wi-Fi caiu) desiste em 1 min, senão o download trava até reiniciar o app.

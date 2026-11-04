@@ -379,6 +379,8 @@ impl DocumentoPdf {
         if p.senha_abrir.is_empty() && p.limitar.is_none() { return Err("Escolha uma senha ou o que limitar.".into()); }
         let mut doc = self.documento.clone();
         if doc.is_encrypted() { return Err("O PDF já está criptografado.".into()); }
+        // Trocar a senha: a proteção com que o PDF foi aberto sai, só a nova vale (senão cifra duas vezes).
+        doc.encryption_state = None;
         crate::podar(&mut doc);
         if !doc.trailer.has(b"ID") {
             let id = Object::String(aleatorio::<16>()?.to_vec(), lopdf::StringFormat::Hexadecimal);
@@ -433,7 +435,15 @@ mod testes {
             let abrir = |senha: &str| Document::load_mem_with_options(&bytes, lopdf::LoadOptions::with_password(senha));
             assert!(abrir("errada").is_err());
             assert!(!abrir("abre").unwrap().get_pages().is_empty());
+            let aberto = DocumentoPdf::de_bytes_com_senha(&bytes, None, Some("abre")).unwrap();
+            let s = aberto.seguranca().unwrap();
+            assert!(s.contains(if aes256 { "AES-256" } else { "128 bits" }) && s.contains("copiar") && !s.contains("imprimir"), "{s}");
+            // Trocar a senha de quem já tem: a nova abre, a antiga não.
+            let nova = aberto.protegido(&Protecao { senha_abrir: "nova".into(), limitar: None, aes256 }).unwrap();
+            assert!(DocumentoPdf::de_bytes_com_senha(&nova, None, Some("nova")).is_ok_and(|d| d.total_paginas() == 1));
+            assert!(DocumentoPdf::de_bytes_com_senha(&nova, None, Some("abre")).is_err());
         }
+        assert!(pdf.seguranca().is_none());
         assert!(pdf.protegido(&Protecao { senha_abrir: String::new(), limitar: None, aes256: true }).is_err());
     }
 

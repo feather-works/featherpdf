@@ -1,5 +1,26 @@
 # Pendências do FeatherPDF
 
+## Audit de 04/11/2026
+
+Corrigido neste dia:
+- Ctrl+Z com teto de peso (512 MB), além dos 20 passos: PDF grande não enche a memória (issue #2).
+- Depois de cada edição, o PDF é regravado e reinterpretado em outra thread: a janela não para
+  (issue #3). Quem desenha, imprime ou exporta nesse meio-tempo espera o desenhador novo.
+- Arquivos de passagem (imprimir, levar ao FeatherDocs/FeatherSheet) saem do /tmp comum e vão
+  para `~/.config/featherpdf/temporarios` (0700).
+- Modelo de OCR já baixado é conferido pelo hash, não só pelo tamanho.
+- `PARIDADE-ACROBAT.md`: seções 1 e 17 conferidas de novo.
+
+- Salvar (Ctrl+S e "Salvar como") grava em outra thread. Enquanto grava, a aba e a janela não
+  fecham; edição feita no meio continua por salvar; falha volta a marcar "não salvo". O "salvar
+  antes de fechar" continua na thread da janela (a aba fecha logo depois).
+- Segundo audit do dia: o desenhador em segundo plano tem uma thread só e um pedido na fila
+  (segurar Ctrl+Z num PDF grande juntava dezenas de cópias); o teto do Ctrl+Z vale para todas as
+  abas juntas; colar texto troca TAB por espaço e recusa o que não cabe na página; "Comentários"
+  no Sanitizar não tira vídeo, som nem 3D.
+
+Falta medir com PDFs reais grandes (memória e tempo) e ver as telas novas rodando.
+
 ## Auditoria de 19/10/2026 (código novo da leva dos 29 itens "planejado")
 
 Nada disto foi conferido rodando a GUI. "Copiar como LaTeX" foi retirado a pedido do
@@ -39,9 +60,9 @@ usuário (19/10), e com ele o achado sobre `\alphax`.
 7. **Fonte sem `/Encoding` muda o apóstrofo.** `featherpdf-core/src/fontes.rs`: vira
    WinAnsi, e 0x27/0x60 (’ ‘ no padrão Type1) viram ' e `. Recusar essas fontes ou pôr
    `shortcut:` dizendo o limite.
-8. **Cada equação cria três fontes novas.** `featherpdf-core/src/latex.rs`
+8. ✅ (04/11) **Cada equação cria três fontes novas.** Reaproveita a fonte igual que já está no arquivo. `featherpdf-core/src/latex.rs`
    `inserir_equacao`: reaproveitar a fonte com o mesmo `BaseFont` já nos recursos.
-9. **Réguas roubam o clique na beirada.** `featherpdf-pelicano/src/edicao.rs`: só começar a guia
+9. ✅ (04/11) **Réguas roubam o clique na beirada.** `featherpdf-pelicano/src/edicao.rs`: só começar a guia
    se `self.achar(p)` não achar objeto.
 10. Menores: vírgula sobrando num `format!` do `latex.rs`; o bloco "Comprimir" do fluxo
     grava o documento uma vez a mais só para o relatório de tamanho.

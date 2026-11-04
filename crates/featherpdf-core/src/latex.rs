@@ -196,7 +196,9 @@ impl DocumentoPdf {
         let fontes = [("Helvetica", true), ("Helvetica-Oblique", true), ("Symbol", false)].map(|(base, ansi)| {
             let mut d = dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => base };
             if ansi { d.set("Encoding", "WinAnsiEncoding"); }
-            self.documento.add_object(d)
+            // A mesma fonte simples já no arquivo (de outra equação) serve: sem isso cada equação somava três.
+            let igual = self.documento.objects.iter().find(|(_, o)| o.as_dict().is_ok_and(|e| *e == d)).map(|(id, _)| *id);
+            igual.unwrap_or_else(|| self.documento.add_object(d))
         });
         let nomes: Vec<String> = fontes.iter().map(|f| format!("FPe{}", f.0)).collect();
         let mut s = format!("q {} 0 0 0 rg 0 0 0 RG 0 {:.3} cm\n", cm([m[0], m[1], m[2], m[3], x, y]), -c.sobe);
@@ -227,5 +229,10 @@ mod testes {
         assert!(crate::DocumentoPdf::de_bytes(&bytes, None).is_ok());
         assert!(pdf.inserir_equacao(1, 72.0, 600.0, r"\matrix{1}", 12.0).unwrap_err().contains("matrix"));
         assert!(pdf.inserir_equacao(1, 72.0, 600.0, r"\frac{1}{2", 12.0).is_err());
+        // A segunda equação usa as mesmas fontes da primeira.
+        let fontes = |pdf: &crate::DocumentoPdf| pdf.documento.objects.values().filter(|o| o.as_dict().is_ok_and(|d| d.get(b"BaseFont").is_ok())).count();
+        let antes = fontes(&pdf);
+        pdf.inserir_equacao(1, 72.0, 500.0, r"x^2", 12.0).unwrap();
+        assert_eq!(fontes(&pdf), antes, "sem fontes repetidas");
     }
 }

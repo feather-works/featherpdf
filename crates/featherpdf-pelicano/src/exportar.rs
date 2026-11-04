@@ -41,7 +41,7 @@ impl Formato {
 pub enum ModoPlanilha { PorTabela, Tudo, Pagina }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TipoImagem { Png, Jpg, Webp, Tiff, Svg }
+pub enum TipoImagem { Png, Jpg, Webp, Tiff, Svg, Bmp, Gif }
 
 #[derive(Debug, Clone)]
 pub enum Ex {
@@ -50,6 +50,8 @@ pub enum Ex {
     Imagem(TipoImagem),
     Dpi(u32),
     SoAtual(bool),
+    /// Páginas escolhidas ("1-3, 5"); `None` volta a todas ou só a atual.
+    Intervalo(Option<String>),
     Html(bool),
     Markdown(bool),
     Odt(bool),
@@ -72,6 +74,7 @@ pub struct Exportar {
     imagem: TipoImagem,
     dpi: u32,
     so_atual: bool,
+    intervalo: Option<String>,
     html: bool,
     markdown: bool,
     odt: bool,
@@ -92,7 +95,7 @@ pub struct Exportar {
 
 impl Default for Exportar {
     fn default() -> Self {
-        Self { formato: Formato::Sheet, imagem: TipoImagem::Png, dpi: 150, so_atual: false, html: false, markdown: false, odt: false, pdfa: vec![], trabalhando: false, resultado: None,
+        Self { formato: Formato::Sheet, imagem: TipoImagem::Png, dpi: 150, so_atual: false, intervalo: None, html: false, markdown: false, odt: false, pdfa: vec![], trabalhando: false, resultado: None,
             brutas: None, tabelas: vec![], escolhida: 0, modo: ModoPlanilha::PorTabela, juntar: true, ocr_tabelas: false, leitura: 0 }
     }
 }
@@ -153,7 +156,8 @@ impl App {
             Ex::Formato(f) => { e.formato = f; e.resultado = None; return self.ler_tabelas(); }
             Ex::Imagem(v) => e.imagem = v,
             Ex::Dpi(d) => e.dpi = d,
-            Ex::SoAtual(v) => e.so_atual = v,
+            Ex::SoAtual(v) => { e.so_atual = v; e.intervalo = None; }
+            Ex::Intervalo(t) => e.intervalo = t,
             Ex::Html(v) => { e.html = v; e.markdown = false; }
             Ex::Markdown(v) => { e.markdown = v; e.html = false; }
             Ex::Odt(v) => e.odt = v,
@@ -169,7 +173,10 @@ impl App {
             Ex::Juntar(v) => { e.juntar = v; e.refazer(); }
             Ex::OcrTabelas(v) => { e.ocr_tabelas = v; e.brutas = None; return self.ler_tabelas(); }
             Ex::AbrirSheet => {
-                let destino = std::env::temp_dir().join("featherpdf").join(format!("{base} — tabelas.xlsx"));
+                let destino = match crate::recentes::pasta_temporaria() {
+                    Ok(p) => p.join(format!("{base} — tabelas.xlsx")),
+                    Err(e) => { self.status = format!("Não consegui gravar a planilha: {e}"); return Task::none(); }
+                };
                 return self.update_exportar(Ex::Destino(doc, Some(destino)));
             }
             Ex::Exportar => {
@@ -200,11 +207,18 @@ impl App {
                 let Some(a) = &self.aberto else { return Task::none() };
                 let (pdf, vis) = (a.pdf.clone(), a.vis.clone());
                 let e = &mut self.exportar;
-                let paginas: Vec<u32> = if e.so_atual { vec![atual] } else { (1..=total).collect() };
+                let paginas: Vec<u32> = match &e.intervalo {
+                    Some(t) => match crate::imprimir::ler_intervalo(t, total) {
+                        Some(v) => v,
+                        None => { self.status = format!("Páginas “{t}” não se leem: use algo como 1-3, 5 (de 1 a {total})."); return Task::none(); }
+                    },
+                    None if e.so_atual => vec![atual],
+                    None => (1..=total).collect(),
+                };
                 let (formato, tipo, dpi, html, markdown, odt, modo) = (e.formato, e.imagem, e.dpi, e.html, e.markdown, e.odt, e.modo);
                 let tabelas = e.tabelas.clone();
                 // "Abrir no FeatherSheet" grava num temporário e abre lá; o resto vai para onde a pessoa escolheu.
-                let no_sheet = destino.starts_with(std::env::temp_dir().join("featherpdf"));
+                let no_sheet = crate::recentes::pasta_temporaria().is_ok_and(|p| destino.starts_with(p));
                 e.trabalhando = true;
                 e.resultado = None;
                 return Task::perform(async move {
@@ -258,7 +272,7 @@ impl App {
                                 Ok(format!("{} página(s) em {}", paginas.len(), destino.display()))
                             }
                             _ => {
-                                let extensao = match tipo { TipoImagem::Jpg => "jpg", TipoImagem::Webp => "webp", TipoImagem::Svg => "svg", _ => "png" };
+                                let extensao = match tipo { TipoImagem::Jpg => "jpg", TipoImagem::Webp => "webp", TipoImagem::Svg => "svg", TipoImagem::Bmp => "bmp", TipoImagem::Gif => "gif", _ => "png" };
                                 let arquivo = |n: u32| destino.join(format!("{base} - página {n}.{extensao}"));
                                 // A pasta foi escolhida sem diálogo de "substituir?": não apaga uma exportação anterior.
                                 if let Some(existe) = paginas.iter().map(|&n| arquivo(n)).find(|a| a.exists()) {
@@ -274,8 +288,13 @@ impl App {
                                     if tipo == TipoImagem::Webp { featherpdf_io::gravar_webp(&arquivo, r.largura, r.altura, r.rgba)?; continue; }
                                     let img = image::RgbaImage::from_raw(r.largura, r.altura, r.rgba).ok_or("Página com tamanho incoerente.")?;
                                     let mut bytes = std::io::Cursor::new(Vec::new());
-                                    let gravado = if tipo == TipoImagem::Jpg { image::DynamicImage::ImageRgba8(img).to_rgb8().write_to(&mut bytes, image::ImageFormat::Jpeg) }
-                                        else { img.write_to(&mut bytes, image::ImageFormat::Png) };
+                                    let gravado = match tipo {
+                                        TipoImagem::Jpg => image::DynamicImage::ImageRgba8(img).to_rgb8().write_to(&mut bytes, image::ImageFormat::Jpeg),
+                                        TipoImagem::Bmp => image::DynamicImage::ImageRgba8(img).to_rgb8().write_to(&mut bytes, image::ImageFormat::Bmp),
+                                        // GIF tem 256 cores: serve para página simples (texto, gráfico), não para foto.
+                                        TipoImagem::Gif => img.write_to(&mut bytes, image::ImageFormat::Gif),
+                                        _ => img.write_to(&mut bytes, image::ImageFormat::Png),
+                                    };
                                     gravado.map_err(|e| e.to_string()).and_then(|_| featherpdf_io::gravar_atomico(&arquivo, bytes.get_ref()))
                                         .map_err(|e| format!("{}: {e}", arquivo.display()))?;
                                 }
@@ -346,7 +365,12 @@ impl App {
         let opcao = |rotulo: &'static str, ativo: bool, msg: Ex| button(text(rotulo).size(12.5)).padding([5, 10])
             .style(tema::estilo_botao_pequeno(ativo)).on_press(Msg::Exp(msg));
         let paginas = row![text("Páginas").size(13).width(90),
-            opcao("Todas", !e.so_atual, Ex::SoAtual(false)), opcao("Só a atual", e.so_atual, Ex::SoAtual(true))].spacing(6).align_y(Align::Center);
+            opcao("Todas", !e.so_atual && e.intervalo.is_none(), Ex::SoAtual(false)), opcao("Só a atual", e.so_atual && e.intervalo.is_none(), Ex::SoAtual(true)),
+            opcao("Escolher", e.intervalo.is_some(), Ex::Intervalo(Some(e.intervalo.clone().unwrap_or_default())))].spacing(6).align_y(Align::Center);
+        let paginas = match &e.intervalo {
+            Some(t) => column![paginas, row![Space::new(90.0, 0.0), text_input("1-3, 5", t).on_input(|t| Msg::Exp(Ex::Intervalo(Some(t)))).size(12.5).width(160.0)]].spacing(6),
+            None => column![paginas],
+        };
         let (mut corpo, botao): (Column<'_, Msg>, &str) = match e.formato {
             Formato::Sheet | Formato::Excel => (self.corpo_planilha(), if e.formato == Formato::Sheet { "Abrir no FeatherSheet" } else { "Salvar como…" }),
             Formato::Docs => (column![text("Texto corrido com títulos, parágrafos e imagens, aberto direto no FeatherDocs para editar.").size(13).color(muted)], "Abrir no FeatherDocs"),
@@ -368,7 +392,9 @@ impl App {
                     opcao("JPG (menor)", e.imagem == TipoImagem::Jpg, Ex::Imagem(TipoImagem::Jpg)),
                     opcao("WebP (sem perda)", e.imagem == TipoImagem::Webp, Ex::Imagem(TipoImagem::Webp)),
                     opcao("TIFF (várias páginas)", e.imagem == TipoImagem::Tiff, Ex::Imagem(TipoImagem::Tiff)),
-                    opcao("SVG (vetorial)", e.imagem == TipoImagem::Svg, Ex::Imagem(TipoImagem::Svg))].spacing(6).align_y(Align::Center),
+                    opcao("SVG (vetorial)", e.imagem == TipoImagem::Svg, Ex::Imagem(TipoImagem::Svg)),
+                    opcao("BMP", e.imagem == TipoImagem::Bmp, Ex::Imagem(TipoImagem::Bmp)),
+                    opcao("GIF (256 cores)", e.imagem == TipoImagem::Gif, Ex::Imagem(TipoImagem::Gif))].spacing(6).align_y(Align::Center),
             ].spacing(10).push_maybe((e.imagem != TipoImagem::Svg).then(|| row![text("Resolução").size(13).width(90), opcao("72 dpi (tela)", e.dpi == 72, Ex::Dpi(72)), opcao("150 dpi", e.dpi == 150, Ex::Dpi(150)), opcao("300 dpi (impressão)", e.dpi == 300, Ex::Dpi(300))].spacing(6).align_y(Align::Center)))
                 .push(paginas), if e.imagem == TipoImagem::Tiff { "Salvar como…" } else { "Escolher pasta…" }),
             Formato::PdfA => {
