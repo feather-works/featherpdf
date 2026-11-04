@@ -12,7 +12,7 @@ usuário (19/10), e com ele o achado sobre `\alphax`.
    `limpar_fundo` passa *toda* imagem pelo filtro; o `clarear_fundo_jpeg` testa antes se a
    imagem parece papel (`niveis_do_papel`), o caderno não. Correção: a mesma checagem no
    começo, ou só imagem que cobre a página inteira.
-2. **Refluxo invade a coluna ao lado.** `featherpdf-core/src/refluxo.rs` (margem com uma
+2. ✅ (04/11) **Refluxo invade a coluna ao lado.** Linha sozinha usa a margem das linhas da mesma coluna. `featherpdf-core/src/refluxo.rs` (margem com uma
    linha só = folga da esquerda espelhada). Em artigo de duas colunas a linha da esquerda
    cresce até a borda da página, por cima da direita. Correção: com uma linha, usar o maior
    `caixa[2]` das linhas de texto da página que começam no mesmo x (±2 pt).

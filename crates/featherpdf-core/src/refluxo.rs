@@ -23,10 +23,15 @@ impl DocumentoPdf {
         let c0 = objs[objeto].caixa;
         let linhas = crate::paragrafos::paragrafo_por_geometria(&objs, objeto, true);
         let textos: Vec<String> = linhas.iter().map(|&k| texto_de(&objs[k]).map_or(String::new(), |t| t.0)).collect();
-        // Margem direita: a da linha mais comprida; com uma linha só, a mesma folga da esquerda.
+        // Margem direita: a da linha mais comprida; com uma linha só, a das outras linhas que
+        // começam no mesmo x (a coluna, para não invadir a do lado) ou, sem elas, a mesma folga da esquerda.
         let (geo, _) = self.geometria(pagina)?;
         let mut margem = linhas.iter().map(|&k| objs[k].caixa[2]).fold(f32::MIN, f32::max);
-        if linhas.len() == 1 { margem = margem.max(geo[2] - (c0[0] - geo[0])); }
+        if linhas.len() == 1 {
+            let coluna = objs.iter().filter(|o| matches!(o.tipo, TipoObjeto::Texto { .. }) && (o.caixa[0] - c0[0]).abs() <= 2.0)
+                .map(|o| o.caixa[2]).fold(margem, f32::max);
+            margem = if coluna > margem { coluna } else { margem.max(geo[2] - (c0[0] - geo[0])) };
+        }
         let palavras: Vec<String> = std::iter::once(trocado.as_str()).chain(textos[1..].iter().map(String::as_str))
             .flat_map(str::split_whitespace).map(String::from).collect();
         // Medidas: cada palavra e o espaço, na fonte da linha, levadas a pontos pela largura que a linha já tem.
@@ -102,5 +107,18 @@ mod testes {
         let antes = linhas(&pdf);
         assert!(pdf.substituir_com_refluxo(1, 0, "gato", "gato preto e muito curioso").is_err());
         assert_eq!(linhas(&pdf), antes);
+    }
+
+    #[test]
+    fn linha_sozinha_nao_invade_a_coluna_do_lado() {
+        // Duas colunas: a linha sozinha (x=50) fica longe da outra linha da mesma coluna, que
+        // marca a margem; a coluna da direita começa em x=320.
+        let mut pdf = pdf_com("BT /F1 10 Tf 50 700 Td (Um gato) Tj 0 -200 Td (Esta linha da esquerda vai ate aqui) Tj ET \
+            BT /F1 10 Tf 320 700 Td (Coluna da direita com texto) Tj ET");
+        let margem = linhas(&pdf)[1].1;
+        assert!(margem < 320.0);
+        let aviso = pdf.substituir_com_refluxo(1, 0, "gato", "gato preto e branco subiu no muro").unwrap();
+        assert!(aviso.contains("apertada"), "{aviso}");
+        assert!(linhas(&pdf).iter().filter(|l| l.0.contains("gato")).all(|l| l.1 <= margem + 1.0), "{:?}", linhas(&pdf));
     }
 }
