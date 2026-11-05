@@ -1,6 +1,6 @@
 # FeatherPDF
 
-**Produto FeatherOffice independente · versão 0.1.4**
+**Produto FeatherOffice independente · versão 0.1.5**
 
 ## Baixar
 
@@ -14,6 +14,16 @@
 | **Linux** (qualquer distribuição) | [featherpdf-linux-x86_64.tar.gz](https://github.com/feather-works/featherpdf/releases/latest/download/featherpdf-linux-x86_64.tar.gz) | extraia e rode `./instalar.sh` |
 
 Todas as versões e os `SHA256SUMS` ficam na [página de releases](https://github.com/feather-works/featherpdf/releases).
+
+### Novidades da 0.1.5
+
+- **Medidas batem com a planta:** a escala que o CAD grava no PDF agora é lida também quando vem sem unidade, e o fator de distância é aplicado direito. Numa planta de lote, os lados medidos passaram a bater com as cotas.
+- **Mover pontos de uma medida:** com uma ferramenta do Medir ligada, arraste um ponto de uma medida pronta para ajustar; o valor se refaz na hora.
+- **Medir em planta grande sem travar:** o imã lê os cantos do desenho uma vez só e procura só perto do mouse (planta com 375 mil vértices ficou leve no zoom).
+- **Aviso de versão nova:** ao abrir (uma vez por dia, desligável em Configurações → Sobre), o FeatherPDF avisa quando há atualização e instala pelo terminal, conferindo o SHA-256.
+- **Salvar sem travar:** salvar e preparar o desenho do PDF rodam em segundo plano; editar durante a gravação não se perde.
+- **Zoom:** dá para digitar o zoom, há o botão "Altura", e o zoom no mouse não pula quando a página pequena passa a encher a tela.
+- **Mais:** exportar por intervalo de páginas, BMP e GIF; colar imagem ou texto da área de transferência; Sanitizar pode tirar comentários; "Limpar caderno" não mexe em fotos e logotipos.
 
 Editor nativo em **Rust + pelicano**. A página é exibida como PDF de verdade
 (textos, imagens e elementos gráficos), e o documento permanece vetorial para

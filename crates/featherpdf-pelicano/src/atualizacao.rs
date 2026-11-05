@@ -176,6 +176,7 @@ pub fn abrir_no_terminal(inst: Instalacao, versao: &str) -> Result<(), String> {
     // Pasta nova 0700: com nome fixo em /tmp, outro usuário podia trocar o roteiro enquanto o sudo pede a senha.
     let pasta = std::env::temp_dir().join(format!("featherpdf-atualizar-{}-{}", std::process::id(),
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos())));
+    #[cfg_attr(not(unix), allow(unused_mut))]
     let mut criar = std::fs::DirBuilder::new();
     #[cfg(unix)]
     { use std::os::unix::fs::DirBuilderExt; criar.mode(0o700); }
