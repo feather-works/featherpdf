@@ -26,10 +26,13 @@ pub struct Config {
     pub faixa: bool,
     /// Índice em `ocr_modelos::LINGUAS`.
     pub lingua_ocr: usize,
+    /// Consultar o GitHub ao abrir (uma vez por dia) e quando foi a última vez (segundos Unix).
+    pub procurar_atualizacoes: bool,
+    pub ultima_procura: u64,
 }
 
 impl Default for Config {
-    fn default() -> Self { Self { tema: Tema::Automatico, zoom: ZoomInicial::Manter, ferramentas: true, faixa: true, lingua_ocr: 0 } }
+    fn default() -> Self { Self { tema: Tema::Automatico, zoom: ZoomInicial::Manter, ferramentas: true, faixa: true, lingua_ocr: 0, procurar_atualizacoes: true, ultima_procura: 0 } }
 }
 
 #[derive(Debug, Clone)]
@@ -53,6 +56,8 @@ impl Config {
                 ("zoom", "100") => c.zoom = ZoomInicial::Cem,
                 ("ferramentas", v) => c.ferramentas = v != "0",
                 ("faixa", v) => c.faixa = v != "0",
+                ("procurar_atualizacoes", v) => c.procurar_atualizacoes = v != "0",
+                ("ultima_procura", v) => c.ultima_procura = v.parse().unwrap_or(0),
                 ("lingua_ocr", v) => c.lingua_ocr = v.parse().ok().filter(|i| *i < crate::ocr_modelos::LINGUAS.len()).unwrap_or(0),
                 _ => {}
             }
@@ -63,7 +68,8 @@ impl Config {
     fn texto(&self) -> String {
         let tema = match self.tema { Tema::Automatico => "auto", Tema::Claro => "claro", Tema::Escuro => "escuro" };
         let zoom = match self.zoom { ZoomInicial::Largura => "largura", ZoomInicial::Inteira => "inteira", ZoomInicial::Cem => "100", ZoomInicial::Manter => "manter" };
-        format!("tema={tema}\nzoom={zoom}\nferramentas={}\nfaixa={}\nlingua_ocr={}\n", self.ferramentas as u8, self.faixa as u8, self.lingua_ocr)
+        format!("tema={tema}\nzoom={zoom}\nferramentas={}\nfaixa={}\nlingua_ocr={}\nprocurar_atualizacoes={}\nultima_procura={}\n",
+            self.ferramentas as u8, self.faixa as u8, self.lingua_ocr, self.procurar_atualizacoes as u8, self.ultima_procura)
     }
 
     /// Falha ao gravar não atrapalha o uso: só a preferência não volta na próxima abertura.
@@ -173,6 +179,7 @@ impl App {
             _ => column![
                 text(format!("FeatherPDF {}", env!("CARGO_PKG_VERSION"))).size(22),
                 text("Leitor e editor de PDF nativo da suíte FeatherWorks, em Rust.").size(12.5),
+                self.sobre_atualizacao(),
                 text("Os arquivos são abertos e processados no computador: sem conta, sem telemetria, sem envio de conteúdo. O OCR roda localmente.").size(12.5),
                 text("Tema, botões, menus e esta janela vêm da biblioteca feather-ui.").size(12).color(muted),
                 feather_ui::creditos::colaboradores(),
@@ -192,7 +199,8 @@ mod testes {
     #[test]
     fn grava_e_le_de_volta() {
         let a = std::env::temp_dir().join(format!("featherpdf-config-{}.txt", std::process::id()));
-        let c = Config { tema: Tema::Escuro, zoom: ZoomInicial::Largura, ferramentas: false, faixa: false, lingua_ocr: 2 };
+        let c = Config { tema: Tema::Escuro, zoom: ZoomInicial::Largura, ferramentas: false, faixa: false, lingua_ocr: 2,
+            procurar_atualizacoes: false, ultima_procura: 1_790_000_000 };
         std::fs::write(&a, c.texto()).unwrap();
         assert_eq!(Config::carregar_de(&a), c);
         // Arquivo estranho: o que não se entende fica no padrão.

@@ -164,16 +164,25 @@ impl crate::DocumentoPdf {
             if x < x0.min(x1) || x > x0.max(x1) || y < y0.min(y1) || y > y0.max(y1) { return None; }
             let medida = r(vp.get(b"Measure").ok()?)?.as_dict().ok()?.clone();
             if medida.get(b"Subtype").ok().and_then(|s| s.as_name().ok()).is_some_and(|s| s != b"RL") { return None; }
-            // Distância (/D) se houver; senão o eixo X. Só o primeiro formato converte do papel; os outros são subdivisões.
-            let formatos = medida.get(b"D").ok().or_else(|| medida.get(b"X").ok()).and_then(r)?;
-            let primeiro = r(formatos.as_array().ok()?.first()?)?.as_dict().ok()?.clone();
-            let fator = r(primeiro.get(b"C").ok()?)?.as_float().ok()? as f64;
-            let rotulo = r(primeiro.get(b"U").ok()?)?;
-            let unidade = Unidade::do_rotulo(&lopdf::decode_text_string(&rotulo).ok()?)?;
+            // Só o primeiro formato de cada lista converte; os outros são subdivisões. O /X leva do
+            // papel às unidades do desenho; o /D (opcional) leva das unidades do /X às da distância.
+            let primeiro = |chave: &[u8]| -> Option<(f64, String)> {
+                let formatos = r(medida.get(chave).ok()?)?;
+                let f = r(formatos.as_array().ok()?.first()?)?.as_dict().ok()?.clone();
+                let c = r(f.get(b"C").ok()?)?.as_float().ok()? as f64;
+                let u = f.get(b"U").ok().and_then(r).and_then(|u| lopdf::decode_text_string(&u).ok()).unwrap_or_default();
+                Some((c, u))
+            };
+            let (cx, ux) = primeiro(b"X")?;
+            let (cd, ud) = primeiro(b"D").unwrap_or((1.0, String::new()));
+            let fator = cx * cd;
+            let rotulo = if ud.trim().is_empty() { ux } else { ud };
+            // shortcut: unidade em branco (CAD/GIS que não grava) vira metro, o comum em topografia; mm sairia 1000× maior.
+            let unidade = if rotulo.trim().is_empty() { Unidade::M } else { Unidade::do_rotulo(&rotulo)? };
             if !(fator > 0.0 && fator.is_finite()) { return None; }
             // 1:50 vira proporção; um fator quebrado fica como calibrado.
             let n = fator / unidade.por_ponto();
-            let proporcao = ((n - n.round()).abs() < n * 1e-3).then(|| n.round());
+            let proporcao = ((n - n.round()).abs() < n * 1e-4).then(|| n.round());
             Some(Escala { unidade, fator, proporcao })
         })
     }
@@ -200,6 +209,14 @@ mod testes {
         assert_eq!((e.unidade, e.proporcao), (super::Unidade::M, Some(50.0)));
         assert!(pdf.escala_da_planta(1, (400.0, 100.0)).is_none(), "unidade desconhecida");
         assert!(pdf.escala_da_planta(1, (100.0, 600.0)).is_none(), "fora das janelas");
+        // Como grava o CAD do levantamento: /X com o fator, /D com C=1 (relativo ao /X) e unidade em branco.
+        let rl = dictionary! { "Type" => "Measure", "Subtype" => "RL", "R" => Object::string_literal(" "),
+            "X" => vec![dictionary! { "U" => Object::string_literal(" "), "C" => 0.17486 }.into()],
+            "D" => vec![dictionary! { "U" => Object::string_literal(" "), "C" => 1 }.into()] };
+        pdf.documento.get_dictionary_mut(pagina).unwrap().set("VP", vec![vp([0, 0, 595, 842], rl)]);
+        let e = pdf.escala_da_planta(1, (100.0, 100.0)).unwrap();
+        assert_eq!(e.unidade, super::Unidade::M);
+        assert!((e.fator - 0.17486).abs() < 1e-6, "{}", e.fator);
     }
 
     #[test]

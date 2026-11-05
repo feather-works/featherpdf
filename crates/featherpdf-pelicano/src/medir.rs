@@ -14,7 +14,7 @@ use pelicano::column;
 use crate::compat::*;
 use crate::compat::mouse::{self, Cursor};
 use crate::compat::{event, canvas::{self, Frame, Geometry, Path, Stroke, Text}};
-use crate::edicao::na_tela;
+use crate::edicao::{da_tela, na_tela};
 use crate::{App, Ferramenta, Msg, Painel};
 
 /// Ferramenta da aba Medir.
@@ -45,8 +45,8 @@ pub struct Medidas {
     pub sem_ima: bool,
     /// A pessoa escolheu a escala na mão: a gravada pelo CAD na planta não passa por cima.
     pub escala_manual: bool,
-    /// Vértices de cada página na tela, guardados pelo zoom e pela versão do documento.
-    ima: std::cell::RefCell<std::collections::HashMap<u32, (f32, u64, std::sync::Arc<Vec<Point>>)>>,
+    /// Vértices de cada página (pontos da página, em ordem de x), guardados pela versão do documento.
+    ima: std::cell::RefCell<std::collections::HashMap<u32, (u64, std::sync::Arc<Vec<(f32, f32)>>)>>,
 }
 
 #[derive(Debug, Clone)]
@@ -54,6 +54,8 @@ pub enum Med {
     Ferramenta(Medidor),
     /// Clique na página, em pixels a partir do canto dela.
     Ponto { pagina: u32, p: Point },
+    /// Ponto `j` da medida `i` arrastado para `p` (pixels a partir do canto da página).
+    Mover { pagina: u32, i: usize, j: usize, p: Point },
     Terminar,
     /// Clique no primeiro ponto de área ou perímetro: fecha a forma.
     Fechar,
@@ -86,13 +88,17 @@ fn id_escala() -> &'static str { "featherpdf.escala" }
 /// Camada da página com as medidas desenhadas e, com a ferramenta ligada, os cliques.
 struct Regua {
     pagina: u32,
-    feitas: Vec<(TipoMedida, Vec<Point>, String)>,
+    /// Medidas desta página: o índice na lista, o tipo, os pontos na tela e o valor.
+    feitas: Vec<(usize, TipoMedida, Vec<Point>, String)>,
     atual: Vec<Point>,
     tipo: Option<TipoMedida>,
     zoom: f32,
     escala: Escala,
-    /// Vértices do desenho na tela (imã), se ligado.
-    ima: Option<std::sync::Arc<Vec<Point>>>,
+    /// Vértices do desenho em pontos da página, em ordem de x (imã), se ligado.
+    ima: Option<std::sync::Arc<Vec<(f32, f32)>>>,
+    /// Caixa e giro da página, para levar o cursor aos pontos da página e voltar.
+    pag: [f32; 4],
+    giro: i64,
     /// Shift apertado: o traço anda de 45 em 45°.
     travar: bool,
 }
@@ -108,9 +114,28 @@ impl Regua {
             let r = dx.hypot(dy);
             return (Point::new(u.x + r * a.cos(), u.y + r * a.sin()), false);
         }
-        let perto = self.ima.as_ref().and_then(|v| v.iter().copied()
-            .map(|q| (q, q.distance(p))).filter(|(_, d)| *d < RAIO_IMA).min_by(|a, b| a.1.total_cmp(&b.1)));
-        perto.map_or((p, false), |(q, _)| (q, true))
+        // Planta de CAD tem centenas de milhares de vértices: só a faixa de x perto do cursor é olhada.
+        let raio = RAIO_IMA / self.zoom;
+        let (x, y) = da_tela(p, self.pag, self.giro, self.zoom);
+        let perto = self.ima.as_ref().and_then(|v| {
+            let ini = v.partition_point(|q| q.0 < x - raio);
+            v[ini..].iter().take_while(|q| q.0 <= x + raio).copied()
+                .map(|q| (q, (q.0 - x).hypot(q.1 - y))).filter(|(_, d)| *d < raio).min_by(|a, b| a.1.total_cmp(&b.1))
+        });
+        perto.map_or((p, false), |((qx, qy), _)| (na_tela([qx, qy, qx, qy], self.pag, self.giro, self.zoom).position(), true))
+    }
+
+    /// Ponto de medida pronta embaixo do cursor (só sem medida em andamento): (posição em `feitas`, ponto).
+    fn ponto_pronto(&self, p: Point) -> Option<(usize, usize)> {
+        if !self.atual.is_empty() { return None; }
+        self.feitas.iter().enumerate().flat_map(|(k, f)| f.2.iter().enumerate().map(move |(j, q)| (k, j, q.distance(p))))
+            .filter(|t| t.2 < RAIO_IMA).min_by(|a, b| a.2.total_cmp(&b.2)).map(|(k, j, _)| (k, j))
+    }
+
+    /// Os pontos da medida `k` com o ponto `j` (e as cópias dele, como o fim do perímetro fechado) em `novo`.
+    fn movida(&self, k: usize, j: usize, novo: Point) -> Vec<Point> {
+        let pts = &self.feitas[k].2;
+        pts.iter().map(|&q| if q == pts[j] { novo } else { q }).collect()
     }
 
     /// Área ou perímetro com 3 pontos ou mais, e o cursor no primeiro: clicar fecha.
@@ -120,7 +145,12 @@ impl Regua {
 }
 
 #[derive(Default)]
-struct EstadoRegua { cursor: Option<Point>, ultimo: Option<(std::time::Instant, Point)> }
+struct EstadoRegua {
+    cursor: Option<Point>,
+    ultimo: Option<(std::time::Instant, Point)>,
+    /// Arrastando o ponto `j` da medida `k` (posição em `feitas`), pego em `de`.
+    arrasto: Option<(usize, usize, Point)>,
+}
 
 fn rotulo(f: &mut Frame, p: Point, texto: &str, cor: Color) {
     let largura = texto.chars().count() as f32 * 6.6 + 10.0;
@@ -173,15 +203,33 @@ impl canvas::Program<Msg> for Regua {
                 if novo == estado.cursor { return (event::Status::Ignored, None); }
                 estado.cursor = novo;
                 // Com o imã, o quadradinho segue o mouse mesmo antes do primeiro clique.
-                (if self.atual.is_empty() && self.ima.is_none() { event::Status::Ignored } else { event::Status::Captured }, None)
+                (if self.atual.is_empty() && self.ima.is_none() && estado.arrasto.is_none() && self.feitas.is_empty() { event::Status::Ignored } else { event::Status::Captured }, None)
             }
             canvas::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let Some(cru) = cursor.position_in(limites) else { return (event::Status::Ignored, None) };
+                // Em cima de um ponto de medida pronta: arrasta; o clique sem arrastar vale no soltar.
+                if let Some((k, j)) = self.ponto_pronto(cru) {
+                    estado.arrasto = Some((k, j, cru));
+                    return (event::Status::Captured, None);
+                }
                 let (p, _) = self.ajustar(cru);
                 let agora = std::time::Instant::now();
                 let duplo = estado.ultimo.is_some_and(|(t, q)| agora.duration_since(t).as_millis() < DUPLO_MS && q.distance(cru) < DUPLO_PX);
                 estado.ultimo = Some((agora, cru));
                 let msg = if self.fecha(p) { Med::Fechar } else if duplo { Med::Terminar } else { Med::Ponto { pagina: self.pagina, p } };
+                (event::Status::Captured, Some(Msg::Medir(msg)))
+            }
+            canvas::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if estado.arrasto.is_some() => {
+                let Some((k, j, de)) = estado.arrasto.take() else { return (event::Status::Ignored, None) };
+                let solto = cursor.position_in(limites).unwrap_or(de);
+                let (p, _) = self.ajustar(solto);
+                let msg = if solto.distance(de) < DUPLO_PX {
+                    // Não arrastou: é um clique normal, começa uma medida grudada neste ponto.
+                    estado.ultimo = Some((std::time::Instant::now(), solto));
+                    Med::Ponto { pagina: self.pagina, p: self.feitas[k].2[j] }
+                } else {
+                    Med::Mover { pagina: self.pagina, i: self.feitas[k].0, j, p }
+                };
                 (event::Status::Captured, Some(Msg::Medir(msg)))
             }
             canvas::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if !self.atual.is_empty() =>
@@ -192,11 +240,26 @@ impl canvas::Program<Msg> for Regua {
 
     fn draw(&self, estado: &EstadoRegua, renderer: &Renderer, _: &Theme, limites: Rect, _: Cursor) -> Vec<Geometry> {
         let mut f = Frame::new(renderer, limites.size());
-        for (tipo, pts, texto) in &self.feitas {
-            desenhar(&mut f, *tipo, pts, AZUL, true);
-            rotulo(&mut f, ponto_do_rotulo(*tipo, pts), texto, AZUL);
-        }
         let ajustado = estado.cursor.filter(|_| self.tipo.is_some()).map(|c| self.ajustar(c));
+        for (k, (_, tipo, pts, texto)) in self.feitas.iter().enumerate() {
+            match (estado.arrasto, ajustado) {
+                // A medida sendo arrastada sai com o ponto novo e o valor refeito.
+                (Some((a, j, _)), Some((c, _))) if a == k => {
+                    let pts = self.movida(k, j, c);
+                    let pagina: Vec<(f32, f32)> = pts.iter().map(|p| (p.x / self.zoom, p.y / self.zoom)).collect();
+                    desenhar(&mut f, *tipo, &pts, LARANJA, true);
+                    rotulo(&mut f, ponto_do_rotulo(*tipo, &pts), &medir(*tipo, &pagina, &self.escala).1, LARANJA);
+                }
+                _ => {
+                    desenhar(&mut f, *tipo, pts, AZUL, true);
+                    rotulo(&mut f, ponto_do_rotulo(*tipo, pts), texto, AZUL);
+                }
+            }
+        }
+        // Anel no ponto pronto embaixo do cursor: dá para arrastar.
+        if let Some((k, j)) = estado.arrasto.is_none().then(|| estado.cursor.and_then(|c| self.ponto_pronto(c))).flatten() {
+            f.stroke(&Path::circle(self.feitas[k].2[j], 7.0), Stroke::default().with_color(VERDE).with_width(2.0));
+        }
         if let Some((c, true)) = ajustado {
             f.stroke(&Path::rectangle(Point::new(c.x - 5.0, c.y - 5.0), Size::new(10.0, 10.0)), Stroke::default().with_color(VERDE).with_width(2.0));
         }
@@ -236,24 +299,25 @@ impl App {
         let tela = |pts: &[(f32, f32)]| -> Vec<Point> {
             pts.iter().map(|&(x, y)| na_tela([x, y, x, y], [x0, y0, x1, y1], giro, self.zoom).position()).collect()
         };
-        let feitas = self.medidas.feitas.iter().filter(|m| m.pagina == n)
-            .map(|m| (m.tipo, tela(&m.pontos), medir(m.tipo, &m.pontos, &self.medidas.escala).1)).collect();
+        let feitas = self.medidas.feitas.iter().enumerate().filter(|(_, m)| m.pagina == n)
+            .map(|(i, m)| (i, m.tipo, tela(&m.pontos), medir(m.tipo, &m.pontos, &self.medidas.escala).1)).collect();
         let regua = Regua {
             pagina: n, feitas, atual: atual_aqui.map(|(_, p)| tela(p)).unwrap_or_default(),
             tipo, zoom: self.zoom, escala: self.medidas.escala,
-            ima: tipo.filter(|_| !self.medidas.sem_ima).and_then(|_| self.ima_da_pagina(n, &tela)),
+            ima: tipo.filter(|_| !self.medidas.sem_ima).and_then(|_| self.ima_da_pagina(n)),
+            pag: [x0, y0, x1, y1], giro,
             travar: self.modificadores.shift_key(),
         };
         Some(canvas::Canvas::new(regua).width(l).height(a).into())
     }
 
-    /// Vértices da página `n` na tela, lidos do PDF uma vez por zoom e versão do documento.
-    fn ima_da_pagina(&self, n: u32, tela: &dyn Fn(&[(f32, f32)]) -> Vec<Point>) -> Option<std::sync::Arc<Vec<Point>>> {
+    /// Vértices da página `n` (já em ordem de x), lidos do PDF uma vez por versão do documento
+    /// (`geracao_fundos`; o `geracao` muda a cada passo de zoom e relia a planta inteira).
+    fn ima_da_pagina(&self, n: u32) -> Option<std::sync::Arc<Vec<(f32, f32)>>> {
         let mut cache = self.medidas.ima.borrow_mut();
-        if let Some((z, g, v)) = cache.get(&n) { if *z == self.zoom && *g == self.geracao { return Some(v.clone()); } }
-        let pontos = self.aberto.as_ref()?.pdf.vertices(n).ok()?;
-        let v = std::sync::Arc::new(tela(&pontos));
-        cache.insert(n, (self.zoom, self.geracao, v.clone()));
+        if let Some((g, v)) = cache.get(&n) { if *g == self.geracao_fundos { return Some(v.clone()); } }
+        let v = std::sync::Arc::new(self.aberto.as_ref()?.pdf.vertices(n).ok()?);
+        cache.insert(n, (self.geracao_fundos, v.clone()));
         Some(v)
     }
 
@@ -318,6 +382,15 @@ impl App {
                 let texto = medir(tipo, &pontos, &m.escala).1;
                 m.feitas.push(Medida { pagina, tipo, pontos });
                 self.status = format!("{}: {texto}", tipo.nome());
+            }
+            Med::Mover { pagina, i, j, p } => {
+                let Some(novo) = self.ponto_na_pagina(pagina, p) else { return Task::none() };
+                let escala = self.medidas.escala;
+                let Some(m) = self.medidas.feitas.get_mut(i).filter(|m| j < m.pontos.len()) else { return Task::none() };
+                // O perímetro fechado repete o primeiro ponto no fim: os dois andam juntos.
+                let velho = m.pontos[j];
+                for q in m.pontos.iter_mut().filter(|q| **q == velho) { *q = novo; }
+                self.status = format!("{}: {}", m.tipo.nome(), medir(m.tipo, &m.pontos, &escala).1);
             }
             Med::Cancelar => self.medidas.atual = None,
             Med::DesfazerPonto => if let Some((_, pts)) = &mut self.medidas.atual {
@@ -557,8 +630,11 @@ mod testes {
     use super::*;
 
     fn regua(atual: Vec<Point>, ima: Vec<Point>, travar: bool, tipo: TipoMedida) -> Regua {
+        let pag = [0.0, 0.0, 1000.0, 1000.0];
+        let mut ima: Vec<(f32, f32)> = ima.iter().map(|&p| da_tela(p, pag, 0, 1.0)).collect();
+        ima.sort_by(|a, b| a.0.total_cmp(&b.0));
         Regua { pagina: 1, feitas: vec![], atual, tipo: Some(tipo), zoom: 1.0, escala: Escala::default(),
-            ima: Some(std::sync::Arc::new(ima)), travar }
+            ima: Some(std::sync::Arc::new(ima)), pag, giro: 0, travar }
     }
 
     #[test]
@@ -567,6 +643,26 @@ mod testes {
         assert_eq!(r.ajustar(Point::new(103.0, 101.0)), (Point::new(104.0, 100.0), true));
         // Longe de tudo: fica onde o mouse está.
         assert_eq!(r.ajustar(Point::new(300.0, 300.0)), (Point::new(300.0, 300.0), false));
+        // Página girada e com zoom: o raio continua em pixels e o ponto volta na tela certa.
+        let pag = [0.0, 0.0, 600.0, 800.0];
+        let alvo = Point::new(200.0, 300.0);
+        let r = Regua { ima: Some(std::sync::Arc::new(vec![(0.0, 0.0), da_tela(alvo, pag, 270, 2.0)])), pag, giro: 270, zoom: 2.0, ..r };
+        assert_eq!(r.ajustar(Point::new(206.0, 296.0)), (alvo, true));
+        assert!(!r.ajustar(Point::new(215.0, 300.0)).1, "15 px longe não gruda");
+    }
+
+    #[test]
+    fn pega_e_move_ponto_de_medida_pronta() {
+        // Perímetro fechado: o primeiro ponto se repete no fim e os dois andam juntos.
+        let pts = vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(100.0, 100.0), Point::new(0.0, 0.0)];
+        let r = Regua { feitas: vec![(7, TipoMedida::Perimetro, pts, String::new())], ..regua(vec![], vec![], false, TipoMedida::Distancia) };
+        assert_eq!(r.ponto_pronto(Point::new(98.0, 3.0)), Some((0, 1)));
+        assert_eq!(r.ponto_pronto(Point::new(50.0, 50.0)), None);
+        let novo = r.movida(0, 0, Point::new(5.0, 5.0));
+        assert_eq!((novo[0], novo[3], novo[1]), (Point::new(5.0, 5.0), Point::new(5.0, 5.0), Point::new(100.0, 0.0)));
+        // Com medida em andamento, clicar no ponto pronto é ponto novo, não arrasto.
+        let r = Regua { atual: vec![Point::new(300.0, 300.0)], ..r };
+        assert_eq!(r.ponto_pronto(Point::new(98.0, 3.0)), None);
     }
 
     #[test]

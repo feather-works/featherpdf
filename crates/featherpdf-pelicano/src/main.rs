@@ -6,6 +6,7 @@
 
 mod ajuda_pdf;
 mod assinar;
+mod atualizacao;
 mod busca;
 mod camadas;
 mod comentar;
@@ -280,6 +281,7 @@ pub enum Msg {
     AlternarTema,
     SecaoConfig(usize),
     Config(configuracoes::Cf),
+    Atualizacao(atualizacao::At),
     AjudaEvento(feather_ui::ajuda::Evento),
     // Janelas
     EscalaTela(f32),
@@ -432,6 +434,10 @@ pub struct App {
     pub recentes: recentes::Recentes,
     pub tema_escuro: bool,
     pub config: configuracoes::Config,
+    /// Seção Sobre: procurando, em dia, versão nova…
+    pub atualizacao: atualizacao::Estado,
+    /// Cartão de versão nova na tela (a consulta da abertura achou uma).
+    pub aviso_atualizacao: Option<atualizacao::Lancamento>,
     /// Página escura (modo escuro inteligente), separado do tema da janela.
     pub modo_escuro: bool,
     config_secao: usize,
@@ -569,6 +575,8 @@ impl App {
             suspenso: None,
             mao: None,
             config,
+            atualizacao: atualizacao::Estado::default(),
+            aviso_atualizacao: None,
         };
         app.ocr.lingua = app.config.lingua_ocr;
         app.janelas.principal = Some(WindowId::MAIN);
@@ -578,6 +586,7 @@ impl App {
         if let Some(caminho) = std::env::args_os().nth(1).map(PathBuf::from) {
             tarefas.push(Task::done(Msg::AbrirCaminho(caminho)));
         }
+        tarefas.push(app.procurar_atualizacao_ao_abrir());
         (app, Task::batch(tarefas))
     }
 
@@ -1620,6 +1629,7 @@ impl App {
                 return self.update_config(configuracoes::Cf::Tema(t));
             }
             Msg::Config(m) => return self.update_config(m),
+            Msg::Atualizacao(e) => return self.update_atualizacao(e),
             Msg::SecaoConfig(i) => self.config_secao = i,
             Msg::AjudaEvento(e) => self.ajuda.atualizar(e, ajuda_pdf::modelo()),
 

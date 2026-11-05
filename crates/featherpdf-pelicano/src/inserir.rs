@@ -330,14 +330,8 @@ impl App {
 
     /// Ponto da tela (a partir do canto da página) no espaço da página.
     pub(crate) fn ponto_na_pagina(&self, pagina: u32, p: Point) -> Option<(f32, f32)> {
-        let ([x0, y0, x1, y1], giro) = self.aberto.as_ref()?.pdf.geometria(pagina).ok()?;
-        let (u, v) = (p.x / self.zoom, p.y / self.zoom);
-        Some(match giro {
-            90 => (x0 + v, y0 + u),
-            180 => (x1 - u, y0 + v),
-            270 => (x1 - v, y1 - u),
-            _ => (x0 + u, y1 - v),
-        })
+        let (pag, giro) = self.aberto.as_ref()?.pdf.geometria(pagina).ok()?;
+        Some(crate::edicao::da_tela(p, pag, giro, self.zoom))
     }
 
     pub(crate) fn caixa_na_pagina(&self, pagina: u32, a: Point, b: Point) -> Option<[f32; 4]> {

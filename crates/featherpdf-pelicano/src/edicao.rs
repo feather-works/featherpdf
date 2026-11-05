@@ -76,6 +76,17 @@ pub fn na_tela(c: [f32; 4], pag: [f32; 4], giro: i64, zoom: f32) -> Rect {
     Rect { x: l, y: t, width: (a.0 - b.0).abs() * zoom, height: (a.1 - b.1).abs() * zoom }
 }
 
+/// O inverso de `na_tela` para um ponto: pixels a partir do canto da página → pontos da página.
+pub fn da_tela(p: Point, [x0, y0, x1, y1]: [f32; 4], giro: i64, zoom: f32) -> (f32, f32) {
+    let (u, v) = (p.x / zoom, p.y / zoom);
+    match giro {
+        90 => (x0 + v, y0 + u),
+        180 => (x1 - u, y0 + v),
+        270 => (x1 - v, y1 - u),
+        _ => (x0 + u, y1 - v),
+    }
+}
+
 /// Deslocamento da tela (y para baixo) no espaço da página (y para cima).
 pub(crate) fn para_pagina(dx: f32, dy: f32, giro: i64, zoom: f32) -> (f32, f32) {
     let (dx, dy) = (dx / zoom, dy / zoom);

@@ -82,6 +82,7 @@ pub fn janela(app: &App) -> Element<'_, Msg> {
     if app.menu { camadas = camadas.push(menu_arquivo(app)); }
     if !app.busca_comandos.trim().is_empty() { camadas = camadas.push(resultados_comandos(app)); }
     if let Some((qual, canto)) = app.suspenso { camadas = camadas.push(menu_suspenso(qual, canto)); }
+    if let Some(c) = app.cartao_atualizacao() { camadas = camadas.push(c); }
     container(camadas).width(Length::FILL).height(Length::FILL).clip(true)
         .style(|_| Style::default().background(COR_FUNDO_JANELA()).border(Border::default().color(COR_BORDA(), 1.0)).text_color(COR_TEXTO()))
         .into()
