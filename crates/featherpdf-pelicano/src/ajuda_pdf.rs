@@ -145,6 +145,7 @@ pub fn modelo() -> &'static Catalogo {
                     topico("configuracoes", "Configurações", vec![
                         t("A engrenagem no alto abre as Configurações."),
                         m("Aparência (tema) e preferências dos documentos."),
+                        m("Leitor de PDF padrão ▸ Tornar padrão: no Linux os PDFs passam a abrir no FeatherPDF com dois cliques; no Windows abre a tela de Aplicativos padrão já no FeatherPDF, para escolher .pdf."),
                     ]),
                 ],
             },

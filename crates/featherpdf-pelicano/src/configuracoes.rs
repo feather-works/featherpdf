@@ -36,7 +36,7 @@ impl Default for Config {
 }
 
 #[derive(Debug, Clone)]
-pub enum Cf { Tema(Tema), Zoom(ZoomInicial), LinguaOcr(usize), LimparRecentes }
+pub enum Cf { Tema(Tema), Zoom(ZoomInicial), LinguaOcr(usize), LimparRecentes, LeitorPadrao }
 
 fn arquivo() -> Option<PathBuf> { crate::recentes::pasta_config().map(|p| p.join("config.txt")) }
 
@@ -98,6 +98,10 @@ impl App {
             Cf::Zoom(z) => self.config.zoom = z,
             Cf::LinguaOcr(i) => { self.config.lingua_ocr = i; self.ocr.lingua = i; }
             Cf::LimparRecentes => { self.recentes.limpar(); return Task::none(); }
+            Cf::LeitorPadrao => {
+                self.leitor_padrao = Some(crate::leitor_padrao::pedir().unwrap_or_else(|e| e));
+                return Task::none();
+            }
         }
         self.config.gravar();
         Task::none()
@@ -152,6 +156,12 @@ impl App {
                     linha("Idioma do OCR", "O idioma que a janela de OCR, o OCR da área e os fluxos usam primeiro.",
                         suspensa(nomes, escolhido, move |n: String| Msg::Config(Cf::LinguaOcr(lista.iter().position(|x| *x == n).unwrap_or(0))))
                             .text_size(12.5).padding([5, 8])),
+                    linha("Leitor de PDF padrão", "Dois cliques num PDF abrem no FeatherPDF.", row![
+                        button(text("Tornar padrão").size(12.5))
+                            .padding([6u16, 13]).style(tema::estilo_botao_pequeno(false))
+                            .on_press(Msg::Config(Cf::LeitorPadrao)),
+                        text(self.leitor_padrao.clone().unwrap_or_default()).size(12.5).color(muted),
+                    ].spacing(10).align_y(Align::Center)),
                     linha("PDFs recentes", "A lista da tela inicial e do menu Arquivo.", row![
                         text(format!("{} na lista", self.recentes.itens.len())).size(12.5).color(muted),
                         button(text("Limpar lista").size(12.5)).padding([6u16, 13]).style(tema::estilo_botao_pequeno(false))

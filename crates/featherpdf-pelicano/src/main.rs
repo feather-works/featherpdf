@@ -5,6 +5,7 @@
 //! ferramenta mora no seu módulo, com o estado, as mensagens e as camadas dela.
 
 mod ajuda_pdf;
+mod leitor_padrao;
 mod assinar;
 mod atualizacao;
 mod busca;
@@ -376,6 +377,8 @@ pub struct App {
     /// Zoom mudou e o desenho espera ele parar (`ZoomParou`).
     pub zoom_esperando: bool,
     pub status: String,
+    /// O recado do botão "Tornar leitor padrão" (Configurações).
+    pub leitor_padrao: Option<String>,
     pub aba: Aba,
     pub faixa_aberta: bool,
     pub leitura: bool,
@@ -512,6 +515,7 @@ impl App {
             tamanho_mesa: std::cell::Cell::new(Size::new(0.0, 0.0)),
             zoom_esperando: false,
             status: String::new(),
+            leitor_padrao: None,
             aba: Aba::Inicio,
             faixa_aberta: config.faixa,
             leitura: false,
