@@ -251,10 +251,15 @@ fn cortar(texto: &str, max: usize, do_comeco: bool) -> String {
 
 /// "~/Documentos/Manutenção" no lugar de "/home/fulano/Documentos/Manutenção".
 fn encurtar_pasta(pasta: &std::path::Path) -> String {
-    let texto = pasta.display().to_string();
-    match std::env::var("HOME") {
-        Ok(home) if !home.is_empty() && texto.starts_with(&home) => format!("~{}", &texto[home.len()..]),
-        _ => texto,
+    encurtar_em(pasta, std::env::var_os("HOME").as_deref().map(std::path::Path::new))
+}
+
+/// Compara pedaço por pedaço do caminho: com HOME `/home/ana`, `/home/anabela` não vira `~bela`.
+fn encurtar_em(pasta: &std::path::Path, home: Option<&std::path::Path>) -> String {
+    match home.filter(|h| !h.as_os_str().is_empty()).and_then(|h| pasta.strip_prefix(h).ok()) {
+        Some(resto) if resto.as_os_str().is_empty() => "~".into(),
+        Some(resto) => format!("~{}{}", std::path::MAIN_SEPARATOR, resto.display()),
+        None => pasta.display().to_string(),
     }
 }
 
@@ -271,5 +276,15 @@ mod testes {
         assert_eq!(super::cortar("curto.pdf", 60, false), "curto.pdf");
         assert_eq!(super::cortar("abcdef", 4, false), "abc…");
         assert_eq!(super::cortar("/a/b/c/d", 4, true), "…c/d");
+    }
+
+    #[test]
+    fn encurtar_so_dentro_da_pasta_pessoal() {
+        use std::path::Path;
+        let home = Some(Path::new("/home/ana"));
+        assert_eq!(super::encurtar_em(Path::new("/home/ana/Documentos"), home), "~/Documentos");
+        assert_eq!(super::encurtar_em(Path::new("/home/ana"), home), "~");
+        assert_eq!(super::encurtar_em(Path::new("/home/anabela/x"), home), "/home/anabela/x");
+        assert_eq!(super::encurtar_em(Path::new("/tmp"), None), "/tmp");
     }
 }

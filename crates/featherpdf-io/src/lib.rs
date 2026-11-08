@@ -30,10 +30,17 @@ pub fn abrir(caminho: &Path) -> Result<DocumentoPdf, String> { abrir_com_senha(c
 pub fn abrir_com_senha(caminho: &Path, senha: Option<&str>) -> Result<DocumentoPdf, String> {
     let bytes = ler_arquivo_limitado(caminho, &PoliticaArquivos::default())
         .map_err(|e| format!("Erro ao ler PDF: {e}"))?;
-    if !bytes.starts_with(b"%PDF-") {
-        return Err("O arquivo selecionado nao possui cabecalho PDF valido.".into());
+    // Como o Acrobat: o %PDF- pode vir depois de lixo (boleto e nota baixados de sistema antigo).
+    let inicio = bytes.windows(5).take(1024).position(|j| j == b"%PDF-")
+        .ok_or_else(|| "O arquivo selecionado não tem cabeçalho de PDF válido.".to_owned())?;
+    let primeiro = DocumentoPdf::de_bytes_com_senha(&bytes, Some(caminho.to_path_buf()), senha);
+    match primeiro {
+        Err(e) if inicio > 0 && e != featherpdf_core::PRECISA_SENHA => {
+            // As posições da tabela xref costumam contar a partir do %PDF-.
+            DocumentoPdf::de_bytes_com_senha(&bytes[inicio..], Some(caminho.to_path_buf()), senha).map_err(|_| e)
+        }
+        outro => outro,
     }
-    DocumentoPdf::de_bytes_com_senha(&bytes, Some(caminho.to_path_buf()), senha)
 }
 
 /// Bytes crus de um arquivo (o PDF como está no disco, para assinar/validar; o .pfx).
@@ -274,7 +281,7 @@ fn preparar_na_fila() {
 impl Visualizador {
     pub fn novo(bytes: Vec<u8>) -> Result<Self, String> {
         let pdf = hayro::hayro_syntax::Pdf::new(bytes)
-            .map_err(|e| format!("Nao foi possivel interpretar o PDF para renderizacao: {e:?}"))?;
+            .map_err(|e| format!("Não foi possível interpretar o PDF para desenhar: {e:?}"))?;
         Ok(Self::pronto(std::sync::Arc::new(pdf)))
     }
 
@@ -338,7 +345,7 @@ impl Visualizador {
     /// Como `desenhar`, mas em pedaços colados: exportar uma A1 a 300 dpi (9933×7016) passa do
     /// limite de um desenho só. Teto de 150 MP (~600 MB) para não derrubar o app.
     pub fn desenhar_grande(&self, pagina: u32, escala: f32) -> Result<PaginaRaster, String> {
-        let (pl, pa) = *self.tamanhos().get(pagina.saturating_sub(1) as usize).ok_or("Pagina solicitada nao existe.")?;
+        let (pl, pa) = *self.tamanhos().get(pagina.saturating_sub(1) as usize).ok_or("A página pedida não existe.")?;
         let (l, a) = ((pl * escala) as u32, (pa * escala) as u32);
         if l as u64 * a as u64 <= 20_000_000 && l <= 8000 && a <= 8000 { return self.desenhar(pagina, escala); }
         if l as u64 * a as u64 > 150_000_000 { return Err("Pagina grande demais para esta resolucao; escolha menos dpi.".into()); }
@@ -361,7 +368,7 @@ impl Visualizador {
     /// A página (começando em 1) em SVG vetorial: texto, traços e imagens como no PDF.
     pub fn svg(&self, pagina: u32) -> Result<String, String> {
         let p = pagina.checked_sub(1).and_then(|i| self.doc().pages().get(i as usize))
-            .ok_or_else(|| "Pagina solicitada nao existe.".to_string())?;
+            .ok_or_else(|| "A página pedida não existe.".to_string())?;
         let cache = hayro_svg::RenderCache::new();
         Ok(hayro_svg::convert(p, &cache, &hayro::hayro_interpret::InterpreterSettings::default(), &hayro_svg::SvgRenderSettings::default()))
     }
@@ -392,7 +399,7 @@ impl Visualizador {
         let indice = pagina.checked_sub(1)
             .ok_or_else(|| "Pagina deve ser maior que zero.".to_string())? as usize;
         let pagina = self.doc().pages().get(indice)
-            .ok_or_else(|| "Pagina solicitada nao existe.".to_string())?;
+            .ok_or_else(|| "A página pedida não existe.".to_string())?;
 
         let (largura, altura) = pagina.render_dimensions();
         let [x, y, l, a] = trecho.unwrap_or([0, 0, (largura * escala) as u32, (altura * escala) as u32]);
@@ -1043,6 +1050,25 @@ mod testes {
         assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
         assert!(std::fs::read(&real).unwrap().starts_with(b"%PDF-"));
         assert_eq!(std::fs::metadata(&real).unwrap().permissions().mode() & 0o777, 0o600);
+    }
+
+    #[test]
+    fn abrir_aceita_lixo_antes_do_cabecalho() {
+        let pasta = Pasta::nova("lixo");
+        let limpo = pasta.0.join("limpo.pdf");
+        let mut pdf = criar_a4().unwrap();
+        pdf.duplicar_paginas(&[1]).unwrap();
+        salvar_como(&mut pdf, &limpo).unwrap();
+        let mut sujo = b"Content-Type: application/pdf\r\n\r\n".to_vec();
+        sujo.extend(std::fs::read(&limpo).unwrap());
+        let caminho = pasta.0.join("boleto.pdf");
+        std::fs::write(&caminho, &sujo).unwrap();
+        assert_eq!(abrir(&caminho).unwrap().total_paginas(), 2);
+        // Depois de 1 KiB de lixo não é mais PDF.
+        let mut longe = vec![b' '; 2048];
+        longe.extend(std::fs::read(&limpo).unwrap());
+        std::fs::write(&caminho, &longe).unwrap();
+        assert!(abrir(&caminho).is_err());
     }
 
     #[test]

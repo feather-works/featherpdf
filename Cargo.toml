@@ -18,6 +18,8 @@ publish = false
 opt-level = 3
 lto = true
 codegen-units = 1
+# Sem os símbolos de depuração: o binário do Linux tinha 85 MB (só o .exe passava pelo strip no gerar.sh).
+strip = true
 
 # Mesmo perfil do FeatherSheet: release sem LTO e incremental, para recompilar rápido.
 [profile.medir]

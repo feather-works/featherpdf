@@ -48,6 +48,25 @@ pub fn agora() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
+/// Marca do caminho escrito com %XX: só o que tem TAB ou quebra de linha (o resto fica como
+/// sempre foi, e as listas antigas, com `\` do Windows, continuam valendo).
+const CODIFICADO: char = '\u{1}';
+
+fn caminho_para_texto(c: &Path) -> String {
+    let t = c.display().to_string();
+    if !t.contains(['\t', '\n', '\r']) { return t; }
+    let mut s = String::from(CODIFICADO);
+    for ch in t.chars() {
+        match ch { '%' => s.push_str("%25"), '\t' => s.push_str("%09"), '\n' => s.push_str("%0A"), '\r' => s.push_str("%0D"), c => s.push(c) }
+    }
+    s
+}
+
+fn caminho_do_texto(t: &str) -> String {
+    let Some(resto) = t.strip_prefix(CODIFICADO) else { return t.to_owned() };
+    resto.replace("%09", "\t").replace("%0A", "\n").replace("%0D", "\r").replace("%25", "%")
+}
+
 impl Recentes {
     pub fn carregar() -> Self {
         let texto = arquivo().and_then(|a| std::fs::read_to_string(a).ok()).unwrap_or_default();
@@ -57,7 +76,7 @@ impl Recentes {
     fn de_texto(texto: &str) -> Self {
         let itens = texto.lines().filter_map(|linha| {
             let mut partes = linha.split('\t');
-            let caminho = PathBuf::from(partes.next()?);
+            let caminho = PathBuf::from(caminho_do_texto(partes.next()?));
             let paginas = partes.next()?.parse().ok()?;
             let aberto_em = partes.next()?.parse().ok()?;
             // Coluna nova: listas gravadas antes dela voltam para o começo.
@@ -69,7 +88,7 @@ impl Recentes {
 
     fn para_texto(&self) -> String {
         self.itens.iter()
-            .map(|r| format!("{}\t{}\t{}\t{}\n", r.caminho.display(), r.paginas, r.aberto_em, r.pagina))
+            .map(|r| format!("{}\t{}\t{}\t{}\n", caminho_para_texto(&r.caminho), r.paginas, r.aberto_em, r.pagina))
             .collect()
     }
 
@@ -150,6 +169,15 @@ mod testes {
         assert_eq!(r.itens.len(), 2);
         assert_eq!((r.itens[0].pagina, r.itens[1].pagina), (2, 1), "sem a coluna, começa na 1");
         assert_eq!(Recentes::de_texto(&r.para_texto()).itens, r.itens);
+    }
+
+    #[test]
+    fn caminho_com_tab_ou_quebra_de_linha_volta_inteiro() {
+        let mut r = Recentes::default();
+        for c in ["/a/um\tdois.pdf", "/a/linha\nnova 100%.pdf", "C:\\Users\\new\\x.pdf"] { r.registrar(Path::new(c), 2); }
+        let volta = Recentes::de_texto(&r.para_texto());
+        assert_eq!(volta.itens, r.itens);
+        assert_eq!(volta.itens.len(), 3);
     }
 
     #[test]
