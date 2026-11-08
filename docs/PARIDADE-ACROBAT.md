@@ -1,45 +1,45 @@
 # Paridade do FeatherPDF com o Adobe Acrobat Pro
 
-**Data:** 19/10/2026 (revisão parcial em 04/11/2026)
+**Data:** 19/10/2026 (revisão completa em 08/11/2026)
 
-> Em 04/11 foram conferidas no código as seções 1 (leitura) e 17 (impressão) e todos os itens 🟡 parciais. O que entrou depois de 19/10 nas outras seções (comparar texto, fluxos em lote, scripts, Bates, marca-d'água no fluxo e outros da leva dos 29 itens) ainda aparece como ❌ aqui: conferir antes de planejar.
+> Em 08/11/2026 a lista inteira foi conferida de novo no código: cada item ❌ e 🟡 foi procurado no motor e na tela (botão, menu ou janela). Só conta como ✅ o que dá para fazer no app. Entraram os recursos que estavam marcados errado como ❌ (comparar texto, fluxos em lote, scripts, Bates, marca d'água, imagens para PDF, Sanitizar, Dividir e Extrair, leitor padrão de PDF e outros).
 **Base:** lista de funcionalidades do Acrobat (26 seções, 723 itens).
 
 ## Resumo
 
-Total: **723** itens. ✅ feito: **176** · 🟡 parcial: **43** · ❌ falta: **433** · ⛔ fora do escopo (serviço da Adobe): **71**.
+Total: **723** itens. ✅ feito: **272** · 🟡 parcial: **71** · ❌ falta: **309** · ⛔ fora do escopo (serviço da Adobe): **71**.
 
 Ver a contagem por seção abaixo. Os itens ⛔ dependem de nuvem ou de serviço da Adobe (Acrobat Sign remoto, PDF Spaces, Adobe Express, compartilhamento em nuvem) e ficam de fora da comparação de código.
 
 | Seção | Itens | ✅ feito | 🟡 parcial | ❌ falta | ⛔ Adobe |
 |---|---|---|---|---|---|
-| 1. Visualização e leitura de PDF | 35 | 22 | 4 | 9 | 0 |
-| 2. Edição de texto | 24 | 9 | 4 | 11 | 0 |
-| 3. Edição de imagens | 18 | 7 | 0 | 11 | 0 |
-| 4. Organização de páginas | 27 | 19 | 0 | 8 | 0 |
-| 5. Criação de PDF | 22 | 2 | 1 | 19 | 0 |
-| 6. Conversão e exportação | 33 | 13 | 2 | 18 | 0 |
-| 7. Compressão e otimização de PDF | 41 | 15 | 1 | 25 | 0 |
-| 8. OCR e digitalização | 22 | 8 | 3 | 11 | 0 |
-| 9. Comentários e anotações | 40 | 9 | 10 | 21 | 0 |
-| 10. Formulários PDF | 47 | 15 | 3 | 25 | 4 |
-| 11. Assinaturas eletrônicas e digitais | 36 | 14 | 4 | 7 | 11 |
-| 12. Segurança e proteção de documentos | 33 | 14 | 4 | 15 | 0 |
-| 13. Hiperlinks, marcadores e navegação | 21 | 4 | 0 | 17 | 0 |
-| 14. Camadas PDF | 18 | 3 | 0 | 15 | 0 |
-| 15. Cabeçalhos, rodapés, marcas d'água e numeração | 33 | 1 | 0 | 32 | 0 |
+| 1. Visualização e leitura de PDF | 35 | 22 | 5 | 8 | 0 |
+| 2. Edição de texto | 24 | 11 | 4 | 9 | 0 |
+| 3. Edição de imagens | 18 | 10 | 2 | 6 | 0 |
+| 4. Organização de páginas | 27 | 21 | 1 | 5 | 0 |
+| 5. Criação de PDF | 22 | 5 | 4 | 13 | 0 |
+| 6. Conversão e exportação | 33 | 17 | 3 | 13 | 0 |
+| 7. Compressão e otimização de PDF | 41 | 20 | 1 | 20 | 0 |
+| 8. OCR e digitalização | 22 | 11 | 4 | 7 | 0 |
+| 9. Comentários e anotações | 40 | 18 | 11 | 11 | 0 |
+| 10. Formulários PDF | 47 | 22 | 5 | 16 | 4 |
+| 11. Assinaturas eletrônicas e digitais | 36 | 14 | 5 | 6 | 11 |
+| 12. Segurança e proteção de documentos | 33 | 18 | 5 | 10 | 0 |
+| 13. Hiperlinks, marcadores e navegação | 21 | 4 | 1 | 16 | 0 |
+| 14. Camadas PDF | 18 | 7 | 0 | 11 | 0 |
+| 15. Cabeçalhos, rodapés, marcas d'água e numeração | 33 | 15 | 2 | 16 | 0 |
 | 16. Acessibilidade | 25 | 0 | 3 | 22 | 0 |
-| 17. Impressão | 25 | 9 | 0 | 16 | 0 |
-| 18. Produção gráfica profissional | 41 | 4 | 2 | 35 | 0 |
-| 19. Comparação e análise de documentos | 14 | 0 | 0 | 14 | 0 |
-| 20. Automação, processamento em lote e JavaScript | 32 | 0 | 0 | 32 | 0 |
-| 21. Pesquisa avançada | 18 | 1 | 0 | 17 | 0 |
-| 22. Recursos de engenharia, medições e PDF 3D | 28 | 6 | 0 | 22 | 0 |
-| 23. Multimídia e documentos interativos | 18 | 0 | 1 | 17 | 0 |
+| 17. Impressão | 25 | 15 | 0 | 10 | 0 |
+| 18. Produção gráfica profissional | 41 | 11 | 4 | 26 | 0 |
+| 19. Comparação e análise de documentos | 14 | 6 | 4 | 4 | 0 |
+| 20. Automação, processamento em lote e JavaScript | 32 | 10 | 2 | 20 | 0 |
+| 21. Pesquisa avançada | 18 | 2 | 0 | 16 | 0 |
+| 22. Recursos de engenharia, medições e PDF 3D | 28 | 8 | 1 | 19 | 0 |
+| 23. Multimídia e documentos interativos | 18 | 0 | 2 | 16 | 0 |
 | 24. Compartilhamento e colaboração | 15 | 0 | 0 | 0 | 15 |
 | 25. Inteligência artificial — Acrobat AI Assistant e Acrobat Studio | 40 | 0 | 0 | 0 | 40 |
-| 26. Preferências e personalização | 17 | 1 | 1 | 14 | 1 |
-| **Total** | **723** | **176** | **43** | **433** | **71** |
+| 26. Preferências e personalização | 17 | 5 | 2 | 9 | 1 |
+| **Total** | **723** | **272** | **71** | **309** | **71** |
 
 ## Próximos lotes sugeridos
 
@@ -47,29 +47,29 @@ Os 15 itens ❌ ou 🟡 de maior valor para quem usa PDF no dia a dia, agrupados
 
 Critério: uso diário de PDF, sem os itens exóticos (3D, geoespacial, PDF/X, PDF/E, trapping). Cada lote fica num entregável. Os itens entram uma vez só.
 
-**Lote 1: visualizar e imprimir**
-1. Imprimir PDF (seção 17): ✅ desde a 0.1.4 (páginas, cópias, frente e verso, orientação).
-2. Ajustar página à janela (seção 1): ✅.
-3. Zoom personalizado (seção 1): 🟡. Roda com Ctrl em passos de 10%, sem campo para digitar o percentual.
+**Lote 1: ver e imprimir**
+1. Visualizar propriedades do documento (seção 1): ❌. Não há tela com título, autor, versão do PDF e tamanho; o inspetor (F12) só mostra os objetos crus.
+2. Rotacionar temporariamente a visualização (seção 1): ❌. Para ver uma página deitada é preciso girar a página de verdade.
+3. Configurar tamanho de papel (seção 17): ❌. A impressão usa o papel padrão da impressora, sem escolher A4, Carta ou Ofício.
 
-**Lote 2: vários documentos e páginas**
-4. Abrir vários PDFs ao mesmo tempo (seção 1): ✅ (abas).
-5. Copiar e colar páginas (seção 4): ❌. Sem área de transferência de páginas, então não há como levar página de um arquivo para outro.
-6. Criar PDF a partir de imagens (seção 5): ❌. Não há entrada de imagem para PDF.
+**Lote 2: páginas e arquivos**
+4. Copiar e colar páginas (seção 4): ❌. Sem área de transferência de páginas, então não há como levar página de um arquivo para outro.
+5. Alterar numeração lógica das páginas (seção 4): ❌. O PageLabels só é apagado, não dá para dizer que a página 1 é a "i".
+6. TIFF → PDF (seção 6): ❌. Imagens para PDF e Juntar só aceitam PNG e JPG; scanner costuma gravar TIFF.
 
 **Lote 3: edição de texto e imagem**
-7. Modificar tamanho da fonte (seção 2): 🟡. Vale só para texto novo; editar texto existente mantém a fonte da linha. Cor e negrito seguem a mesma regra.
-8. Redimensionar imagens (seção 3): ❌. Não há alça de redimensionamento.
-9. Substituir imagens existentes (seção 3): ❌. Só dá para trocar a imagem apagando e inserindo outra.
+7. Modificar fonte (seção 2): ❌. Tamanho, cor e espaço do texto existente já mudam; a fonte e o negrito não.
+8. Rotacionar imagens (seção 3): ❌. Editar imagem troca, corta e redimensiona, mas não gira.
+9. Extrair imagens do PDF (seção 3): ❌. Só dá para exportar a página inteira como imagem ou copiar uma área.
 
-**Lote 4: marca d'água e revisão**
-10. Adicionar marca d'água de texto (seção 15): ❌. Não há recurso de marca d'água.
-11. Responder comentários (seção 9): ❌. Os comentários não têm resposta, estado nem filtro.
-12. Campo obrigatório em formulário (seção 10): ❌. Os campos não têm regras de preenchimento.
-13. Definir formato de datas em campo (seção 10): ❌. O tipo "data" existe, mas sem formato configurável.
+**Lote 4: formulários e comentários**
+10. Campo obrigatório em formulário (seção 10): ❌. As regras têm formato e cálculo, mas nenhum campo é obrigatório.
+11. Definir formato de datas em campo (seção 10): ❌. O campo de data tem calendário, mas sem formato configurável.
+12. Editar comentários (seção 9): ❌. Dá para responder e apagar, mas o texto de uma nota não muda depois de criada.
 
-**Lote 5: segurança e acessibilidade**
-14. Sanitizar documento antes do compartilhamento (seção 12): ❌. Já existem remover metadados e anexos; faltam comentários, camadas ocultas e JavaScript.
+**Lote 5: navegação, marcas e acessibilidade**
+13. Criar e editar marcadores (seção 13): ❌. O painel Marcadores só lê o sumário que já veio no arquivo.
+14. Editar e remover cabeçalho e rodapé (seção 15): ❌. Aplicar de novo soma ao anterior; só o Ctrl+Z tira.
 15. Verificar acessibilidade (seção 16): ❌. Não há verificação nem tags; o inspetor só lista problemas de estrutura.
 
 Os lotes 1 e 2 são os de maior uso no dia a dia.
@@ -111,7 +111,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Selecionar texto. | ✅ feito | ferramenta Selecionar, ordem de leitura (selecao.rs) |
 | Selecionar imagens. | 🟡 parcial | imagens só como objeto na ferramenta Editar texto |
 | Copiar texto. | ✅ feito | Ctrl+C e botão direito (selecao.rs) |
-| Copiar imagens. | ❌ falta | não há no código |
+| Copiar imagens. | 🟡 parcial | Copiar área copia o trecho da página como imagem (regiao.rs), não a imagem original |
 | Copiar uma região como imagem. | ✅ feito | regiao.rs "Copiar como imagem" |
 | Ler documentos em voz alta. | ❌ falta | não há no código |
 | Rolagem automática. | ❌ falta | não há no código |
@@ -133,7 +133,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Excluir texto. | ✅ feito | excluir objeto (edicao.rs Obj::Excluir) |
 | Substituir palavras. | ✅ feito | Ctrl+H, trocar regrava a linha (busca.rs) |
 | Corrigir erros ortográficos. | ❌ falta | não há no código |
-| Copiar e colar texto. | 🟡 parcial | Ctrl+C copia, Ctrl+V cola só imagem (main.rs) |
+| Copiar e colar texto. | ✅ feito | Ctrl+C copia; Ctrl+V cola texto ou imagem como objeto novo (inserir.rs Ins::Colar) |
 | Recortar texto. | ❌ falta | não há no código |
 | Mover blocos de texto. | ✅ feito | arrastar objeto (edicao.rs Obj::Arrastou) |
 | Redimensionar blocos de texto. | ❌ falta | não há no código |
@@ -144,12 +144,12 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Aplicar itálico. | ❌ falta | não há no código |
 | Aplicar sublinhado quando suportado pela formatação. | ❌ falta | não há no código |
 | Modificar alinhamento. | ❌ falta | alinha objetos entre si, não o parágrafo |
-| Ajustar espaçamento entre caracteres. | ❌ falta | não há no código |
+| Ajustar espaçamento entre caracteres. | ✅ feito | Editar ▸ Texto ▸ Mais espaço / Menos espaço (core tipografia.rs) |
 | Ajustar espaçamento entre linhas. | ❌ falta | não há no código |
 | Modificar dimensões da caixa de texto. | ❌ falta | não há no código |
 | Inserir caracteres especiais. | 🟡 parcial | Helvetica no texto novo, letras fora da fonte não entram (core inserir.rs) |
 | Editar textos identificados por OCR. | ✅ feito | OCR troca a imagem por texto editável (ocr.rs) |
-| Reorganizar texto dentro de blocos editáveis. | ❌ falta | não há no código |
+| Reorganizar texto dentro de blocos editáveis. | 🟡 parcial | Ctrl+H com “Refazer o parágrafo” refaz as linhas (core refluxo.rs); não dá para digitar dentro do bloco |
 | Localizar palavras. | ✅ feito | Ctrl+F (busca.rs) |
 | Substituir ocorrências de texto. | ✅ feito | Ctrl+H, trocar (busca.rs) |
 
@@ -160,17 +160,17 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 |---|---|---|
 | Inserir imagens. | ✅ feito | Imagem (inserir.rs inserir_imagem) |
 | Remover imagens. | ✅ feito | excluir objeto de imagem (edicao.rs) |
-| Substituir imagens existentes. | ❌ falta | não há no código |
-| Redimensionar imagens. | ❌ falta | sem alça de redimensionar (edicao.rs) |
+| Substituir imagens existentes. | ✅ feito | Editar imagem ▸ Trocar por outra imagem (imagem.rs) |
+| Redimensionar imagens. | ✅ feito | Editar imagem ▸ Tamanho, com proporção (imagem.rs); sem alça de arrastar |
 | Mover imagens. | ✅ feito | arrastar e setas (edicao.rs) |
 | Rotacionar imagens. | ❌ falta | não há no código |
-| Recortar imagens. | ❌ falta | não há no código |
+| Recortar imagens. | ✅ feito | Editar imagem ▸ Cortar (imagem.rs) |
 | Alinhar imagens. | ✅ feito | alinhar entre si e à página (inserir.rs Ins::Alinhar) |
 | Ajustar a posição de objetos gráficos. | ✅ feito | mover e alinhar (edicao.rs) |
 | Editar objetos rasterizados. | ✅ feito | core editar_imagem.rs (redimensionar, cortar, trocar, brilho e contraste) |
-| Editar objetos vetoriais. | ❌ falta | não há edição de vetor existente, só texto e imagem viram objetos |
+| Editar objetos vetoriais. | 🟡 parcial | desenho agrupado move e apaga (edicao.rs), sem editar o traço |
 | Extrair imagens do PDF. | ❌ falta | não há no código |
-| Copiar imagens para outros documentos. | ❌ falta | não há no código |
+| Copiar imagens para outros documentos. | 🟡 parcial | Copiar área + Ctrl+V cola noutro PDF como figura, não a imagem original |
 | Abrir imagens em um editor externo compatível. | ❌ falta | não há no código |
 | Atualizar imagens editadas externamente. | ❌ falta | não há no código |
 | Alterar propriedades de objetos gráficos. | ✅ feito | core objetos.rs `estilizar_desenhos` em qualquer desenho |
@@ -195,10 +195,10 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Salvar páginas como novos PDFs. | ✅ feito | Extrair na aba Páginas |
 | Separar um PDF em vários documentos. | ✅ feito | Dividir (organizar.rs partes_divisao) |
 | Dividir por quantidade de páginas. | ✅ feito | Dividir "A cada N páginas" |
-| Dividir por tamanho de arquivo. | ❌ falta | não há no código |
-| Dividir por marcadores de nível superior. | ❌ falta | não há no código |
+| Dividir por tamanho de arquivo. | ✅ feito | Dividir ▸ Por tamanho de arquivo (MB) (core divisao.rs) |
+| Dividir por marcadores de nível superior. | ✅ feito | Dividir ▸ Por marcador (capítulos do sumário) (core divisao.rs) |
 | Mesclar vários PDFs. | ✅ feito | Juntar arquivos (organizar.rs Pag::Juntar) |
-| Combinar arquivos de formatos diferentes em um PDF. | ❌ falta | só PDF é aceito ao juntar |
+| Combinar arquivos de formatos diferentes em um PDF. | 🟡 parcial | Juntar aceita PDF e imagens (PNG, JPG), não Word nem Excel (juntar.rs) |
 | Rotacionar páginas individualmente. | ✅ feito | girar_paginas (paginas.rs) |
 | Rotacionar várias páginas. | ✅ feito | girar várias (paginas.rs) |
 | Recortar páginas. | ✅ feito | cortar_margens (Caixas da página) |
@@ -219,24 +219,24 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Criar PDF a partir de documentos Word. | ❌ falta | não há no código |
 | Criar PDF a partir de planilhas Excel. | ❌ falta | não há no código |
 | Criar PDF a partir de apresentações PowerPoint. | ❌ falta | não há no código |
-| Criar PDF a partir de imagens. | ❌ falta | não há no código |
+| Criar PDF a partir de imagens. | ✅ feito | Página inicial ▸ Imagens para PDF; arrastar PNG/JPG abre como PDF (juntar.rs) |
 | Criar PDF a partir de arquivos de texto. | ❌ falta | não há no código |
 | Criar PDF a partir de páginas HTML. | ❌ falta | não há no código |
 | Criar PDF a partir de páginas da internet. | ❌ falta | não há no código |
-| Criar PDF a partir da área de transferência. | ❌ falta | não há no código |
+| Criar PDF a partir da área de transferência. | 🟡 parcial | Novo PDF (Ctrl+N) e Ctrl+V cola a imagem ou o texto; sem comando direto |
 | Criar PDF utilizando scanner. | ❌ falta | não há no código |
-| Criar PDF a partir de fotografias. | ❌ falta | não há no código |
+| Criar PDF a partir de fotografias. | ✅ feito | Imagens para PDF (uma foto por página) e Limpar caderno (core caderno.rs) |
 | Criar PDF usando impressão virtual. | ❌ falta | não há no código |
-| Converter múltiplos documentos em lote. | ❌ falta | não há no código |
-| Combinar arquivos durante a criação. | ❌ falta | não há no código |
+| Converter múltiplos documentos em lote. | 🟡 parcial | Fluxos em lote junta pastas de fotos em PDF; Word e Excel não entram |
+| Combinar arquivos durante a criação. | ✅ feito | Imagens para PDF e Juntar arquivos (PDF e imagens num só) |
 | Criar documentos PDF com marcadores. | ❌ falta | não há no código |
-| Criar documentos PDF com links. | ❌ falta | não há no código |
+| Criar documentos PDF com links. | 🟡 parcial | Novo PDF + Editar ▸ Link; a conversão de outros formatos não existe |
 | Criar documentos PDF com formulários. | ✅ feito | modelos de formulário A4 (core modelos.rs) |
 | Criar documentos PDF com anexos. | ❌ falta | não há no código |
 | Criar PDFs com configurações personalizadas de compressão. | ❌ falta | não há no código |
 | Configurar qualidade de imagens durante a criação. | ❌ falta | não há no código |
 | Configurar incorporação de fontes. | ❌ falta | não há no código |
-| Criar documentos em formatos PDF padronizados. | 🟡 parcial | PDF/A-2b em andamento (pdfa.rs, exportar.rs) |
+| Criar documentos em formatos PDF padronizados. | 🟡 parcial | Converter ▸ PDF/A, só PDF/A-2b (core pdfa.rs, exportar.rs) |
 
 
 ## 6. Conversão e exportação
@@ -246,7 +246,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | PDF → DOCX. | ✅ feito | Word (.docx) via gravar_docx (io) |
 | PDF → DOC. | ❌ falta | não há no código |
 | PDF → XLSX. | ✅ feito | ModoPlanilha::Pagina (página inteira em grade) ou só tabelas |
-| PDF → PPTX. | ❌ falta | não há no código |
+| PDF → PPTX. | 🟡 parcial | Apresentação (.pptx): cada página vira um slide como imagem, sem texto editável (io pptx.rs) |
 | PDF → RTF. | ❌ falta | não há no código |
 | PDF → TXT. | ✅ feito | Texto puro (exportar.rs) |
 | PDF → HTML. | ✅ feito | Texto puro e HTML (exportar.rs) |
@@ -263,11 +263,11 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | TXT → PDF. | ❌ falta | não há no código |
 | RTF → PDF. | ❌ falta | não há no código |
 | HTML → PDF. | ❌ falta | não há no código |
-| JPEG → PDF. | ❌ falta | não há no código |
-| PNG → PDF. | ❌ falta | não há no código |
+| JPEG → PDF. | ✅ feito | Imagens para PDF; arrastar JPG abre como PDF (juntar.rs) |
+| PNG → PDF. | ✅ feito | Imagens para PDF; arrastar PNG abre como PDF (juntar.rs) |
 | TIFF → PDF. | ❌ falta | não há no código |
-| Documentos digitalizados → PDF. | ❌ falta | não há no código |
-| Converter vários arquivos em lote. | ❌ falta | não há no código |
+| Documentos digitalizados → PDF. | ✅ feito | scan em PNG/JPG vira PDF (Imagens para PDF) e o OCR torna pesquisável |
+| Converter vários arquivos em lote. | ✅ feito | Fluxos em lote: saída PDF, Word, planilha ou PNG (fluxos.rs Modo) |
 | Preservar imagens na conversão. | ✅ feito | imagens levadas ao docx (io lib.rs) |
 | Preservar tabelas quando possível. | 🟡 parcial | tabelas (tabelas.rs, tabela.rs) |
 | Preservar fontes e formatação. | 🟡 parcial | negrito, tamanho e centro (fluxo.rs) |
@@ -310,16 +310,16 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Substituir compressão LZW por Flate quando apropriado. | ❌ falta | não há no código |
 | Otimizar representações internas dos objetos PDF. | ✅ feito | object streams e xref streams (otimizar.rs) |
 | Achatar transparências. | ❌ falta | não há no código |
-| Achatar campos de formulário. | ❌ falta | não há no código |
+| Achatar campos de formulário. | ✅ feito | Comentar ▸ Achatar (core achatamento.rs) |
 | Achatar camadas. | ❌ falta | não há no código |
-| Remover comentários. | ❌ falta | remover comentários não há (só anexos e miniaturas) |
+| Remover comentários. | ✅ feito | Limpar e sanitizar ▸ Comentários (core sanitizar.rs) |
 | Remover anexos. | ✅ feito | Remover anexos (proteger.rs) |
 | Remover metadados. | ✅ feito | limpar_metadados (documento.rs) |
 | Remover dados privados de aplicativos. | ✅ feito | PieceInfo em limpar (otimizar.rs) |
-| Remover conteúdo de camadas ocultas. | ❌ falta | não há no código |
+| Remover conteúdo de camadas ocultas. | ✅ feito | Limpar e sanitizar ▸ Camadas ocultas (core sanitizar.rs) |
 | Remover multimídia. | ❌ falta | não há no código |
-| Otimizar para visualização rápida na web (*Fast Web View*). | ❌ falta | Fast Web View não há |
-| Processar vários PDFs em lote. | ❌ falta | não há no código |
+| Otimizar para visualização rápida na web (*Fast Web View*). | ✅ feito | Converter ▸ Para a web (core linearizar.rs) |
+| Processar vários PDFs em lote. | ✅ feito | Fluxos em lote, modelo “Comprimir vários PDFs” (fluxos.rs) |
 | Analisar o espaço utilizado por cada categoria de objeto. | ✅ feito | peso por imagens, fontes e resto (otimizar.rs peso) |
 | Exibir relatório de uso de espaço. | ✅ feito | "Onde está o peso" no Comprimir (imagens, fontes, resto) |
 | Salvar perfis de otimização. | ❌ falta | não há no código |
@@ -330,7 +330,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Item | Estado | Evidência / o que falta |
 |---|---|---|
 | Digitalizar documentos. | ❌ falta | não há no código |
-| Importar documentos digitalizados. | ❌ falta | não há no código |
+| Importar documentos digitalizados. | ✅ feito | Imagens para PDF e arrastar PNG/JPG para a janela (juntar.rs) |
 | Reconhecer texto em imagens. | ✅ feito | PP-OCR embutido (featherpdf-ocr) |
 | Reconhecer texto em páginas PDF. | ✅ feito | lê páginas do PDF (ocr.rs) |
 | OCR de múltiplas páginas. | ✅ feito | Todas, só a atual ou só as sem texto (ocr.rs) |
@@ -345,12 +345,12 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Corrigir inclinação das páginas (*deskew*). | 🟡 parcial | Endireitar a página pelo classificador de orientação, sem deskew fino |
 | Remover padrões de retícula (*descreen*). | ❌ falta | não há no código |
 | Remover ou suavizar fundos irregulares. | 🟡 parcial | Limpar o fundo (ocr.rs, core tarja.rs) |
-| Melhorar fotografias de documentos. | ❌ falta | não há no código |
+| Melhorar fotografias de documentos. | ✅ feito | Limpar caderno tira sombra, pauta e quadriculado da foto (core caderno.rs) |
 | Corrigir perspectiva de imagens capturadas por câmera. | ❌ falta | não há no código |
 | Ajustar qualidade da digitalização. | ❌ falta | não há no código |
-| Configurar compressão de páginas digitalizadas. | ❌ falta | não há no código |
+| Configurar compressão de páginas digitalizadas. | 🟡 parcial | bloco Comprimir (Leve, Padrão, Forte) no fluxo, sem opção própria do scan |
 | Configurar resolução do documento digitalizado. | ❌ falta | não há no código |
-| Criar PDF/A durante o fluxo de digitalização. | ❌ falta | não há no código |
+| Criar PDF/A durante o fluxo de digitalização. | ✅ feito | Fluxos em lote: blocos OCR e Converter para PDF/A (modelo “Arquivo de contratos”) |
 
 
 ## 9. Comentários e anotações
@@ -362,9 +362,9 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Destacar texto. | ✅ feito | Destacar (comentar.rs) |
 | Sublinhar texto. | ✅ feito | Sublinhar (comentar.rs) |
 | Riscar texto. | ✅ feito | Riscar (comentar.rs) |
-| Marcar texto para substituição. | ❌ falta | não há no código |
-| Marcar texto para exclusão. | ❌ falta | não há no código |
-| Inserir sugestões de texto. | ❌ falta | não há no código |
+| Marcar texto para substituição. | ✅ feito | Comentar ▸ Substituir (core revisao.rs, riscado + Caret) |
+| Marcar texto para exclusão. | ✅ feito | Comentar ▸ Riscar (comentar.rs) |
+| Inserir sugestões de texto. | 🟡 parcial | Substituir grava o riscado com o texto novo; sem inserir sem riscar |
 | Adicionar caixas de texto. | ✅ feito | Caixa de texto (comentar.rs) |
 | Adicionar balões explicativos. | ❌ falta | não há no código |
 | Desenhar livremente. | ✅ feito | desenho à mão (comentar.rs, anotacoes.rs) |
@@ -381,21 +381,21 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Alterar espessura das linhas. | 🟡 parcial | espessura escolhida antes de desenhar |
 | Alterar opacidade. | ❌ falta | não há no código |
 | Adicionar carimbos. | ✅ feito | Carimbo (comentar.rs, cor_do_carimbo) |
-| Criar carimbos personalizados. | ❌ falta | não há no código |
-| Criar carimbos dinâmicos. | ❌ falta | não há no código |
+| Criar carimbos personalizados. | ✅ feito | Carimbo: texto próprio ou imagem PNG/JPG (comentar.rs) |
+| Criar carimbos dinâmicos. | ✅ feito | Carimbo com linha de baixo “Nome e data” ou “Só a data” (comentar.rs) |
 | Inserir anexos como comentários. | ❌ falta | não há no código |
 | Adicionar comentários a vídeos. | ❌ falta | não há no código |
-| Responder comentários. | ❌ falta | não há no código |
+| Responder comentários. | ✅ feito | painel Comentários ▸ Responder (/IRT, core revisao.rs) |
 | Editar comentários. | ❌ falta | não há no código |
 | Excluir comentários. | ✅ feito | apagar_anotacao (anotacoes.rs) |
 | Agrupar comentários. | ❌ falta | não há no código |
 | Desagrupar comentários. | ❌ falta | não há no código |
-| Filtrar comentários. | ❌ falta | não há no código |
-| Pesquisar comentários. | ❌ falta | não há no código |
-| Marcar comentários como resolvidos. | ❌ falta | não há no código |
+| Filtrar comentários. | ✅ feito | painel Comentários: filtro por texto, autor ou tipo (revisao.rs) |
+| Pesquisar comentários. | ✅ feito | filtro do painel Comentários procura no texto (revisao.rs) |
+| Marcar comentários como resolvidos. | ✅ feito | estado de revisão aceito, rejeitado ou concluído (core revisao.rs) |
 | Marcar comentários como não lidos. | ❌ falta | não há no código |
 | Reagir a comentários. | ❌ falta | não há no código |
-| Exportar informações de revisão. | ❌ falta | não há no código |
+| Exportar informações de revisão. | ✅ feito | painel Comentários ▸ CSV ou Para o FeatherSheet (revisao.rs) |
 | Imprimir resumo dos comentários. | ❌ falta | não há no código |
 
 
@@ -420,17 +420,17 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Mover campos. | ❌ falta | não há no código |
 | Redimensionar campos. | ❌ falta | não há no código |
 | Alinhar campos. | ❌ falta | não há no código |
-| Definir ordem de navegação entre campos. | ❌ falta | não há no código |
+| Definir ordem de navegação entre campos. | ✅ feito | Regras e Tab ▸ ordem do Tab (core regras.rs) |
 | Definir campos obrigatórios. | ❌ falta | não há no código |
 | Definir campos somente leitura. | ❌ falta | não há no código |
 | Configurar valores padrão. | ❌ falta | não há no código |
-| Definir formato de números. | ❌ falta | não há no código |
+| Definir formato de números. | ✅ feito | Regras e Tab ▸ Número (core regras.rs) |
 | Definir formato de datas. | ❌ falta | não há no código |
-| Definir formato de moedas. | ❌ falta | não há no código |
-| Definir formatos personalizados. | ❌ falta | não há no código |
-| Aplicar máscaras de entrada. | ❌ falta | não há no código |
-| Validar informações. | ❌ falta | não há no código |
-| Configurar cálculos automáticos. | ❌ falta | não há no código |
+| Definir formato de moedas. | ✅ feito | Regras e Tab ▸ Moeda (core regras.rs) |
+| Definir formatos personalizados. | 🟡 parcial | só formatos prontos (CPF, CNPJ, CEP, telefone, e-mail), sem formato livre |
+| Aplicar máscaras de entrada. | ✅ feito | máscara de CPF, CNPJ, CEP e telefone (core regras.rs) |
+| Validar informações. | ✅ feito | Validar e calcular, com dígito verificador (core regras.rs) |
+| Configurar cálculos automáticos. | ✅ feito | soma, média, produto, menor, maior e fórmula (core regras.rs) |
 | Configurar scripts JavaScript. | ❌ falta | não há no código |
 | Exibir e ocultar campos. | ❌ falta | não há no código |
 | Configurar eventos dos campos. | ❌ falta | não há no código |
@@ -442,13 +442,13 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Preencher formulários não interativos. | ✅ feito | detectar e criar campo, ou texto livre |
 | Preenchimento automático de informações. | ❌ falta | não há no código |
 | Salvar informações preenchidas. | ✅ feito | Salvar |
-| Imprimir formulários. | ❌ falta | não há no código |
+| Imprimir formulários. | 🟡 parcial | Imprimir (Ctrl+P) sai com a aparência gravada dos campos; sem opção “só os campos” |
 | Distribuir formulários. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
 | Coletar respostas. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
 | Acompanhar formulários distribuídos. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
 | Consolidar respostas. | 🟡 parcial | Pasta de fichas, uma linha por arquivo (formularios.rs ler_pasta), sem painel de respostas |
 | Exportar dados de formulários. | ✅ feito | Para o FeatherSheet (formularios.rs para_sheet) |
-| Importar dados de formulários. | ❌ falta | não há no código |
+| Importar dados de formulários. | ✅ feito | Importar dados JSON, XFDF ou CSV (core dados_form.rs, form_dados.rs) |
 | Publicar formulários na web por meio dos serviços compatíveis. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
 
 
@@ -479,7 +479,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Permitir múltiplas assinaturas digitais. | ✅ feito | teste com duas assinaturas válidas (core assinatura.rs) |
 | Configurar permissões após certificação. | ❌ falta | não há no código |
 | Inspecionar alterações posteriores à assinatura. | ✅ feito | `cobre_tudo` e painel Versões |
-| Comparar versões assinadas. | ❌ falta | não há no código |
+| Comparar versões assinadas. | 🟡 parcial | Versões abre a versão assinada; salvar e usar Comparar, em dois passos |
 | Incorporar informações de validação de longo prazo. | ❌ falta | não há no código |
 | Solicitar assinaturas de outras pessoas. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
 | Enviar documentos para assinatura. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
@@ -501,7 +501,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Proteger PDF com senha de abertura. | ✅ feito | senha de abertura (otimizar.rs senha_abrir) |
 | Proteger permissões com senha. | ✅ feito | senha de permissões (otimizar.rs limitar) |
 | Alterar senhas. | 🟡 parcial | grava com nova senha, sem troca separada |
-| Remover proteção mediante autorização. | ❌ falta | não há no código |
+| Remover proteção mediante autorização. | ✅ feito | Proteger ▸ Senha ▸ Tirar a senha, com o PDF aberto pela senha (proteger.rs) |
 | Criptografar documentos. | ✅ feito | AES-256 (otimizar.rs aes256) |
 | Criptografar com certificados digitais. | ❌ falta | não há no código |
 | Restringir impressão. | ✅ feito | Permissoes::imprimir |
@@ -517,13 +517,13 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Procurar informações sensíveis. | ✅ feito | padrões CPF, CNPJ, e-mail, telefone, CEP (core tarja.rs Padrao) |
 | Remover ocorrências de palavras específicas. | ✅ feito | busca de palavra (tarja.rs) |
 | Remover padrões identificáveis. | ✅ feito | padrões (tarja.rs) |
-| Configurar a aparência das tarjas de remoção. | ❌ falta | não há no código |
-| Utilizar códigos de classificação nas remoções. | ❌ falta | não há no código |
-| Remover informações ocultas. | 🟡 parcial | apaga anexos e metadados, não todas as informações ocultas |
+| Configurar a aparência das tarjas de remoção. | 🟡 parcial | texto sobre a tarja (tarja.rs), sem escolher a cor |
+| Utilizar códigos de classificação nas remoções. | 🟡 parcial | o texto sobre a tarja serve de código, sem lista de códigos |
+| Remover informações ocultas. | ✅ feito | Limpar e sanitizar: metadados, histórico, anexos, JavaScript, camadas ocultas e links (sanitizar.rs) |
 | Remover metadados confidenciais. | ✅ feito | limpar_metadados (documento.rs) |
 | Remover comentários e anexos sensíveis. | ✅ feito | Sanitizar: anexos e, se marcado, comentários |
-| Remover conteúdo de camadas ocultas. | ❌ falta | não há no código |
-| Sanitizar documentos antes do compartilhamento. | ❌ falta | não há no código |
+| Remover conteúdo de camadas ocultas. | ✅ feito | Limpar e sanitizar ▸ Camadas ocultas (core sanitizar.rs) |
+| Sanitizar documentos antes do compartilhamento. | ✅ feito | Proteger ▸ Limpar e sanitizar, oito opções (sanitizar.rs) |
 | Abrir documentos em modo protegido. | ❌ falta | não há no código |
 | Isolar documentos não confiáveis. | ❌ falta | não há no código |
 | Controlar execução de JavaScript. | ❌ falta | não há no código |
@@ -539,7 +539,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 |---|---|---|
 | Adicionar hiperlinks. | ✅ feito | inserir_link (core inserir.rs, Editar > Link) |
 | Editar hiperlinks. | ❌ falta | não há no código |
-| Excluir hiperlinks. | ❌ falta | não há no código |
+| Excluir hiperlinks. | 🟡 parcial | Limpar e sanitizar ▸ Links externos tira todos; sem apagar um link só |
 | Criar links para páginas internas. | ✅ feito | Destino::Pagina (core inserir.rs) |
 | Criar links para páginas externas. | ✅ feito | Destino::Endereco (core inserir.rs) |
 | Criar links para arquivos. | ❌ falta | não há no código |
@@ -567,14 +567,14 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Visualizar camadas existentes. | ✅ feito | camadas() e painel Camadas (core anotacoes.rs, comentar.rs) |
 | Importar arquivos como camadas. | ❌ falta | não há no código |
 | Criar uma camada a partir de um arquivo importado. | ❌ falta | não há no código |
-| Renomear camadas. | ❌ falta | não há no código |
+| Renomear camadas. | ✅ feito | painel Camadas ▸ renomear (core camadas.rs) |
 | Reorganizar camadas. | ❌ falta | não há no código |
 | Mostrar camadas. | ✅ feito | mostrar_camada (anotacoes.rs) |
 | Ocultar camadas. | ✅ feito | mostrar_camada, ocultar (anotacoes.rs) |
-| Configurar visibilidade inicial. | ❌ falta | não há no código |
-| Configurar visibilidade para impressão. | ❌ falta | não há no código |
+| Configurar visibilidade inicial. | ✅ feito | ligar ou desligar no painel Camadas grava como o PDF abre (comentar.rs) |
+| Configurar visibilidade para impressão. | ✅ feito | painel Camadas: Só na tela ou Só na impressão (core camadas.rs) |
 | Configurar visibilidade para exportação. | ❌ falta | não há no código |
-| Alterar propriedades das camadas. | ❌ falta | não há no código |
+| Alterar propriedades das camadas. | ✅ feito | painel Camadas: travar, quando aparece e faixa de zoom (core camadas.rs) |
 | Gerenciar grupos de camadas. | ❌ falta | não há no código |
 | Mesclar camadas. | ❌ falta | não há no código |
 | Achatar camadas (*flatten*). | ❌ falta | não há no código |
@@ -588,32 +588,32 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 
 | Item | Estado | Evidência / o que falta |
 |---|---|---|
-| Adicionar cabeçalho. | ❌ falta | não há no código |
-| Adicionar rodapé. | ❌ falta | não há no código |
+| Adicionar cabeçalho. | ✅ feito | Páginas ▸ Cabeçalho e rodapé, três lugares (marcas.rs) |
+| Adicionar rodapé. | ✅ feito | Páginas ▸ Cabeçalho e rodapé, três lugares (marcas.rs) |
 | Editar cabeçalho. | ❌ falta | não há no código |
 | Editar rodapé. | ❌ falta | não há no código |
 | Remover cabeçalhos. | ❌ falta | não há no código |
 | Remover rodapés. | ❌ falta | não há no código |
-| Inserir data. | ❌ falta | não há no código |
+| Inserir data. | ✅ feito | campo {data} no cabeçalho e rodapé (core marcas.rs) |
 | Inserir números de página. | ✅ feito | Números de página (organizar.rs Dialogos::Numeros, paginas.rs numerar) |
-| Aplicar cabeçalhos somente a páginas selecionadas. | ❌ falta | não há no código |
-| Aplicar configurações a vários documentos. | ❌ falta | não há no código |
-| Adicionar marca d'água de texto. | ❌ falta | não há no código |
+| Aplicar cabeçalhos somente a páginas selecionadas. | ✅ feito | campo de páginas (1-3, 5) no painel (marcas.rs) |
+| Aplicar configurações a vários documentos. | ✅ feito | Fluxos em lote, bloco Cabeçalho e rodapé |
+| Adicionar marca d'água de texto. | ✅ feito | Páginas ▸ Marca d'água (core marcas.rs) |
 | Adicionar marca d'água de imagem. | ❌ falta | não há no código |
-| Ajustar opacidade. | ❌ falta | não há no código |
-| Ajustar tamanho. | ❌ falta | não há no código |
-| Ajustar rotação. | ❌ falta | não há no código |
+| Ajustar opacidade. | ✅ feito | Marca d'água ▸ Opacidade (marcas.rs) |
+| Ajustar tamanho. | ✅ feito | Marca d'água ▸ Tamanho (pt) (marcas.rs) |
+| Ajustar rotação. | ✅ feito | Marca d'água ▸ ângulo (marcas.rs) |
 | Configurar posicionamento. | ❌ falta | não há no código |
-| Colocar marca d'água à frente do conteúdo. | ❌ falta | não há no código |
+| Colocar marca d'água à frente do conteúdo. | ✅ feito | sempre por cima do conteúdo (core marcas.rs) |
 | Colocar marca d'água atrás do conteúdo. | ❌ falta | não há no código |
 | Atualizar marca d'água. | ❌ falta | não há no código |
-| Remover marca d'água. | ❌ falta | não há no código |
-| Aplicar marcas d'água em lote. | ❌ falta | não há no código |
-| Adicionar numeração Bates. | ❌ falta | não há no código |
-| Configurar numeração sequencial. | ❌ falta | não há no código |
-| Configurar prefixos. | ❌ falta | não há no código |
+| Remover marca d'água. | 🟡 parcial | na camada própria dá para esconder no painel Camadas; sem remover |
+| Aplicar marcas d'água em lote. | ✅ feito | Fluxos em lote, bloco Marca d'água |
+| Adicionar numeração Bates. | ✅ feito | Páginas ▸ Numeração Bates… (core paginas.rs numerar_bates) |
+| Configurar numeração sequencial. | ✅ feito | Bates: primeiro número e algarismos (organizar.rs) |
+| Configurar prefixos. | ✅ feito | Bates: prefixo (organizar.rs) |
 | Configurar sufixos. | ❌ falta | não há no código |
-| Aplicar numeração a múltiplos documentos. | ❌ falta | não há no código |
+| Aplicar numeração a múltiplos documentos. | 🟡 parcial | Bates diz onde o próximo arquivo começa; um arquivo de cada vez |
 | Remover numeração Bates. | ❌ falta | não há no código |
 | Pesquisar documentos numerados. | ❌ falta | não há no código |
 | Adicionar fundo colorido. | ❌ falta | não há no código |
@@ -664,18 +664,18 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Imprimir intervalos. | ✅ feito | Paginas::Intervalo |
 | Imprimir páginas pares. | ✅ feito | Paginas::Pares |
 | Imprimir páginas ímpares. | ✅ feito | Paginas::Impares |
-| Imprimir em ordem inversa. | ❌ falta | não há no código |
+| Imprimir em ordem inversa. | ✅ feito | Imprimir ▸ Ordem inversa (imprimir.rs) |
 | Configurar orientação. | ✅ feito | Orientacao (automática, retrato, paisagem) |
 | Configurar tamanho de papel. | ❌ falta | não há no código |
 | Configurar tamanhos personalizados. | ❌ falta | não há no código |
-| Ajustar impressão à página. | ❌ falta | não há no código |
-| Imprimir no tamanho real. | ❌ falta | não há no código |
+| Ajustar impressão à página. | ✅ feito | Imprimir ▸ Tamanho ▸ Ajustar à folha (imprimir.rs) |
+| Imprimir no tamanho real. | ✅ feito | Imprimir ▸ Tamanho ▸ Tamanho real (imprimir.rs) |
 | Configurar escala personalizada. | ❌ falta | não há no código |
 | Imprimir em preto e branco. | ✅ feito | opção preto e branco do imprimir.rs |
-| Imprimir em tons de cinza. | ❌ falta | não há no código |
-| Imprimir em cores. | ❌ falta | não há no código |
+| Imprimir em tons de cinza. | ✅ feito | Imprimir ▸ Cor ▸ Preto e branco (print-color-mode=monochrome) |
+| Imprimir em cores. | ✅ feito | Imprimir ▸ Cor ▸ Colorido (imprimir.rs) |
 | Imprimir em frente e verso. | ✅ feito | Lados (borda longa/curta) |
-| Imprimir múltiplas páginas por folha. | ❌ falta | não há no código |
+| Imprimir múltiplas páginas por folha. | ✅ feito | Imprimir ▸ Páginas por folha (2, 4, 6, 9) (imprimir.rs) |
 | Imprimir livretos. | ❌ falta | não há no código |
 | Imprimir pôsteres divididos em folhas. | ❌ falta | não há no código |
 | Imprimir regiões selecionadas. | ❌ falta | não há no código |
@@ -697,14 +697,14 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Converter RGB para CMYK. | ❌ falta | não há no código |
 | Visualizar sobreimpressão (*overprint*). | ❌ falta | não há no código |
 | Simular saída de impressão. | ❌ falta | não há no código |
-| Identificar problemas de cores. | ❌ falta | não há no código |
+| Identificar problemas de cores. | ✅ feito | Preflight: CMYK, RGB e cores especiais (core preflight.rs) |
 | Gerenciar tintas. | ❌ falta | não há no código |
 | Configurar tratamento de tintas especiais. | ❌ falta | não há no código |
-| Executar verificações Preflight. | ❌ falta | não há no código |
-| Utilizar perfis de verificação. | ❌ falta | não há no código |
+| Executar verificações Preflight. | ✅ feito | Converter ▸ Preflight (preflight.rs) |
+| Utilizar perfis de verificação. | ✅ feito | Preflight por destino: gráfica, escritório ou tela (core preflight.rs Destino) |
 | Criar perfis personalizados. | ❌ falta | não há no código |
-| Identificar erros de impressão. | ❌ falta | não há no código |
-| Corrigir problemas detectados. | ❌ falta | não há no código |
+| Identificar erros de impressão. | ✅ feito | Preflight aponta o que impede imprimir (core preflight.rs) |
+| Corrigir problemas detectados. | 🟡 parcial | Preflight só lê; a correção fica em PDF/A, Comprimir e Achatar |
 | Verificar fontes incorporadas. | ✅ feito | core preflight.rs |
 | Verificar resolução de imagens. | ✅ feito | core preflight.rs |
 | Verificar espaços de cor. | ✅ feito | core preflight.rs |
@@ -715,13 +715,13 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Adicionar marcas de corte. | ❌ falta | não há no código |
 | Adicionar marcas de registro. | ❌ falta | não há no código |
 | Configurar caixas da página. | ✅ feito | core caixas.rs (Bleed, Trim, Art) |
-| Configurar sangria (*bleed*). | ❌ falta | não há no código |
-| Configurar área de corte (*trim*). | ❌ falta | não há no código |
-| Configurar área de mídia (*media box*). | ❌ falta | não há no código |
-| Configurar área de arte (*art box*). | ❌ falta | não há no código |
+| Configurar sangria (*bleed*). | ✅ feito | Caixas da página ▸ Sangria (BleedBox) (core caixas.rs) |
+| Configurar área de corte (*trim*). | ✅ feito | Caixas da página ▸ Refile (TrimBox) (core caixas.rs) |
+| Configurar área de mídia (*media box*). | 🟡 parcial | Padronizar tamanho muda a folha; sem campo próprio para a MediaBox |
+| Configurar área de arte (*art box*). | ✅ feito | Caixas da página ▸ Arte (ArtBox) (core caixas.rs) |
 | Configurar trapping. | ❌ falta | não há no código |
 | Criar configurações de trapping. | ❌ falta | não há no código |
-| Converter documentos para PDF/A. | 🟡 parcial | PDF/A-2b em andamento (core pdfa.rs) |
+| Converter documentos para PDF/A. | 🟡 parcial | Converter ▸ PDF/A, só PDF/A-2b (core pdfa.rs) |
 | Validar PDF/A. | 🟡 parcial | verificação própria, não substitui veraPDF |
 | Converter documentos para PDF/X. | ❌ falta | não há no código |
 | Validar PDF/X. | ❌ falta | não há no código |
@@ -736,48 +736,48 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 
 | Item | Estado | Evidência / o que falta |
 |---|---|---|
-| Comparar duas versões de um PDF. | ❌ falta | não há no código |
-| Identificar textos adicionados. | ❌ falta | não há no código |
-| Identificar textos removidos. | ❌ falta | não há no código |
-| Identificar textos modificados. | ❌ falta | não há no código |
+| Comparar duas versões de um PDF. | ✅ feito | Comentar ▸ Comparar (comparar.rs, core comparar.rs) |
+| Identificar textos adicionados. | ✅ feito | Comparar ▸ Texto: “Entrou” (core comparar.rs) |
+| Identificar textos removidos. | ✅ feito | Comparar ▸ Texto: “Saiu” (core comparar.rs) |
+| Identificar textos modificados. | 🟡 parcial | texto trocado aparece como saiu + entrou |
 | Identificar alterações de formatação. | ❌ falta | não há no código |
-| Identificar alterações em imagens. | ❌ falta | não há no código |
-| Identificar diferenças no layout. | ❌ falta | não há no código |
+| Identificar alterações em imagens. | 🟡 parcial | Sobrepor mostra em cor o que mudou no desenho da página |
+| Identificar diferenças no layout. | 🟡 parcial | Sobrepor: vermelho só na antiga, azul só na nova |
 | Visualizar documentos lado a lado. | ❌ falta | não há no código |
-| Destacar diferenças. | ❌ falta | não há no código |
-| Navegar entre diferenças. | ❌ falta | não há no código |
+| Destacar diferenças. | ✅ feito | Sobrepor em vermelho e azul; lista Saiu/Entrou (comparar.rs) |
+| Navegar entre diferenças. | ✅ feito | clique na página da diferença leva até ela (comparar.rs) |
 | Gerar relatório de comparação. | ❌ falta | não há no código |
-| Visualizar resumo das alterações. | ❌ falta | não há no código |
+| Visualizar resumo das alterações. | ✅ feito | Comparar ▸ Texto lista o que saiu e o que entrou, com a página |
 | Comparar documentos grandes. | ❌ falta | não há no código |
-| Analisar alterações em documentos assinados. | ❌ falta | não há no código |
+| Analisar alterações em documentos assinados. | 🟡 parcial | Versões abre a versão assinada; Comparar a confronta depois de salva |
 
 
 ## 20. Automação, processamento em lote e JavaScript
 
 | Item | Estado | Evidência / o que falta |
 |---|---|---|
-| Criar ações automatizadas. | ❌ falta | não há no código |
-| Executar ações predefinidas. | ❌ falta | não há no código |
-| Executar ações personalizadas. | ❌ falta | não há no código |
-| Processar múltiplos arquivos. | ❌ falta | não há no código |
-| Automatizar conversões. | ❌ falta | não há no código |
-| Automatizar otimizações. | ❌ falta | não há no código |
-| Automatizar aplicação de marcas d'água. | ❌ falta | não há no código |
-| Automatizar alterações de segurança. | ❌ falta | não há no código |
+| Criar ações automatizadas. | ✅ feito | Converter ▸ Fluxos em lote (fluxos.rs) |
+| Executar ações predefinidas. | ✅ feito | Fluxos em lote ▸ Modelos prontos (fluxos.rs) |
+| Executar ações personalizadas. | ✅ feito | Fluxos em lote: arrastar os blocos na ordem desejada |
+| Processar múltiplos arquivos. | ✅ feito | Fluxos em lote: pasta, PDFs ou imagens na entrada |
+| Automatizar conversões. | ✅ feito | Fluxos em lote: saída Word, planilha, PNG ou PDF/A |
+| Automatizar otimizações. | ✅ feito | Fluxos em lote: Comprimir, Embutir fontes, Linearizar |
+| Automatizar aplicação de marcas d'água. | ✅ feito | Fluxos em lote, bloco Marca d'água |
+| Automatizar alterações de segurança. | ✅ feito | Fluxos em lote: senha, assinatura, tarjar padrões, apagar metadados |
 | Automatizar verificações. | ❌ falta | não há no código |
 | Importar configurações de ações. | ❌ falta | não há no código |
 | Exportar configurações de ações. | ❌ falta | não há no código |
-| Executar JavaScript compatível com a API do Acrobat. | ❌ falta | não há no código |
+| Executar JavaScript compatível com a API do Acrobat. | 🟡 parcial | Converter ▸ Script roda JavaScript com API própria (pdf.*), não a do Acrobat |
 | Criar scripts associados ao documento. | ❌ falta | não há no código |
 | Executar scripts em eventos. | ❌ falta | não há no código |
 | Adicionar scripts aos campos de formulário. | ❌ falta | não há no código |
 | Criar validações personalizadas. | ❌ falta | não há no código |
-| Criar cálculos personalizados. | ❌ falta | não há no código |
+| Criar cálculos personalizados. | 🟡 parcial | Regras e Tab ▸ Fórmula (Qtd * [Valor] - Desconto), sem JavaScript livre |
 | Controlar ações de botões. | ❌ falta | não há no código |
 | Manipular propriedades do documento por script. | ❌ falta | não há no código |
-| Manipular campos de formulário. | ❌ falta | não há no código |
+| Manipular campos de formulário. | ✅ feito | Script: pdf.fields() e pdf.setField() (scripts.rs) |
 | Configurar ações na abertura do documento. | ❌ falta | não há no código |
-| Abrir editor JavaScript. | ❌ falta | não há no código |
+| Abrir editor JavaScript. | ✅ feito | Converter ▸ Script abre o editor ao lado da página (scripts.rs) |
 | Depurar scripts. | ❌ falta | não há no código |
 | Adicionar pontos de interrupção. | ❌ falta | não há no código |
 | Inspecionar variáveis. | ❌ falta | não há no código |
@@ -798,7 +798,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Pesquisar palavras inteiras. | ❌ falta | não há no código |
 | Diferenciar maiúsculas de minúsculas. | ❌ falta | não há no código |
 | Pesquisar expressões. | ❌ falta | não há no código |
-| Pesquisar em comentários. | ❌ falta | não há no código |
+| Pesquisar em comentários. | ✅ feito | filtro do painel Comentários (revisao.rs) |
 | Pesquisar em marcadores. | ❌ falta | não há no código |
 | Pesquisar em campos de formulário. | ❌ falta | não há no código |
 | Pesquisar em anexos. | ❌ falta | não há no código |
@@ -824,15 +824,15 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Configurar escala. | ✅ feito | distância, perímetro, área, escala, unidades e medidas gravadas (core medida.rs, medir.rs) |
 | Configurar unidades. | ✅ feito | distância, perímetro, área, escala, unidades e medidas gravadas (core medida.rs, medir.rs) |
 | Adicionar marcações de medição. | ✅ feito | distância, perímetro, área, escala, unidades e medidas gravadas (core medida.rs, medir.rs) |
-| Ajustar medições por pontos de referência. | ❌ falta | não há no código |
-| Utilizar encaixe em pontos e linhas. | ❌ falta | não há no código |
+| Ajustar medições por pontos de referência. | ✅ feito | Escala… calibra por uma linha de tamanho conhecido (medir.rs) |
+| Utilizar encaixe em pontos e linhas. | ✅ feito | Ímã gruda nos cantos e pontas das linhas (medir.rs) |
 | Visualizar modelos 3D incorporados. | ❌ falta | não há no código |
 | Adicionar modelos 3D compatíveis. | ❌ falta | não há no código |
 | Rotacionar modelos. | ❌ falta | não há no código |
 | Aplicar zoom em modelos. | ❌ falta | não há no código |
 | Alterar visualizações. | ❌ falta | não há no código |
 | Medir distâncias entre pontos 3D. | ❌ falta | não há no código |
-| Medir ângulos. | ❌ falta | não há no código |
+| Medir ângulos. | 🟡 parcial | Medir ▸ Ângulo na página (core medida.rs), sem modelo 3D |
 | Medir raios. | ❌ falta | não há no código |
 | Medir distâncias perpendiculares. | ❌ falta | não há no código |
 | Utilizar pontos de encaixe. | ❌ falta | não há no código |
@@ -864,7 +864,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Configurar transições de página compatíveis. | ❌ falta | não há no código |
 | Criar botões interativos. | ❌ falta | não há no código |
 | Associar botões a arquivos e links. | ❌ falta | não há no código |
-| Abrir anexos incorporados. | ❌ falta | não há no código |
+| Abrir anexos incorporados. | 🟡 parcial | painel Anexos salva o arquivo; não abre direto |
 | Criar PDF Portfolios. | ❌ falta | não há no código |
 | Adicionar documentos a Portfolios. | ❌ falta | não há no código |
 | Criar pastas em Portfolios. | ❌ falta | não há no código |
@@ -943,21 +943,21 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 
 | Item | Estado | Evidência / o que falta |
 |---|---|---|
-| Definir aplicativo padrão para PDF. | ❌ falta | não há no código |
+| Definir aplicativo padrão para PDF. | ✅ feito | Configurações ▸ Leitor de PDF padrão ▸ Tornar padrão (leitor_padrao.rs) |
 | Configurar idioma. | ❌ falta | não há no código |
 | Configurar aparência da interface. | ✅ feito | tema claro e escuro (Configurações > Aparência) |
 | Personalizar barra de ferramentas. | ❌ falta | não há no código |
-| Personalizar painéis. | ❌ falta | não há no código |
+| Personalizar painéis. | 🟡 parcial | liga e desliga o painel Ferramentas e a faixa (Configurações), sem escolher o conteúdo |
 | Personalizar ações rápidas. | ❌ falta | não há no código |
 | Configurar atalhos de teclado disponíveis. | 🟡 parcial | atalhos fixos, listados na Ajuda (F1), não configuráveis |
 | Configurar comportamento de abertura. | ❌ falta | não há no código |
-| Configurar visualização inicial. | ❌ falta | não há no código |
-| Configurar preferências de zoom. | ❌ falta | não há no código |
+| Configurar visualização inicial. | ✅ feito | Configurações ▸ Zoom ao abrir: Largura, Inteira ou Manter |
+| Configurar preferências de zoom. | ✅ feito | Configurações ▸ Zoom ao abrir (configuracoes.rs) |
 | Configurar renderização de fontes. | ❌ falta | não há no código |
 | Configurar acessibilidade. | ❌ falta | não há no código |
 | Configurar mecanismos de segurança. | ❌ falta | não há no código |
 | Configurar preferências de JavaScript. | ❌ falta | não há no código |
 | Configurar certificados. | ❌ falta | não há no código |
 | Configurar serviços conectados. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Configurar opções de atualização. | ❌ falta | não há no código |
+| Configurar opções de atualização. | ✅ feito | Configurações ▸ Sobre ▸ Procurar atualizações ao abrir (atualizacao.rs) |
 
