@@ -28,8 +28,17 @@ pub fn abrir(caminho: &Path) -> Result<DocumentoPdf, String> { abrir_com_senha(c
 
 /// [`abrir`] com a senha que a pessoa digitou (erro `featherpdf_core::PRECISA_SENHA` quando ela falta).
 pub fn abrir_com_senha(caminho: &Path, senha: Option<&str>) -> Result<DocumentoPdf, String> {
-    let bytes = ler_arquivo_limitado(caminho, &PoliticaArquivos::default())
-        .map_err(|e| format!("Erro ao ler PDF: {e}"))?;
+    // Mapeado, não copiado: o lopdf já guarda o conteúdo, e a cópia em `Vec` dobrava o pico
+    // (PDF de 129 MB: 258 → ~130 MB). O mesmo teto de tamanho da leitura limitada.
+    let arquivo = std::fs::File::open(caminho).map_err(|e| format!("Erro ao ler PDF: {e}"))?;
+    let tamanho = arquivo.metadata().map_err(|e| format!("Erro ao ler PDF: {e}"))?.len();
+    if tamanho > PoliticaArquivos::default().max_bytes_arquivo {
+        return Err("Erro ao ler PDF: o arquivo passa do tamanho máximo (128 MB).".into());
+    }
+    // SAFETY: só leitura, e o mapa some ao fim desta função; o risco é outro programa truncar o
+    // arquivo durante a leitura (ver o shortcut de `Visualizador::do_arquivo`).
+    let mapa = unsafe { memmap2::Mmap::map(&arquivo) }.map_err(|e| format!("Erro ao ler PDF: {e}"))?;
+    let bytes: &[u8] = &mapa;
     // Como o Acrobat: o %PDF- pode vir depois de lixo (boleto e nota baixados de sistema antigo).
     let inicio = bytes.windows(5).take(1024).position(|j| j == b"%PDF-")
         .ok_or_else(|| "O arquivo selecionado não tem cabeçalho de PDF válido.".to_owned())?;
