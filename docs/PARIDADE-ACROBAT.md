@@ -7,13 +7,13 @@
 
 ## Resumo
 
-Total: **723** itens. ✅ feito: **272** · 🟡 parcial: **71** · ❌ falta: **309** · ⛔ fora do escopo (serviço da Adobe): **71**.
+Total: **723** itens. ✅ feito: **273** · 🟡 parcial: **72** · ❌ falta: **307** · ⛔ fora do escopo (serviço da Adobe): **71**.
 
 Ver a contagem por seção abaixo. Os itens ⛔ dependem de nuvem ou de serviço da Adobe (Acrobat Sign remoto, PDF Spaces, Adobe Express, compartilhamento em nuvem) e ficam de fora da comparação de código.
 
 | Seção | Itens | ✅ feito | 🟡 parcial | ❌ falta | ⛔ Adobe |
 |---|---|---|---|---|---|
-| 1. Visualização e leitura de PDF | 35 | 22 | 5 | 8 | 0 |
+| 1. Visualização e leitura de PDF | 35 | 23 | 6 | 6 | 0 |
 | 2. Edição de texto | 24 | 11 | 4 | 9 | 0 |
 | 3. Edição de imagens | 18 | 10 | 2 | 6 | 0 |
 | 4. Organização de páginas | 27 | 21 | 1 | 5 | 0 |
@@ -48,7 +48,7 @@ Os 15 itens ❌ ou 🟡 de maior valor para quem usa PDF no dia a dia, agrupados
 Critério: uso diário de PDF, sem os itens exóticos (3D, geoespacial, PDF/X, PDF/E, trapping). Cada lote fica num entregável. Os itens entram uma vez só.
 
 **Lote 1: ver e imprimir**
-1. Visualizar propriedades do documento (seção 1): ❌. Não há tela com título, autor, versão do PDF e tamanho; o inspetor (F12) só mostra os objetos crus.
+1. ~~Visualizar propriedades do documento (seção 1)~~: ✅ em 08/11 (Ctrl+D; o XMP ainda não aparece).
 2. Rotacionar temporariamente a visualização (seção 1): ❌. Para ver uma página deitada é preciso girar a página de verdade.
 3. Configurar tamanho de papel (seção 17): ❌. A impressão usa o papel padrão da impressora, sem escolher A4, Carta ou Ofício.
 
@@ -117,11 +117,11 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Rolagem automática. | ❌ falta | não há no código |
 | Visualização adaptada para leitura (Reflow). | ❌ falta | não há no código |
 | Modo de leitura com recursos de acessibilidade. | 🟡 parcial | Leitura sem recursos de acessibilidade |
-| Visualizar propriedades do documento. | ❌ falta | não há no código |
+| Visualizar propriedades do documento. | ✅ feito | ☰ Menu ▸ Propriedades do documento (Ctrl+D), propriedades.rs |
 | Visualizar fontes utilizadas. | ✅ feito | tabela de fontes do inspetor F12 (inspetor.rs) |
 | Visualizar informações de segurança. | ✅ feito | janela Senha mostra cifra e restrições (core `seguranca`) |
 | Visualizar assinaturas digitais. | ✅ feito | painel Assinaturas valida (assinar.rs) |
-| Visualizar metadados. | ❌ falta | não há no código |
+| Visualizar metadados. | 🟡 parcial | Propriedades do documento mostra e edita o Info; o XMP não aparece |
 
 
 ## 2. Edição de texto

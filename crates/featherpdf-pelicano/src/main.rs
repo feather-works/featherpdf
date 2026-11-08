@@ -17,6 +17,7 @@ mod compat;
 mod contexto;
 mod copias;
 mod desbloquear;
+mod propriedades;
 mod edicao;
 mod imprimir_windows;
 mod instancia;
@@ -212,6 +213,7 @@ pub enum Msg {
     Obj(edicao::Obj),
     Ctx(contexto::Ct),
     Senha(desbloquear::Sb),
+    Prop(propriedades::Pp),
     /// Comentários, carimbos e campos viram desenho da página.
     Achatar,
     Preflight(preflight::Pf),
@@ -403,6 +405,7 @@ pub struct App {
     /// Submenu "Página N ›" aberto no menu da seleção.
     pub contexto_sub: bool,
     pedido_senha: Option<desbloquear::PedidoSenha>,
+    propriedades: Option<propriedades::Janela>,
     preflight: preflight::Preflight,
     regras: regras_campos::RegrasUi,
     versoes: versoes::Versoes,
@@ -536,6 +539,7 @@ impl App {
             contexto: None,
             contexto_sub: false,
             pedido_senha: None,
+            propriedades: None,
             preflight: Default::default(),
             regras: Default::default(),
             versoes: Default::default(),
@@ -1344,6 +1348,7 @@ impl App {
             Msg::Ocr(m) => return self.update_ocr(m),
             Msg::Ctx(m) => return self.update_contexto(m),
             Msg::Senha(m) => return self.update_desbloquear(m),
+            Msg::Prop(m) => return self.update_propriedades(m),
             Msg::Preflight(m) => self.update_preflight(m),
             Msg::Copia(m) => return self.update_copias(m),
             Msg::Regras(m) => return self.update_regras(m),
@@ -1737,6 +1742,7 @@ impl App {
             else if self.assinatura.as_ref().is_some_and(|s| s.marcando()) { self.update(Msg::Assin(assinar::As::Marcar(false))) }
             else if matches!(self.painel, Some(Painel::Assinar | Painel::Assinaturas)) { self.update(Msg::Assin(assinar::As::Fechar)) }
             else if self.pedido_senha.is_some() { self.update(Msg::Senha(desbloquear::Sb::Fechar)) }
+            else if self.propriedades.is_some() { self.update(Msg::Prop(propriedades::Pp::Fechar)) }
             else if self.contexto.is_some() { self.update(Msg::Ctx(contexto::Ct::Fechar)) }
             else if self.org.dialogo.is_some() { self.update(Msg::Pag(organizar::Pag::Fechar)) }
             else if self.ins.link.is_some() || self.ins.texto.is_some() || self.ins.menu.is_some() { self.update(Msg::Ins(inserir::Ins::Fechar)) }
@@ -1776,6 +1782,7 @@ impl App {
             else if ctrl && shift && c("s") { Msg::SalvarComo }
             else if ctrl && c("s") { Msg::Salvar }
             else if ctrl && c("n") { Msg::NovoA4 }
+            else if ctrl && c("d") && self.aberto.is_some() { Msg::Prop(propriedades::Pp::Abrir) }
             else if ctrl && c("k") { Msg::Pesquisar }
             else if ctrl && (c("=") || c("+")) { Msg::ZoomMais }
             else if ctrl && c("-") { Msg::ZoomMenos }
@@ -2187,6 +2194,8 @@ mod testes {
             let geracao = app.geracao;
             let _ = app.update(Msg::Desenhada { geracao, pagina, escala: 1.0, trecho: None, resultado });
         }
+        // `FEATHERPDF_CAPTURA_PROPRIEDADES=1`: com a janela Propriedades do documento aberta.
+        if std::env::var_os("FEATHERPDF_CAPTURA_PROPRIEDADES").is_some() { let _ = app.update(Msg::Prop(propriedades::Pp::Abrir)); }
         let foto = |app: &App| capture(&app.view(), Size::new(1672.0, 941.0), 1.0, &app.theme(), &mut Renderer::new(), None);
         std::fs::write(&destino, foto(&app)).unwrap();
         if std::env::var_os("FEATHERPDF_CAPTURA_ABAS").is_some() {

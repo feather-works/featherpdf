@@ -78,7 +78,7 @@ pub fn janela(app: &App) -> Element<'_, Msg> {
     };
     let tela = app.com_pergunta_fechar(app.com_dialogo_campo(app.com_dialogo_comentario(app.com_protecao(app.com_dialogo_escala(
         app.com_menu_ins(app.com_menu_contexto(app.com_dialogo_link(corpo))))))));
-    let mut camadas = stack![app.com_pedido_senha(tela), alcas(Msg::Puxar)];
+    let mut camadas = stack![app.com_pedido_senha(app.com_propriedades(tela)), alcas(Msg::Puxar)];
     if app.menu { camadas = camadas.push(menu_arquivo(app)); }
     if !app.busca_comandos.trim().is_empty() { camadas = camadas.push(resultados_comandos(app)); }
     if let Some((qual, canto)) = app.suspenso { camadas = camadas.push(menu_suspenso(qual, canto)); }
@@ -909,7 +909,7 @@ impl<'a> ComDica<'a> for Button<'a, Msg> {
 }
 
 /// Os comandos do menu Arquivo: (ícone, rótulo, atalho, mensagem).
-fn itens_arquivo() -> [(&'static str, &'static str, &'static str, Msg); 8] {
+fn itens_arquivo() -> [(&'static str, &'static str, &'static str, Msg); 9] {
     [
         ("file-plus", "Novo PDF A4", "Ctrl+N", Msg::NovoA4),
         ("folder-open", "Abrir…", "Ctrl+O", Msg::Abrir),
@@ -918,6 +918,7 @@ fn itens_arquivo() -> [(&'static str, &'static str, &'static str, Msg); 8] {
         ("printer", "Imprimir…", "Ctrl+P", Msg::Imp(crate::imprimir::Im::Abrir)),
         ("files", "Juntar outro PDF…", "", Msg::Pag(Pag::Juntar)),
         ("file-export", "Exportar…", "", Msg::Exp(crate::exportar::Ex::Abrir(crate::exportar::Formato::Word))),
+        ("info-circle", "Propriedades do documento…", "Ctrl+D", Msg::Prop(crate::propriedades::Pp::Abrir)),
         ("x", "Fechar documento", "Ctrl+W", Msg::IrInicio),
     ]
 }

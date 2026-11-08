@@ -43,6 +43,8 @@ mod sanitizar;
 mod tabela;
 mod tabelas;
 mod pdfa;
+mod propriedades;
+pub use propriedades::Propriedades;
 mod regras;
 mod preflight;
 mod tarja;
