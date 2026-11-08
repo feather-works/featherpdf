@@ -122,9 +122,10 @@ impl App {
 
         // As ferramentas que precisam de um PDF pedem o arquivo e abrem nele (Msg::AbrirPara).
         let para = |m: Msg| Some(Msg::AbrirPara(Box::new(m)));
-        let acoes: [(&str, Color, &str, &str, Option<Msg>); 12] = [
+        let acoes: [(&str, Color, &str, &str, Option<Msg>); 14] = [
             ("file-plus", Color::rgb8(0x8e, 0x44, 0xad), "PDF em branco", "A4, uma página", Some(Msg::NovoA4)),
             ("copy-plus", VERMELHO, "Juntar arquivos", "PDFs e imagens", Some(Msg::Juntar(crate::juntar::Jt::Escolher(false)))),
+            ("cut", Color::rgb8(0xc2, 0x41, 0x5d), "Dividir", "Um PDF a cada N páginas", para(crate::tela::dividir())),
             ("photo", Color::rgb8(0x23, 0x6a, 0xc7), "Imagens para PDF", "Uma por página", Some(Msg::Juntar(crate::juntar::Jt::Escolher(true)))),
             ("list", Color::rgb8(0xb0, 0x7d, 0x0a), "Fluxos em lote", "Pasta inteira", Some(Msg::Fluxos(crate::fluxos::Fx::Abrir))),
             ("scan", Color::rgb8(0x1f, 0x8a, 0x5b), "OCR", "Scan vira texto pesquisável", para(Msg::Ocr(crate::ocr::Oc::Abrir))),
@@ -135,6 +136,7 @@ impl App {
             ("eraser", Color::rgb8(0x8a, 0x92, 0x9c), "Tarja definitiva", "Apagar CPF e nomes", para(Msg::MudarAba(crate::Aba::Proteger))),
             ("columns", Color::rgb8(0xc0, 0x60, 0x14), "Comparar", "Diferença entre versões", para(Msg::Comparar(crate::comparar::Cmp::Abrir))),
             ("forms", Color::rgb8(0x1a, 0x7f, 0x86), "Formulário", "Preencher ou criar campos", para(Msg::MudarAba(crate::Aba::Formularios))),
+            ("file-export", Color::rgb8(0x5b, 0x6b, 0x7c), "Extrair páginas", "Escolha e salve à parte", para(Msg::MudarAba(crate::Aba::Paginas))),
         ];
         let mut grade = column![].spacing(10);
         let mut linha = row![].spacing(10);
@@ -142,6 +144,12 @@ impl App {
         for (k, (icone, cor, titulo, detalhe, msg)) in acoes.into_iter().take(mostrar).enumerate() {
             linha = linha.push(container(acao(icone, cor, titulo, detalhe, msg)).width(Length::Fill(1)));
             if k % 4 == 3 { grade = grade.push(linha); linha = row![].spacing(10); }
+        }
+        // A última fileira incompleta fica com a largura das outras.
+        let sobra = mostrar % 4;
+        if sobra > 0 {
+            for _ in sobra..4 { linha = linha.push(Space::with_width(Length::Fill(1))); }
+            grade = grade.push(linha);
         }
 
         let titulo_recentes = row![

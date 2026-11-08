@@ -232,7 +232,7 @@ fn nome_modelo(m: Modelo) -> (&'static str, &'static str) {
     }
 }
 
-fn dividir() -> Msg {
+pub(crate) fn dividir() -> Msg {
     Msg::Pag(Pag::Abrir(Dialogos::Dividir { modo: crate::organizar::ModoDivisao::ACada, texto: "1".into() }))
 }
 
