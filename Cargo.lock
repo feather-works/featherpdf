@@ -2069,6 +2069,7 @@ dependencies = [
  "rfd",
  "serde_json",
  "sha2",
+ "tiff",
  "tiny-skia",
  "tokio",
  "windows-sys 0.61.2",

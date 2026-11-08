@@ -7,7 +7,7 @@
 
 ## Resumo
 
-Total: **723** itens. ✅ feito: **273** · 🟡 parcial: **72** · ❌ falta: **307** · ⛔ fora do escopo (serviço da Adobe): **71**.
+Total: **723** itens. ✅ feito: **274** · 🟡 parcial: **72** · ❌ falta: **306** · ⛔ fora do escopo (serviço da Adobe): **71**.
 
 Ver a contagem por seção abaixo. Os itens ⛔ dependem de nuvem ou de serviço da Adobe (Acrobat Sign remoto, PDF Spaces, Adobe Express, compartilhamento em nuvem) e ficam de fora da comparação de código.
 
@@ -18,7 +18,7 @@ Ver a contagem por seção abaixo. Os itens ⛔ dependem de nuvem ou de serviço
 | 3. Edição de imagens | 18 | 10 | 2 | 6 | 0 |
 | 4. Organização de páginas | 27 | 21 | 1 | 5 | 0 |
 | 5. Criação de PDF | 22 | 5 | 4 | 13 | 0 |
-| 6. Conversão e exportação | 33 | 17 | 3 | 13 | 0 |
+| 6. Conversão e exportação | 33 | 18 | 3 | 12 | 0 |
 | 7. Compressão e otimização de PDF | 41 | 20 | 1 | 20 | 0 |
 | 8. OCR e digitalização | 22 | 11 | 4 | 7 | 0 |
 | 9. Comentários e anotações | 40 | 18 | 11 | 11 | 0 |
@@ -55,7 +55,7 @@ Critério: uso diário de PDF, sem os itens exóticos (3D, geoespacial, PDF/X, P
 **Lote 2: páginas e arquivos**
 4. Copiar e colar páginas (seção 4): ❌. Sem área de transferência de páginas, então não há como levar página de um arquivo para outro.
 5. Alterar numeração lógica das páginas (seção 4): ❌. O PageLabels só é apagado, não dá para dizer que a página 1 é a "i".
-6. TIFF → PDF (seção 6): ❌. Imagens para PDF e Juntar só aceitam PNG e JPG; scanner costuma gravar TIFF.
+6. ~~TIFF → PDF (seção 6)~~: ✅ em 08/11 (G4/fax, LZW, JPEG, CMYK, várias páginas).
 
 **Lote 3: edição de texto e imagem**
 7. Modificar fonte (seção 2): ❌. Tamanho, cor e espaço do texto existente já mudam; a fonte e o negrito não.
@@ -265,7 +265,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | HTML → PDF. | ❌ falta | não há no código |
 | JPEG → PDF. | ✅ feito | Imagens para PDF; arrastar JPG abre como PDF (juntar.rs) |
 | PNG → PDF. | ✅ feito | Imagens para PDF; arrastar PNG abre como PDF (juntar.rs) |
-| TIFF → PDF. | ❌ falta | não há no código |
+| TIFF → PDF. | ✅ feito | Abrir, arrastar, Imagens para PDF e Juntar; TIFF de várias páginas vira uma página cada (io paginas_tiff) |
 | Documentos digitalizados → PDF. | ✅ feito | scan em PNG/JPG vira PDF (Imagens para PDF) e o OCR torna pesquisável |
 | Converter vários arquivos em lote. | ✅ feito | Fluxos em lote: saída PDF, Word, planilha ou PNG (fluxos.rs Modo) |
 | Preservar imagens na conversão. | ✅ feito | imagens levadas ao docx (io lib.rs) |

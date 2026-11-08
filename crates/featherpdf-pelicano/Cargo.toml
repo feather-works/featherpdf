@@ -39,3 +39,7 @@ windows-sys = { version = "0.61", features = ["Win32_Graphics_Gdi", "Win32_Graph
 [build-dependencies]
 # Ícone, manifesto e nome do .exe do Windows (build.rs).
 embed-resource = "3"
+
+[dev-dependencies]
+# Os testes montam um TIFF de várias páginas (o mesmo do featherpdf-io).
+tiff = { version = "0.11", default-features = false }

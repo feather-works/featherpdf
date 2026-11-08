@@ -1084,7 +1084,7 @@ impl App {
             tokio::task::spawn_blocking(move || {
                 // As etapas vão ao Console do F12, como o "[abrir]" do FeatherSheet.
                 let inicio = Instant::now();
-                // Uma imagem PNG/JPG abre como PDF novo de uma página.
+                // Uma imagem PNG/JPG abre como PDF novo de uma página (TIFF: uma por página do arquivo).
                 let pdf = if juntar::e_imagem(&caminho) { juntar::documento_de_arquivo(&caminho)? }
                     else { featherpdf_io::abrir_com_senha(&caminho, senha.as_deref())? };
                 let ler = inicio.elapsed();
@@ -1301,7 +1301,7 @@ impl App {
             Msg::Abrir => {
                 self.menu = false;
                 return Task::perform(async {
-                    rfd::AsyncFileDialog::new().add_filter("PDF", &["pdf", "PDF"]).add_filter("Imagem (vira PDF)", &juntar::EXTENSOES_IMAGEM).add_filter("Todos os arquivos", &["*"]).pick_files().await
+                    rfd::AsyncFileDialog::new().add_filter("PDF", &["pdf", "PDF"]).add_filter("Imagem (vira PDF)", &juntar::EXTENSOES_PAGINAS).add_filter("Todos os arquivos", &["*"]).pick_files().await
                         .map(|hs| hs.iter().map(|h| h.path().to_path_buf()).collect())
                 }, Msg::CaminhoEscolhido);
             }

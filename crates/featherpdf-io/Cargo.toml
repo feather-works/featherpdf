@@ -20,7 +20,8 @@ memmap2 = "0.9"
 image = { version = "0.25", default-features = false, features = ["jpeg", "webp"] }
 jpeg-encoder = "0.7"
 # Exportar → TIFF de várias páginas (o mesmo tiff que o image usa) e SVG vetorial pelo próprio Hayro.
-tiff = { version = "0.11", default-features = false, features = ["deflate"] }
+# Ler: TIFF de scanner (CCITT G4/fax, LZW, JPEG, várias páginas) em Imagens para PDF e Juntar.
+tiff = { version = "0.11", default-features = false, features = ["deflate", "fax", "lzw", "jpeg"] }
 hayro-svg = "0.8.0"
 # Converter → FeatherSheet: planilha com mesclas, bordas e tamanhos da página.
 rust_xlsxwriter = { version = "0.79", default-features = false }

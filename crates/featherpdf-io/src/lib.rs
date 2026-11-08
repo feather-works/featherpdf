@@ -213,6 +213,58 @@ pub fn gravar_tiff(destino: &Path, paginas: &[u32], dpi: u32, mut desenhar: impl
     gravar_atomico(destino, bytes.get_ref()).map_err(|e| format!("Erro ao salvar a imagem: {e}"))
 }
 
+/// Teto de páginas de um TIFF lido (o arquivo pode vir de qualquer lugar).
+const MAX_PAGINAS_TIFF: usize = 1000;
+
+/// Cada página de um TIFF (scanner costuma gravar um arquivo de várias páginas) em RGB de 8 bits:
+/// `(largura, altura, rgb)`. Preto e branco (fax/G4), cinza, RGB, CMYK; transparência vai sobre branco.
+pub fn paginas_tiff(bytes: &[u8]) -> Result<Vec<(u32, u32, Vec<u8>)>, String> {
+    use tiff::{decoder::{Decoder, DecodingResult}, ColorType};
+    let erro = |e: tiff::TiffError| format!("Não consegui ler o TIFF: {e}");
+    let mut d = Decoder::new(std::io::Cursor::new(bytes)).map_err(erro)?;
+    let mut paginas = Vec::new();
+    loop {
+        let (l, a) = d.dimensions().map_err(erro)?;
+        let cor = d.colortype().map_err(erro)?;
+        let n = l as usize * a as usize;
+        // 16 bits por amostra: fica o byte alto.
+        let amostras: Vec<u8> = match d.read_image().map_err(erro)? {
+            DecodingResult::U8(v) => v,
+            DecodingResult::U16(v) => v.into_iter().map(|x| (x >> 8) as u8).collect(),
+            _ => return Err("TIFF com amostras em ponto flutuante ou 32 bits: não suportado.".into()),
+        };
+        let sobre_branco = |c: u8, alfa: u8| (c as u32 * alfa as u32 / 255 + (255 - alfa as u32)) as u8;
+        let mut rgb = Vec::with_capacity(n * 3);
+        match cor {
+            ColorType::Gray(1) => {
+                // Um bit por pixel, cada linha completa o byte; 1 = branco (o decodificador já inverte o WhiteIsZero).
+                let por_linha = (l as usize).div_ceil(8);
+                for y in 0..a as usize {
+                    for x in 0..l as usize {
+                        let bit = amostras.get(y * por_linha + x / 8).map_or(1, |b| (b >> (7 - x % 8)) & 1);
+                        rgb.extend([if bit == 1 { 255 } else { 0 }; 3]);
+                    }
+                }
+            }
+            ColorType::Gray(8 | 16) => for &v in &amostras { rgb.extend([v; 3]) },
+            ColorType::GrayA(8 | 16) => for p in amostras.chunks_exact(2) { rgb.extend([sobre_branco(p[0], p[1]); 3]) },
+            ColorType::RGB(8 | 16) => rgb = amostras,
+            ColorType::RGBA(8 | 16) => for p in amostras.chunks_exact(4) { rgb.extend([sobre_branco(p[0], p[3]), sobre_branco(p[1], p[3]), sobre_branco(p[2], p[3])]) },
+            ColorType::CMYK(8 | 16) => for p in amostras.chunks_exact(4) {
+                let k = 255 - p[3] as u32;
+                rgb.extend([0, 1, 2].map(|i| ((255 - p[i] as u32) * k / 255) as u8));
+            },
+            outro => return Err(format!("TIFF com cores {outro:?}: ainda não suportado (salve como PNG ou JPG).")),
+        }
+        if rgb.len() != n * 3 { return Err("TIFF com dados incompletos.".into()); }
+        paginas.push((l, a, rgb));
+        if !d.more_images() { break; }
+        if paginas.len() >= MAX_PAGINAS_TIFF { return Err(format!("TIFF com mais de {MAX_PAGINAS_TIFF} páginas.")); }
+        d.next_image().map_err(erro)?;
+    }
+    Ok(paginas)
+}
+
 fn decodificar(img: featherpdf_core::ImagemCrua<'_>) -> Option<image::DynamicImage> {
     use image::{DynamicImage, GrayImage, RgbImage};
     Some(if img.jpeg {
@@ -965,6 +1017,32 @@ mod testes {
         d.next_image().unwrap();
         assert!(!d.more_images());
         std::fs::remove_file(&destino).ok();
+    }
+
+    #[test]
+    fn tiff_de_varias_paginas_vira_rgb() {
+        use tiff::encoder::{colortype::{Gray8, RGB8}, TiffEncoder};
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        let mut t = TiffEncoder::new(&mut bytes).unwrap();
+        t.write_image::<RGB8>(2, 1, &[255, 0, 0, 0, 0, 255]).unwrap();
+        t.write_image::<Gray8>(1, 2, &[0, 200]).unwrap();
+        drop(t);
+        let p = paginas_tiff(bytes.get_ref()).unwrap();
+        assert_eq!(p, vec![(2, 1, vec![255, 0, 0, 0, 0, 255]), (1, 2, vec![0, 0, 0, 200, 200, 200])]);
+        assert!(paginas_tiff(b"II*\0lixo").is_err());
+    }
+
+    /// `FEATHERPDF_TIFF=a.tif,b.tif cargo test tiff_do_disco -- --ignored --nocapture`: páginas e pixels escuros.
+    #[test]
+    #[ignore]
+    fn tiff_do_disco() {
+        for c in std::env::var("FEATHERPDF_TIFF").unwrap().split(',') {
+            let p = paginas_tiff(&std::fs::read(c).unwrap()).unwrap();
+            for (l, a, rgb) in &p {
+                let escuros = rgb.chunks_exact(3).filter(|px| px[0] < 128).count();
+                println!("{c}: {l}×{a}, {escuros} escuros de {}, primeiro {:?}", l * a, &rgb[..3]);
+            }
+        }
     }
 
     #[test]

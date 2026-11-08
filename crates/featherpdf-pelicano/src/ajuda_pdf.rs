@@ -27,7 +27,7 @@ pub fn modelo() -> &'static Catalogo {
                 topicos: vec![
                     topico("arquivos", "Abrir, criar e salvar", vec![
                         t("Abrir (Ctrl+O), novo (Ctrl+N), salvar (Ctrl+S)."),
-                        m("Arraste PDFs ou imagens (PNG, JPG) para a janela: cada um abre numa aba. Imagem vira PDF de uma página."),
+                        m("Arraste PDFs ou imagens (PNG, JPG, TIFF) para a janela: cada um abre numa aba. Imagem vira PDF de uma página; o TIFF de várias páginas do scanner vira um PDF com todas."),
                         m("PDF com senha pede a senha ao abrir."),
                         m("Ctrl+S grava por cima; Ctrl+Shift+S salva uma cópia com outro nome."),
                         m("A gravação é segura: o arquivo novo é escrito à parte e só troca o antigo no fim, mantendo as permissões."),
