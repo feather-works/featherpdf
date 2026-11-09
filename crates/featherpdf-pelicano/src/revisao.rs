@@ -22,6 +22,8 @@ pub struct Revisao {
     pub estado: FiltroEstado,
     /// Comentário (página, índice) com a caixa de resposta aberta, e o texto.
     pub respondendo: Option<((u32, usize), String)>,
+    /// A caixa aberta edita o texto do próprio comentário em vez de responder.
+    pub editando: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -29,6 +31,8 @@ pub enum Rv {
     Filtro(String),
     Estado(FiltroEstado),
     Responder(u32, usize),
+    /// Editar o texto do comentário (página, índice, texto atual).
+    Editar(u32, usize, String),
     Texto(String),
     Enviar,
     Cancelar,
@@ -56,11 +60,15 @@ impl App {
         match m {
             Rv::Filtro(t) => r.filtro = t,
             Rv::Estado(e) => r.estado = e,
-            Rv::Responder(p, i) => { r.respondendo = Some(((p, i), String::new())); return crate::focar(id_resposta()); }
+            Rv::Responder(p, i) => { r.respondendo = Some(((p, i), String::new())); r.editando = false; return crate::focar(id_resposta()); }
+            Rv::Editar(p, i, atual) => { r.respondendo = Some(((p, i), atual)); r.editando = true; return crate::focar(id_resposta()); }
             Rv::Texto(t) => if let Some((_, v)) = &mut r.respondendo { *v = t },
-            Rv::Cancelar => r.respondendo = None,
+            Rv::Cancelar => { r.respondendo = None; r.editando = false; }
             Rv::Enviar => {
                 let Some(((p, i), texto)) = r.respondendo.take() else { return Task::none() };
+                if std::mem::take(&mut r.editando) {
+                    return self.editar(move |pdf| pdf.editar_comentario(p, i, &texto).map(|_| "Comentário alterado. Ctrl+Z desfaz.".into()));
+                }
                 let quem = autor();
                 return self.editar(move |pdf| pdf.responder(p, i, &texto, &quem).map(|_| "Resposta gravada no comentário. Ctrl+Z desfaz.".into()));
             }
@@ -155,17 +163,24 @@ impl App {
             }
             match &r.respondendo {
                 Some(((p, i), texto)) if (*p, *i) == (pagina, indice) => {
-                    cartao = cartao.push(text_input("Escreva a resposta e tecle Enter", texto).id(id_resposta())
+                    let (dica, rotulo) = if r.editando { ("Texto do comentário (Enter grava)", "Gravar") } else { ("Escreva a resposta e tecle Enter", "Responder") };
+                    // Editar pode esvaziar a nota (some o texto, fica o ícone); responder pede texto.
+                    let pode = r.editando || !texto.trim().is_empty();
+                    cartao = cartao.push(text_input(dica, texto).id(id_resposta())
                         .on_input(|t| Msg::Rev(Rv::Texto(t))).on_submit(Msg::Rev(Rv::Enviar)).padding([5, 8]).size(12.5))
                         .push(row![Space::with_width(Length::FILL),
                             button(text("Cancelar").size(11.5)).padding([3, 8]).style(tema::estilo_botao_pequeno(false)).on_press(Msg::Rev(Rv::Cancelar)),
-                            button(text("Responder").size(11.5)).padding([3, 8]).style(tema::estilo_botao_pequeno(true))
-                                .on_press_maybe((!texto.trim().is_empty()).then_some(Msg::Rev(Rv::Enviar))),
+                            button(text(rotulo).size(11.5)).padding([3, 8]).style(tema::estilo_botao_pequeno(true))
+                                .on_press_maybe(pode.then_some(Msg::Rev(Rv::Enviar))),
                         ].spacing(4));
                 }
                 _ => {
-                    let mut acoes = row![button(text("Responder").size(11.5)).padding([3, 8]).style(tema::estilo_botao_pequeno(false))
-                        .on_press(Msg::Rev(Rv::Responder(pagina, indice)))].spacing(3);
+                    let mut acoes = row![
+                        button(text("Responder").size(11.5)).padding([3, 8]).style(tema::estilo_botao_pequeno(false))
+                            .on_press(Msg::Rev(Rv::Responder(pagina, indice))),
+                        button(text("Editar").size(11.5)).padding([3, 8]).style(tema::estilo_botao_pequeno(false))
+                            .on_press(Msg::Rev(Rv::Editar(pagina, indice, a.texto.clone()))),
+                    ].spacing(3);
                     for (k, v) in ESTADOS.iter().take(3) {
                         let ativo = estado == Some(*k);
                         acoes = acoes.push(button(text(*v).size(11.5)).padding([3, 6]).style(tema::estilo_botao_pequeno(ativo))

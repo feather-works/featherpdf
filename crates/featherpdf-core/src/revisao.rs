@@ -23,6 +23,11 @@ pub fn nome_estado(estado: &str) -> &str {
     ESTADOS.iter().find(|(k, _)| *k == estado).map_or(estado, |(_, v)| *v)
 }
 
+fn retangulo_de(o: &Object) -> Option<[f32; 4]> {
+    let v: Vec<f32> = o.as_array().ok()?.iter().filter_map(|x| x.as_float().ok()).collect();
+    (v.len() == 4).then(|| [v[0].min(v[2]), v[1].min(v[3]), v[0].max(v[2]), v[1].max(v[3])])
+}
+
 fn agora_pdf() -> Object {
     let (a, m, d, s) = crate::anotacoes::agora();
     Object::string_literal(format!("D:{a:04}{m:02}{d:02}{:02}{:02}{:02}Z", s / 3600, s / 60 % 60, s % 60))
@@ -60,6 +65,35 @@ impl DocumentoPdf {
     pub fn responder(&mut self, pagina: u32, indice: usize, texto: &str, autor: &str) -> Result<(), String> {
         if texto.trim().is_empty() { return Err("Escreva a resposta.".into()); }
         self.nota_ligada(pagina, indice, dictionary! { "Contents" => lopdf::text_string(texto.trim()) }, autor)
+    }
+
+    /// Troca o texto do comentário (nota, marcação, caixa de texto…), como "Editar" no Acrobat.
+    /// A caixa de texto mostra o texto na página: a aparência é refeita pelo mesmo desenho do criar.
+    pub fn editar_comentario(&mut self, pagina: u32, indice: usize, texto: &str) -> Result<(), String> {
+        let (id, alvo, rect) = self.alvo_anotacao(pagina, indice)?;
+        let texto = texto.trim();
+        let d = self.documento.get_dictionary(alvo).map_err(|e| e.to_string())?;
+        let caixa_texto = d.get(b"Subtype").and_then(Object::as_name).ok() == Some(b"FreeText");
+        if caixa_texto && texto.is_empty() { return Err("A caixa de texto não pode ficar vazia; apague o comentário.".into()); }
+        let mut refeito = None;
+        if caixa_texto {
+            // Desenha uma caixa nova igual, guarda a aparência e tira a nova da página.
+            let r = retangulo_de(&rect).ok_or("A caixa de texto não tem posição.")?;
+            self.anotar(pagina, &AnotacaoNova::CaixaTexto { caixa: r, texto: texto.to_string() }, "")?;
+            let mut lista = self.lista_anotacoes(id);
+            let nova = lista.pop().and_then(|o| o.as_reference().ok()).ok_or("Falha ao refazer a caixa.")?;
+            self.documento.get_dictionary_mut(id).map_err(|e| e.to_string())?.set("Annots", lista);
+            let n = self.documento.objects.remove(&nova).and_then(|o| o.as_dict().ok().cloned()).ok_or("Falha ao refazer a caixa.")?;
+            refeito = Some((n.get(b"AP").cloned().ok(), n.get(b"DA").cloned().ok()));
+        }
+        let d = self.documento.get_dictionary_mut(alvo).map_err(|e| e.to_string())?;
+        if texto.is_empty() { d.remove(b"Contents"); } else { d.set("Contents", lopdf::text_string(texto)); }
+        d.set("M", agora_pdf());
+        if let Some((ap, da)) = refeito {
+            if let Some(ap) = ap { d.set("AP", ap); }
+            if let Some(da) = da { d.set("DA", da); }
+        }
+        Ok(())
     }
 
     /// Marca o estado de revisão (Accepted, Rejected, Completed, Cancelled ou None para limpar).
@@ -179,6 +213,31 @@ mod testes {
         pdf.apagar_anotacao(1, 4).unwrap();
         pdf.apagar_anotacao(1, 0).unwrap();
         assert!(pdf.anotacoes().is_empty());
+    }
+
+    #[test]
+    fn editar_comentario_troca_o_texto_e_refaz_a_caixa() {
+        let mut pdf = pdf_com("BT /F1 12 Tf 72 700 Td (Texto) Tj ET");
+        pdf.anotar(1, &AnotacaoNova::Nota { ponto: (300.0, 700.0), texto: "Antes".into() }, "Ana").unwrap();
+        pdf.anotar(1, &AnotacaoNova::CaixaTexto { caixa: [72.0, 500.0, 300.0, 560.0], texto: "Velho".into() }, "Ana").unwrap();
+        pdf.responder(1, 0, "Resposta", "Bia").unwrap();
+        pdf.editar_comentario(1, 0, "Depois").unwrap();
+        pdf.editar_comentario(1, 1, "Caixa nova").unwrap();
+        assert!(pdf.editar_comentario(1, 1, "  ").is_err(), "caixa de texto vazia");
+        assert!(pdf.editar_comentario(1, 9, "x").is_err());
+        let pdf = DocumentoPdf::de_bytes(&pdf.serializar().unwrap(), None).unwrap();
+        let lista = pdf.anotacoes();
+        assert_eq!(lista.len(), 3, "a caixa refeita não fica sobrando na página: {lista:?}");
+        assert_eq!((lista[0].texto.as_str(), lista[0].autor.as_str()), ("Depois", "Ana"));
+        assert_eq!(lista[1].texto, "Caixa nova");
+        assert_eq!((lista[2].responde_a, lista[2].texto.as_str()), (Some(0), "Resposta"), "a resposta continua ligada");
+        // A aparência da caixa desenha o texto novo (hexadecimal na fonte Helvetica).
+        let id = pdf.id_pagina(1).unwrap();
+        let caixa = pdf.lista_anotacoes(id)[1].as_reference().unwrap();
+        let ap = pdf.documento.get_dictionary(caixa).unwrap().get(b"AP").unwrap().as_dict().unwrap().get(b"N").unwrap().as_reference().unwrap();
+        let fluxo = String::from_utf8_lossy(&pdf.documento.get_object(ap).unwrap().as_stream().unwrap().content).to_string();
+        let hexa_novo: String = "Caixa".bytes().map(|b| format!("{b:02X}")).collect();
+        assert!(fluxo.to_uppercase().contains(&hexa_novo), "{fluxo}");
     }
 
     #[test]

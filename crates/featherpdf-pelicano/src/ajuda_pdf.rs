@@ -58,7 +58,7 @@ pub fn modelo() -> &'static Catalogo {
                         t("Destaque, risque, escreva notas e desenhe."),
                         m("Aba Comentar: Destacar, Sublinhar, Riscar, Ondular, Substituir, Nota, Caixa de texto, Desenhar e Carimbo."),
                         m("Carimbos prontos: Aprovado, Revisado, Recebido, Pago, Conferido, Rascunho, Confidencial e Reprovado."),
-                        m("O painel Comentários lista tudo, com resposta e exclusão; a lista pode ir para CSV ou para o FeatherSheet."),
+                        m("O painel Comentários lista tudo: Responder, Editar (troca o texto de uma nota ou caixa de texto já criada) e a lixeira; a lista pode ir para CSV ou para o FeatherSheet."),
                     ]),
                     topico("formas", "Formulários", vec![
                         t("Preencha, crie campos e faça cálculos."),

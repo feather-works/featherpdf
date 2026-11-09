@@ -7,7 +7,7 @@
 
 ## Resumo
 
-Total: **723** itens. ✅ feito: **274** · 🟡 parcial: **72** · ❌ falta: **306** · ⛔ fora do escopo (serviço da Adobe): **71**.
+Total: **723** itens. ✅ feito: **275** · 🟡 parcial: **72** · ❌ falta: **305** · ⛔ fora do escopo (serviço da Adobe): **71**.
 
 Ver a contagem por seção abaixo. Os itens ⛔ dependem de nuvem ou de serviço da Adobe (Acrobat Sign remoto, PDF Spaces, Adobe Express, compartilhamento em nuvem) e ficam de fora da comparação de código.
 
@@ -21,7 +21,7 @@ Ver a contagem por seção abaixo. Os itens ⛔ dependem de nuvem ou de serviço
 | 6. Conversão e exportação | 33 | 18 | 3 | 12 | 0 |
 | 7. Compressão e otimização de PDF | 41 | 20 | 1 | 20 | 0 |
 | 8. OCR e digitalização | 22 | 11 | 4 | 7 | 0 |
-| 9. Comentários e anotações | 40 | 18 | 11 | 11 | 0 |
+| 9. Comentários e anotações | 40 | 19 | 11 | 10 | 0 |
 | 10. Formulários PDF | 47 | 22 | 5 | 16 | 4 |
 | 11. Assinaturas eletrônicas e digitais | 36 | 14 | 5 | 6 | 11 |
 | 12. Segurança e proteção de documentos | 33 | 18 | 5 | 10 | 0 |
@@ -39,7 +39,7 @@ Ver a contagem por seção abaixo. Os itens ⛔ dependem de nuvem ou de serviço
 | 24. Compartilhamento e colaboração | 15 | 0 | 0 | 0 | 15 |
 | 25. Inteligência artificial — Acrobat AI Assistant e Acrobat Studio | 40 | 0 | 0 | 0 | 40 |
 | 26. Preferências e personalização | 17 | 5 | 2 | 9 | 1 |
-| **Total** | **723** | **272** | **71** | **309** | **71** |
+| **Total** | **723** | **275** | **72** | **305** | **71** |
 
 ## Próximos lotes sugeridos
 
@@ -65,7 +65,7 @@ Critério: uso diário de PDF, sem os itens exóticos (3D, geoespacial, PDF/X, P
 **Lote 4: formulários e comentários**
 10. Campo obrigatório em formulário (seção 10): ❌. As regras têm formato e cálculo, mas nenhum campo é obrigatório.
 11. Definir formato de datas em campo (seção 10): ❌. O campo de data tem calendário, mas sem formato configurável.
-12. Editar comentários (seção 9): ❌. Dá para responder e apagar, mas o texto de uma nota não muda depois de criada.
+12. ~~Editar comentários (seção 9)~~: ✅ em 08/11 (painel Comentários ▸ Editar; a caixa de texto redesenha o texto na página).
 
 **Lote 5: navegação, marcas e acessibilidade**
 13. Criar e editar marcadores (seção 13): ❌. O painel Marcadores só lê o sumário que já veio no arquivo.
@@ -386,7 +386,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Inserir anexos como comentários. | ❌ falta | não há no código |
 | Adicionar comentários a vídeos. | ❌ falta | não há no código |
 | Responder comentários. | ✅ feito | painel Comentários ▸ Responder (/IRT, core revisao.rs) |
-| Editar comentários. | ❌ falta | não há no código |
+| Editar comentários. | ✅ feito | painel Comentários ▸ Editar (`DocumentoPdf::editar_comentario`; a caixa de texto redesenha o texto novo) |
 | Excluir comentários. | ✅ feito | apagar_anotacao (anotacoes.rs) |
 | Agrupar comentários. | ❌ falta | não há no código |
 | Desagrupar comentários. | ❌ falta | não há no código |
