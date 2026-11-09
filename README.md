@@ -1,6 +1,6 @@
 # FeatherPDF
 
-**Produto FeatherOffice independente · versão 0.1.5**
+**Produto FeatherOffice independente · versão 0.1.6**
 
 ## Baixar
 
@@ -14,6 +14,15 @@
 | **Linux** (qualquer distribuição) | [featherpdf-linux-x86_64.tar.gz](https://github.com/feather-works/featherpdf/releases/latest/download/featherpdf-linux-x86_64.tar.gz) | extraia e rode `./instalar.sh` |
 
 Todas as versões e os `SHA256SUMS` ficam na [página de releases](https://github.com/feather-works/featherpdf/releases).
+
+### Novidades da 0.1.6
+
+- **Propriedades do documento (Ctrl+D):** título, autor, assunto e palavras-chave editáveis (com acento, Ctrl+Z desfaz), mais arquivo, tamanho, páginas, versão do PDF, datas e o programa que gerou, como no Acrobat.
+- **TIFF vira PDF:** abrir, arrastar, Imagens para PDF e Juntar aceitam `.tif`/`.tiff` do scanner; cada página do TIFF vira uma página (preto e branco/fax, LZW, JPEG, cinza, cor, CMYK).
+- **Editar comentário:** Comentários ▸ Editar muda o texto de uma nota, marcação ou caixa de texto já criada; a caixa de texto se redesenha na página.
+- **Leitor padrão de PDF:** Configurações ▸ Tornar leitor padrão (no Linux pelo sistema; no Windows aparece em Aplicativos padrão).
+- **Abrir PDF grande com menos memória:** o arquivo é lido direto do disco, sem uma cópia inteira na memória (#2).
+- **Mais:** Dividir e Extrair páginas na tela inicial; boletos com lixo antes do `%PDF-` abrem como no Acrobat; recentes com nomes estranhos voltam inteiros.
 
 ### Novidades da 0.1.5
 
