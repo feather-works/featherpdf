@@ -69,6 +69,8 @@ impl DocumentoPdf {
         for (nome, valor) in pares {
             let campos: Vec<Campo> = self.campos().into_iter().filter(|c| c.nome == *nome).collect();
             let Some(primeiro) = campos.first().cloned() else { faltam.push(nome.clone()); continue };
+            // Somente leitura não recebe dado de fora (o JSON exportado do mesmo formulário o traz).
+            if primeiro.so_leitura { continue; }
             match primeiro.tipo {
                 TipoCampo::Assinatura | TipoCampo::Botao => continue,
                 TipoCampo::Caixa => self.preencher(&primeiro, if marcado(valor) { "x" } else { "" })?,

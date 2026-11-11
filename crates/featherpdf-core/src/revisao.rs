@@ -96,6 +96,17 @@ impl DocumentoPdf {
         Ok(())
     }
 
+    /// Opacidade do comentário `indice` (0,1 a 1): o leitor aplica o /CA à aparência dele.
+    pub fn definir_opacidade(&mut self, pagina: u32, indice: usize, opacidade: f32) -> Result<(), String> {
+        if !opacidade.is_finite() { return Err("Opacidade inválida.".into()); }
+        let (_, alvo, _) = self.alvo_anotacao(pagina, indice)?;
+        let d = self.documento.get_dictionary_mut(alvo).map_err(|e| e.to_string())?;
+        let v = opacidade.clamp(0.1, 1.0);
+        if v >= 1.0 { d.remove(b"CA"); } else { d.set("CA", v); }
+        self.modificado = true;
+        Ok(())
+    }
+
     /// Marca o estado de revisão (Accepted, Rejected, Completed, Cancelled ou None para limpar).
     pub fn marcar_estado(&mut self, pagina: u32, indice: usize, estado: &str, autor: &str) -> Result<(), String> {
         if estado != "None" && !ESTADOS.iter().any(|(k, _)| *k == estado) { return Err(format!("Estado desconhecido: {estado}.")); }
@@ -188,6 +199,23 @@ pub fn comentarios_csv(lista: &[Anotacao]) -> String {
 mod testes {
     use super::*;
     use crate::objetos::testes::pdf_com;
+
+    #[test]
+    fn opacidade_do_comentario() {
+        let mut pdf = pdf_com("BT /F1 12 Tf 72 700 Td (Texto) Tj ET");
+        pdf.anotar(1, &AnotacaoNova::Nota { ponto: (300.0, 700.0), texto: "x".into() }, "Ana").unwrap();
+        assert_eq!(pdf.anotacoes()[0].opacidade, 1.0);
+        pdf.definir_opacidade(1, 0, 0.4).unwrap();
+        let pdf = DocumentoPdf::de_bytes(&pdf.serializar().unwrap(), None).unwrap();
+        assert!((pdf.anotacoes()[0].opacidade - 0.4).abs() < 1e-4);
+        let mut pdf = pdf;
+        pdf.definir_opacidade(1, 0, 0.0).unwrap();
+        assert!((pdf.anotacoes()[0].opacidade - 0.1).abs() < 1e-4, "nunca some de vez");
+        pdf.definir_opacidade(1, 0, 1.0).unwrap();
+        assert_eq!(pdf.anotacoes()[0].opacidade, 1.0);
+        assert!(pdf.definir_opacidade(1, 0, f32::NAN).is_err());
+        assert!(pdf.definir_opacidade(1, 9, 0.5).is_err());
+    }
 
     #[test]
     fn respostas_estado_e_csv() {

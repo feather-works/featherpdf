@@ -371,20 +371,34 @@ fn juntar_pedacos(ops: &[Operation], objetos: Vec<ObjetoPdf>, lugares: Vec<Lugar
 }
 
 /// Posições (em caracteres) de `busca` em `texto`, sem diferenciar maiúscula.
-pub fn achar_sem_caixa(texto: &str, busca: &str) -> Vec<usize> {
-    let minusc = |s: &str| -> Vec<char> { s.chars().map(|c| c.to_lowercase().next().unwrap_or(c)).collect() };
-    let (t, b) = (minusc(texto), minusc(busca));
+pub fn achar_sem_caixa(texto: &str, busca: &str) -> Vec<usize> { achar(texto, busca, OpcoesBusca::default()) }
+
+/// Como procurar: diferenciar maiúsculas e só a palavra inteira (sem letra ou número colado).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct OpcoesBusca {
+    pub maiusculas: bool,
+    pub palavra: bool,
+}
+
+/// Posições (em caracteres) de `busca` em `texto`, sem sobrepor.
+pub fn achar(texto: &str, busca: &str, op: OpcoesBusca) -> Vec<usize> {
+    let preparar = |s: &str| -> Vec<char> {
+        if op.maiusculas { s.chars().collect() } else { s.chars().map(|c| c.to_lowercase().next().unwrap_or(c)).collect() }
+    };
+    let (t, b) = (preparar(texto), preparar(busca));
     if b.is_empty() || b.len() > t.len() { return vec![]; }
+    let colado = |i: usize| t.get(i).is_some_and(|c| c.is_alphanumeric());
     let mut achados = Vec::new();
     let mut i = 0;
     while i + b.len() <= t.len() {
-        if t[i..i + b.len()] == b[..] { achados.push(i); i += b.len(); } else { i += 1; }
+        let inteira = !op.palavra || (!(i > 0 && colado(i - 1)) && !colado(i + b.len()));
+        if t[i..i + b.len()] == b[..] && inteira { achados.push(i); i += b.len(); } else { i += 1; }
     }
     achados
 }
 
-pub(crate) fn trocar_sem_caixa(texto: &str, busca: &str, novo: &str) -> (String, usize) {
-    let achados = achar_sem_caixa(texto, busca);
+pub(crate) fn trocar_com(texto: &str, busca: &str, novo: &str, op: OpcoesBusca) -> (String, usize) {
+    let achados = achar(texto, busca, op);
     let chars: Vec<char> = texto.chars().collect();
     let n = busca.chars().count();
     let mut saida = String::new();
@@ -402,6 +416,11 @@ impl DocumentoPdf {
     /// Troca `busca` por `novo` nas linhas `alvos` (página, objeto), sem diferenciar
     /// maiúscula. Devolve quantas trocas fez. Letra que a fonte não tem para tudo.
     pub fn trocar_texto(&mut self, alvos: &[(u32, usize)], busca: &str, novo: &str) -> Result<usize, String> {
+        self.trocar_texto_com(alvos, busca, novo, OpcoesBusca::default())
+    }
+
+    /// O mesmo, com as opções da busca (maiúsculas, palavra inteira).
+    pub fn trocar_texto_com(&mut self, alvos: &[(u32, usize)], busca: &str, novo: &str, op: OpcoesBusca) -> Result<usize, String> {
         if busca.is_empty() { return Err("Escreva o que procurar.".into()); }
         let mut total = 0;
         // De trás para a frente em cada página: uma troca pode juntar pedaços vizinhos e
@@ -412,7 +431,7 @@ impl DocumentoPdf {
         for &(pagina, objeto) in &alvos {
             let lista = self.objetos(pagina)?;
             let Some(TipoObjeto::Texto { texto, .. }) = lista.get(objeto).map(|o| &o.tipo) else { continue };
-            let (trocado, n) = trocar_sem_caixa(texto, busca, novo);
+            let (trocado, n) = trocar_com(texto, busca, novo, op);
             if n == 0 { continue; }
             self.editar_texto(pagina, objeto, &trocado).map_err(|e| format!("Página {pagina}: {e}"))?;
             total += n;
@@ -994,7 +1013,13 @@ pub(crate) mod testes {
     #[test]
     fn localizar_e_trocar_sem_caixa() {
         assert_eq!(achar_sem_caixa("Ação e AÇÃO, ação", "ação"), [0, 7, 13]);
-        assert_eq!(trocar_sem_caixa("Ola OLA", "ola", "Oi"), ("Oi Oi".to_string(), 2));
+        assert_eq!(trocar_com("Ola OLA", "ola", "Oi", OpcoesBusca::default()), ("Oi Oi".to_string(), 2));
+        let so = |maiusculas, palavra| OpcoesBusca { maiusculas, palavra };
+        assert_eq!(achar("Ação e AÇÃO, ação", "ação", so(true, false)), [13]);
+        assert_eq!(achar("casa casamento acasalar, Casa.", "casa", so(false, true)), [0, 25]);
+        assert_eq!(achar("casa casamento", "casa", so(true, true)), [0]);
+        assert_eq!(achar("a1a a", "a", so(false, true)), [4]);
+        assert_eq!(trocar_com("Ola OLA olar", "ola", "Oi", so(false, true)), ("Oi Oi olar".to_string(), 2));
         let mut pdf = pdf_com_texto();
         assert_eq!(pdf.trocar_texto(&[(1, 0), (1, 1)], "LINHA", "fila").unwrap(), 1);
         assert_eq!(textos(&pdf), ["Ola mundo", "Segunda fila"]);

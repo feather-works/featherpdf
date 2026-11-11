@@ -7,7 +7,6 @@
 mod ajuda_pdf;
 mod leitor_padrao;
 mod assinar;
-mod atualizacao;
 mod busca;
 mod camadas;
 mod comentar;
@@ -37,7 +36,6 @@ mod medir;
 mod monitor;
 mod navegar;
 mod ocr;
-mod ocr_modelos;
 mod organizar;
 mod preflight;
 mod proteger;
@@ -126,7 +124,7 @@ pub enum Auxiliar { Ajuda, Monitor, Configuracoes, Converter, Ocr, Imprimir, Flu
 pub enum Aba { Inicio, Paginas, Editar, Comentar, Formularios, Medir, Proteger, Converter, Exibir }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Painel { Comentarios, Miniaturas, Marcadores, Camadas, Anexos, Texto, Medidas, Tarja, Assinar, Assinaturas, Paginas, Marcas, Sanitizar, Preflight, Imagem, RegrasCampos, Versoes, Comparar, Regiao, Reconhecer, Scripts, Equacao, Tabelas }
+pub enum Painel { Comentarios, Miniaturas, Marcadores, Links, Camadas, Anexos, Texto, Medidas, Tarja, Assinar, Assinaturas, Paginas, Marcas, Sanitizar, Preflight, Imagem, RegrasCampos, Versoes, Comparar, Regiao, Reconhecer, Scripts, Equacao, Tabelas }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ferramenta { Selecionar, Mao, Texto, Editar, Tarja, Comentar(comentar::Anotador), Campo(formularios::Novo), Inserir(inserir::Insercao), Medir(medir::Medidor), Regiao(regiao::Uso) }
@@ -284,7 +282,6 @@ pub enum Msg {
     AlternarTema,
     SecaoConfig(usize),
     Config(configuracoes::Cf),
-    Atualizacao(atualizacao::At),
     AjudaEvento(feather_ui::ajuda::Evento),
     // Janelas
     EscalaTela(f32),
@@ -423,6 +420,8 @@ pub struct App {
     pub campo_zoom: Option<String>,
     pub selecao_texto: Option<(u32, selecao::Posicao, selecao::Posicao)>,
     pub navegacao: navegar::Navegacao,
+    /// Páginas copiadas ou recortadas (um PDF só com elas), para colar neste ou em outro documento.
+    pub paginas_copiadas: Option<DocumentoPdf>,
     pub exportar: exportar::Exportar,
     pub validacao: Option<Result<Vec<featherpdf_core::assinatura::AssinaturaLida>, String>>,
     pub saida_pendente: Option<Vec<u8>>,
@@ -440,10 +439,6 @@ pub struct App {
     pub recentes: recentes::Recentes,
     pub tema_escuro: bool,
     pub config: configuracoes::Config,
-    /// Seção Sobre: procurando, em dia, versão nova…
-    pub atualizacao: atualizacao::Estado,
-    /// Cartão de versão nova na tela (a consulta da abertura achou uma).
-    pub aviso_atualizacao: Option<atualizacao::Lancamento>,
     /// Página escura (modo escuro inteligente), separado do tema da janela.
     pub modo_escuro: bool,
     config_secao: usize,
@@ -557,6 +552,7 @@ impl App {
             campo_pagina: None,
             campo_zoom: None,
             navegacao: navegar::Navegacao::default(),
+            paginas_copiadas: None,
             exportar: exportar::Exportar::default(),
             validacao: None,
             saida_pendente: None,
@@ -583,10 +579,7 @@ impl App {
             suspenso: None,
             mao: None,
             config,
-            atualizacao: atualizacao::Estado::default(),
-            aviso_atualizacao: None,
         };
-        app.ocr.lingua = app.config.lingua_ocr;
         app.janelas.principal = Some(WindowId::MAIN);
         // Sem arquivo, começa na página inicial (`aberto` vazio).
         let mut tarefas = Vec::new();
@@ -594,7 +587,6 @@ impl App {
         if let Some(caminho) = std::env::args_os().nth(1).map(PathBuf::from) {
             tarefas.push(Task::done(Msg::AbrirCaminho(caminho)));
         }
-        tarefas.push(app.procurar_atualizacao_ao_abrir());
         (app, Task::batch(tarefas))
     }
 
@@ -827,6 +819,9 @@ impl App {
         self.selecao_texto = None;
         self.form.campos = None;
         self.edicao = None;
+        // O índice do marcador e do link escolhidos é do documento de antes: Excluir apagaria outro.
+        self.navegacao.escolhido = None;
+        self.navegacao.link = None;
         self.status = if desfazer { "Desfeito.".into() } else { "Refeito.".into() };
         self.texto_da_pagina.0 = 0;
         let total = a.pdf.total_paginas();
@@ -1162,6 +1157,8 @@ impl App {
 
     /// Depois de mexer na estrutura (girar, excluir), a vista é refeita do PDF editado.
     fn refazer_vista(&mut self) -> Task<Msg> {
+        // Edição e Ctrl+Z mudam o sumário: o painel aberto relê (anexos só com o painel, ler é caro).
+        if matches!(self.painel, Some(Painel::Marcadores | Painel::Anexos)) { self.ler_navegacao(); }
         let Some(aberto) = &mut self.aberto else { return Task::none() };
         // Gravar e reinterpretar o PDF leva segundos num arquivo grande: vai para outra thread e a
         // janela não para. Os tamanhos saem do documento na hora; quem desenhar, imprimir ou
@@ -1638,7 +1635,6 @@ impl App {
                 return self.update_config(configuracoes::Cf::Tema(t));
             }
             Msg::Config(m) => return self.update_config(m),
-            Msg::Atualizacao(e) => return self.update_atualizacao(e),
             Msg::SecaoConfig(i) => self.config_secao = i,
             Msg::AjudaEvento(e) => self.ajuda.atualizar(e, ajuda_pdf::modelo()),
 

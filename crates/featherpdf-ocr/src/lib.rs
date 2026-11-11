@@ -88,11 +88,6 @@ impl Ocr {
             include_str!("../modelos/dict.txt"))
     }
 
-    /// A mesma detecção com outro modelo de leitura (outra escrita: grego, cirílico, árabe…).
-    pub fn com_reconhecimento(&self, rec: &[u8], dicionario: &str) -> Result<Self, String> {
-        Self::montar(self.det.clone(), rec, dicionario)
-    }
-
     fn de_bytes(det: &[u8], rec: &[u8], dicionario: &str) -> Result<Self, String> {
         let det = tract_onnx::onnx().model_for_read(&mut &det[..]).map_err(|e| format!("Modelo de OCR inválido: {e:?}"))?;
         Self::montar(det, rec, dicionario)
@@ -209,39 +204,6 @@ impl Ocr {
         }
         fechar(&mut atual);
         Ok((texto, if n == 0 { 0.0 } else { soma / n as f32 }, palavras))
-    }
-}
-
-/// Classificador da orientação da página (PP-LCNet doc_ori: 0°, 90°, 180° ou 270°).
-pub struct Orientacao { plano: Plano }
-
-impl Orientacao {
-    const LADO: usize = 224;
-
-    pub fn de_bytes(modelo: &[u8]) -> Result<Self, String> {
-        let m = tract_onnx::onnx().model_for_read(&mut &modelo[..]).map_err(|e| format!("Modelo de orientação inválido: {e:?}"))?;
-        let plano = m.with_input_fact(0, f32::fact([1, 3, Self::LADO, Self::LADO]).into())
-            .and_then(|m| m.into_optimized()).and_then(|m| m.into_runnable()).map_err(|e| format!("{e:?}"))?;
-        Ok(Orientacao { plano })
-    }
-
-    /// Quantos graus a imagem está girada no sentido horário (0, 90, 180 ou 270), com a certeza
-    /// da escolha. Para endireitar, girar `360 - graus`.
-    pub fn detectar(&self, img: &Imagem<'_>) -> Result<(u32, f32), String> {
-        // Como o PaddleClas: lado menor em 256, recorte de 224 no centro, normalização do ImageNet.
-        let escala = 256.0 / img.largura.min(img.altura) as f32;
-        let (w, h) = (img.largura as f32 * escala, img.altura as f32 * escala);
-        let (ox, oy) = ((w - Self::LADO as f32) / 2.0, (h - Self::LADO as f32) / 2.0);
-        let (media, desvio) = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]);
-        let entrada = tract_ndarray::Array4::from_shape_fn((1, 3, Self::LADO, Self::LADO), |(_, c, y, x)| {
-            let v = amostra(img, (x as f32 + ox + 0.5) / escala, (y as f32 + oy + 0.5) / escala, c);
-            (v / 255.0 - media[c]) / desvio[c]
-        });
-        let saida = self.plano.run(tvec!(Tensor::from(entrada).into())).map_err(|e| e.to_string())?;
-        let p = saida[0].to_plain_array_view::<f32>().map_err(|e| e.to_string())?;
-        let v: Vec<f32> = p.iter().copied().collect();
-        let (k, certeza) = v.iter().copied().enumerate().fold((0, f32::MIN), |m, x| if x.1 > m.1 { x } else { m });
-        Ok((k as u32 * 90, certeza))
     }
 }
 

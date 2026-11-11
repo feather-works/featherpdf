@@ -58,6 +58,38 @@ impl DocumentoPdf {
         match o { Object::Reference(r) => self.documento.get_dictionary(*r).ok(), o => o.as_dict().ok() }
     }
 
+    /// Para a cópia que vai à impressora: com `imprimir`, liga a marca "imprimir" (/F 4) dos
+    /// comentários (sem ela o leitor não os põe no papel); sem, tira os comentários. Devolve quantos.
+    pub fn comentarios_na_impressao(&mut self, imprimir: bool) -> Result<usize, String> {
+        let todos = self.anotacoes();
+        if !imprimir {
+            let nada = OpcoesLimpeza { metadados: false, historico: false, anexos: false, javascript: false, autores: false,
+                camadas_ocultas: false, links_externos: false, comentarios: true };
+            self.sanitizar(nada)?;
+            return Ok(todos.len().saturating_sub(self.anotacoes().len()));
+        }
+        // Página por página, uma passada (antes: a árvore de páginas inteira por comentário).
+        let mut alvos = Vec::new();
+        for (_, id) in self.documento.get_pages() {
+            for o in self.lista_anotacoes(id) {
+                let Ok(r) = o.as_reference() else { continue };
+                let comentario = self.documento.get_dictionary(r).ok()
+                    .and_then(|d| d.get(b"Subtype").and_then(Object::as_name).ok())
+                    .is_some_and(|s| crate::anotacoes::tipo_de_comentario(s).is_some());
+                if comentario { alvos.push(r); }
+            }
+        }
+        let mut n = 0;
+        for r in alvos {
+            let Ok(d) = self.documento.get_dictionary_mut(r) else { continue };
+            let f = d.get(b"F").and_then(Object::as_i64).unwrap_or(0);
+            // Escondida (2) fica escondida; o resto ganha a marca de impressão.
+            if f & 2 == 0 && f & 4 == 0 { d.set("F", f | 4); n += 1; }
+        }
+        if n > 0 { self.modificado = true; }
+        Ok(n)
+    }
+
     pub fn sanitizar(&mut self, op: OpcoesLimpeza) -> Result<Vec<String>, String> {
         let mut relatorio = Vec::new();
         let ids = self.achatar()?;
@@ -368,6 +400,22 @@ mod testes {
         let r = pdf.sanitizar(OpcoesLimpeza { comentarios: true, ..OpcoesLimpeza::default() }).unwrap();
         assert!(r.iter().any(|r| r.starts_with("1 comentário")), "{r:?}");
         assert_eq!(pdf.lista_anotacoes(id), vec![Object::Reference(link), Object::Reference(video)], "link e vídeo ficam");
+    }
+
+    #[test]
+    fn comentarios_na_impressao_liga_ou_tira() {
+        let mut pdf = pdf_com("BT /F1 12 Tf 72 700 Td (oi) Tj ET");
+        let id = pdf.id_pagina(1).unwrap();
+        let nota = pdf.documento.add_object(dictionary! { "Type" => "Annot", "Subtype" => "Text", "Rect" => vec![0.into(), 0.into(), 9.into(), 9.into()] });
+        let escondida = pdf.documento.add_object(dictionary! { "Type" => "Annot", "Subtype" => "Square", "F" => 2, "Rect" => vec![0.into(), 0.into(), 9.into(), 9.into()] });
+        let link = pdf.documento.add_object(dictionary! { "Type" => "Annot", "Subtype" => "Link" });
+        pdf.documento.get_dictionary_mut(id).unwrap().set("Annots", vec![Object::Reference(nota), Object::Reference(escondida), Object::Reference(link)]);
+        let mut com = pdf.clone();
+        assert_eq!(com.comentarios_na_impressao(true).unwrap(), 1);
+        assert_eq!(com.documento.get_dictionary(nota).unwrap().get(b"F").unwrap().as_i64().unwrap(), 4);
+        assert_eq!(com.documento.get_dictionary(escondida).unwrap().get(b"F").unwrap().as_i64().unwrap(), 2);
+        assert_eq!(pdf.comentarios_na_impressao(false).unwrap(), 2);
+        assert_eq!(pdf.lista_anotacoes(id), vec![Object::Reference(link)], "o link fica");
     }
 
     #[test]

@@ -67,6 +67,8 @@ pub enum Mc {
     Paginas(String),
     EmCamada(bool),
     Aplicar,
+    /// Tira o cabeçalho e rodapé que o FeatherPDF escreveu nas páginas escolhidas.
+    Remover,
 }
 
 /// Botão de escolha: o ativo com borda e texto na cor de destaque (o mesmo do Imprimir).
@@ -93,13 +95,38 @@ fn amostra<'a>(rgb: [f32; 3], ativo: bool, msg: Msg) -> Element<'a, Msg> {
 
 fn numero(t: &str) -> Option<f32> { t.trim().replace(',', ".").parse().ok() }
 
+/// [1, 2, 3, 5] → "1-3, 5" (o que `paginas_do_texto` lê); vazio = todas.
+fn intervalos(paginas: &[u32]) -> String {
+    let mut trechos: Vec<(u32, u32)> = Vec::new();
+    for &p in paginas {
+        match trechos.last_mut() { Some((_, b)) if *b + 1 == p => *b = p, _ => trechos.push((p, p)) }
+    }
+    trechos.iter().map(|&(a, b)| if a == b { a.to_string() } else { format!("{a}-{b}") }).collect::<Vec<_>>().join(", ")
+}
+
+#[cfg(test)]
+mod testes {
+    #[test]
+    fn paginas_viram_intervalos() {
+        assert_eq!(super::intervalos(&[1, 2, 3, 5, 7, 8]), "1-3, 5, 7-8");
+        assert_eq!(super::intervalos(&[]), "");
+    }
+}
+
 impl App {
     pub fn update_marcas(&mut self, m: Mc) -> Task<Msg> {
         let total = self.total_paginas();
         let e = &mut self.marcas;
         match m {
-            Mc::Abrir(modo) => { e.modo = modo; self.painel = Some(Painel::Marcas); }
-            Mc::Modo(modo) => e.modo = modo,
+            Mc::Abrir(modo) => {
+                e.modo = modo;
+                self.painel = Some(Painel::Marcas);
+                if modo == Modo::Cabecalho { self.carregar_cabecalho(); }
+            }
+            Mc::Modo(modo) => {
+                e.modo = modo;
+                if modo == Modo::Cabecalho { self.carregar_cabecalho(); }
+            }
             Mc::Texto(t) => e.texto = t,
             Mc::Tamanho(t) => e.tamanho = t,
             Mc::Cor(i) => e.cor = i,
@@ -111,6 +138,15 @@ impl App {
             Mc::CorCr(i) => e.cor_cr = i,
             Mc::Paginas(t) => e.paginas = t,
             Mc::EmCamada(v) => e.em_camada = v,
+            Mc::Remover => {
+                let paginas = match paginas_do_texto(&e.paginas, total) {
+                    Ok(p) => p,
+                    Err(erro) => { self.status = erro; return Task::none(); }
+                };
+                return self.editar(move |pdf| pdf.tirar_cabecalho_rodape(&paginas).and_then(|n| if n == 0 {
+                    Err("Nenhum cabeçalho ou rodapé do FeatherPDF nessas páginas.".into())
+                } else { Ok(format!("Cabeçalho e rodapé tirados de {n} página(s). Ctrl+Z desfaz.")) }));
+            }
             Mc::Aplicar => {
                 let paginas = match paginas_do_texto(&e.paginas, total) {
                     Ok(p) => p,
@@ -136,6 +172,16 @@ impl App {
             }
         }
         Task::none()
+    }
+
+    /// Põe nos campos o cabeçalho e rodapé que o PDF já tem (o texto com os campos, como foi digitado).
+    fn carregar_cabecalho(&mut self) {
+        let Some(m) = self.aberto.as_ref().and_then(|a| a.pdf.cabecalho_rodape_atual()) else { return };
+        let e = &mut self.marcas;
+        for (i, t) in m.cabecalho.iter().chain(&m.rodape).enumerate() { e.lugares[i] = t.clone(); }
+        e.tamanho_cr = featherpdf_core::numero(m.tamanho as f64, 1).trim_end_matches(",0").to_string();
+        if let Some(i) = CORES.iter().position(|(_, c)| c.iter().zip(&m.cor).all(|(a, b)| (a - b).abs() < 0.01)) { e.cor_cr = i; }
+        e.paginas = intervalos(&m.paginas);
     }
 
     pub fn painel_marcas(&self) -> Element<'_, Msg> {
@@ -198,8 +244,11 @@ impl App {
             .push(text_input(format!("Todas (ou 1-3, 5…  de 1 a {total})"), &e.paginas).on_input(|t| Msg::Marca(Mc::Paginas(t))).padding([5, 8]).size(13));
         if !paginas_ok { corpo = corpo.push(dlg::aviso("alert-triangle", format!("Use intervalos de 1 a {total}, como 1-3, 5."))); }
         corpo = corpo.push(previa)
-            .push(text("Entra como texto da página, por cima do conteúdo, em Helvetica. Ctrl+Z desfaz.").size(12).color(muted))
-            .push(row![Space::with_width(Length::FILL), dlg::botao_primario("Aplicar", (pronto && paginas_ok).then_some(mc(Mc::Aplicar)))]);
+            .push(text(if e.modo == Modo::Cabecalho { "Entra como texto da página, em Helvetica, no lugar do cabeçalho e rodapé que o FeatherPDF já tiver posto. Ctrl+Z desfaz." }
+                else { "Entra como texto da página, por cima do conteúdo, em Helvetica. Ctrl+Z desfaz." }).size(12).color(muted));
+        let mut botoes = row![Space::with_width(Length::FILL)].spacing(8);
+        if e.modo == Modo::Cabecalho { botoes = botoes.push(dlg::botao_secundario("Remover", paginas_ok.then_some(mc(Mc::Remover)))); }
+        corpo = corpo.push(botoes.push(dlg::botao_primario("Aplicar", (pronto && paginas_ok).then_some(mc(Mc::Aplicar)))));
         scrollable(corpo.padding([0, 4])).height(Length::FILL).into()
     }
 }

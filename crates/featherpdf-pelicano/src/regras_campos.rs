@@ -21,11 +21,14 @@ impl TipoCalc {
 }
 
 #[derive(Debug, Clone)]
-pub struct RegrasUi { campo: Option<String>, limite: String, calc: TipoCalc, texto: String }
+pub struct RegrasUi { campo: Option<String>, limite: String, calc: TipoCalc, texto: String, padrao: String }
 
 impl Default for RegrasUi {
-    fn default() -> Self { Self { campo: None, limite: String::new(), calc: TipoCalc::Nenhum, texto: String::new() } }
+    fn default() -> Self { Self { campo: None, limite: String::new(), calc: TipoCalc::Nenhum, texto: String::new(), padrao: String::new() } }
 }
+
+/// Campo que guarda valor (o que aparece na lista do painel).
+fn tem_valor(c: &Campo) -> bool { !matches!(c.tipo, TipoCampo::Assinatura | TipoCampo::Botao) }
 
 #[derive(Debug, Clone)]
 pub enum Rg {
@@ -39,12 +42,19 @@ pub enum Rg {
     AplicarCalc,
     Mover(ObjectId, i32),
     PorLinhas,
+    Obrigatorio(bool),
+    SoLeitura(bool),
+    Padrao(String),
+    AplicarPadrao,
+    /// Caixa/opção marcada por padrão.
+    PadraoMarcada(bool),
 }
 
 impl RegrasUi {
     fn carregar(&mut self, c: &Campo) {
         self.campo = Some(c.nome.clone());
         self.limite = c.limite.map_or(String::new(), |n| n.to_string());
+        self.padrao = c.padrao.clone();
         (self.calc, self.texto) = match &c.calculo {
             None => (TipoCalc::Nenhum, String::new()),
             Some(Calculo::Simples(op, v)) => (TipoCalc::Op(*op), v.join("; ")),
@@ -78,12 +88,22 @@ impl App {
         })
     }
 
+    /// Grava obrigatório/somente leitura/padrão do campo escolhido (`padrao` `None` não mexe nele).
+    fn gravar_comportamento(&mut self, obrigatorio: Option<bool>, so_leitura: Option<bool>, padrao: Option<String>) -> Task<Msg> {
+        let Some(c) = self.campo_escolhido() else { return Task::none() };
+        let (o, l) = (obrigatorio.unwrap_or(c.obrigatorio), so_leitura.unwrap_or(c.so_leitura));
+        self.editar(move |pdf| {
+            pdf.definir_comportamento(&c, o, l, padrao.as_deref())?;
+            Ok(format!("“{}” gravado (Ctrl+Z desfaz).", c.nome))
+        })
+    }
+
     pub fn update_regras(&mut self, m: Rg) -> Task<Msg> {
         match m {
             Rg::Abrir => {
                 self.painel = if self.painel == Some(Painel::RegrasCampos) { None } else { Some(Painel::RegrasCampos) };
                 if self.regras.campo.is_none() {
-                    if let Some(c) = self.aberto.as_ref().and_then(|a| a.pdf.campos().into_iter().find(|c| matches!(c.tipo, TipoCampo::Texto { .. }))) { self.regras.carregar(&c); }
+                    if let Some(c) = self.aberto.as_ref().and_then(|a| a.pdf.campos().into_iter().find(tem_valor)) { self.regras.carregar(&c); }
                 }
             }
             Rg::Campo(n) => if let Some(c) = self.aberto.as_ref().and_then(|a| a.pdf.campos().into_iter().find(|c| c.nome == n)) {
@@ -110,6 +130,11 @@ impl App {
                     Ok("Ordem do Tab mudada (Ctrl+Z desfaz).".into())
                 });
             }
+            Rg::Obrigatorio(v) => return self.gravar_comportamento(Some(v), None, None),
+            Rg::SoLeitura(v) => return self.gravar_comportamento(None, Some(v), None),
+            Rg::Padrao(t) => self.regras.padrao = t,
+            Rg::AplicarPadrao => { let p = self.regras.padrao.clone(); return self.gravar_comportamento(None, None, Some(p)); }
+            Rg::PadraoMarcada(v) => return self.gravar_comportamento(None, None, Some(if v { "sim".into() } else { String::new() })),
             Rg::PorLinhas => {
                 let pagina = self.pagina;
                 return self.editar(move |pdf| { pdf.ordem_tab_por_linhas(pagina)?; Ok("Tab de cima para baixo, da esquerda para a direita.".into()) });
@@ -121,17 +146,38 @@ impl App {
     pub fn painel_regras(&self) -> Element<'_, Msg> {
         let muted = tema::COR_TEXTO_MUTED();
         let Some(a) = &self.aberto else { return text("").into() };
+        // Uma leitura dos campos por desenho (antes eram quatro).
         let campos = a.pdf.campos();
-        let mut nomes: Vec<String> = campos.iter().filter(|c| matches!(c.tipo, TipoCampo::Texto { .. })).map(|c| c.nome.clone()).collect();
+        let escolhido = |campos: &[Campo]| self.regras.campo.as_ref().and_then(|n| campos.iter().find(|c| &c.nome == n).cloned());
+        let mut nomes: Vec<String> = campos.iter().filter(|c| tem_valor(c)).map(|c| c.nome.clone()).collect();
         nomes.dedup();
         let chip = |rotulo: String, ativo: bool, msg: Msg| button(text(rotulo).size(12).center()).width(Length::FILL).padding([5, 4])
             .style(tema::estilo_botao_pequeno(ativo)).on_press(msg);
         let mut corpo = column![].spacing(10);
         if nomes.is_empty() {
-            corpo = corpo.push(text("Este PDF não tem campo de texto. Crie um pela faixa (Campo de texto) e volte aqui.").size(13).color(muted));
-        } else if let Some(c) = self.campo_escolhido() {
+            corpo = corpo.push(text("Este PDF não tem campo de formulário. Crie um pela faixa (Campo de texto, Caixa…) e volte aqui.").size(13).color(muted));
+        } else if let Some(c) = escolhido(&campos) {
             corpo = corpo.push(dlg::secao("Campo"))
                 .push(suspensa(nomes, self.regras.campo.clone(), |n| Msg::Regras(Rg::Campo(n))).width(Length::FILL).text_size(13));
+            corpo = corpo.push(dlg::secao("Comportamento"))
+                .push(checkbox("Obrigatório", c.obrigatorio).on_toggle(|v| Msg::Regras(Rg::Obrigatorio(v))).size(15).text_size(13))
+                .push(checkbox("Somente leitura (não aceita digitação)", c.so_leitura).on_toggle(|v| Msg::Regras(Rg::SoLeitura(v))).size(15).text_size(13));
+            corpo = match c.tipo {
+                TipoCampo::Caixa | TipoCampo::Opcao => corpo.push(checkbox("Marcada por padrão", !c.padrao.is_empty())
+                    .on_toggle(|v| Msg::Regras(Rg::PadraoMarcada(v))).size(15).text_size(13)),
+                _ => corpo.push(row![
+                    text("Valor padrão").size(13).width(100),
+                    text_input("vazio", &self.regras.padrao).on_input(|t| Msg::Regras(Rg::Padrao(t))).on_submit(Msg::Regras(Rg::AplicarPadrao)).width(Length::FILL).padding([4, 8]).size(13),
+                    button(text("Aplicar").size(12)).padding([4, 10]).style(tema::estilo_botao_pequeno(false)).on_press(Msg::Regras(Rg::AplicarPadrao)),
+                ].spacing(6).align_y(Align::Center)),
+            };
+            corpo = corpo.push(text("Limpar campos volta cada campo ao valor padrão.").size(11.5).color(muted));
+            let faltam = featherpdf_core::obrigatorios_vazios_de(&campos);
+            if !faltam.is_empty() {
+                corpo = corpo.push(dlg::aviso("alert-triangle", format!("Obrigatórios vazios: {}", faltam.join(", "))));
+            }
+        }
+        if let Some(c) = escolhido(&campos).filter(|c| matches!(c.tipo, TipoCampo::Texto { .. })) {
             // Validação, dois por linha.
             let mut regras = column![chip("Nenhuma".into(), c.regra.is_none(), Msg::Regras(Rg::Regra(None)))].spacing(4);
             for par in Regra::TODAS.chunks(2) {

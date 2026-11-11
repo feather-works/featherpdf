@@ -617,6 +617,20 @@ mod testes {
     }
 
     #[test]
+    fn recortar_e_colar_em_outro_documento() {
+        // O que a GUI faz em Recortar/Colar: extrair, excluir, inserir depois da escolhida.
+        let mut origem = quatro();
+        let copia = DocumentoPdf::de_bytes(&origem.extrair(&[2]).unwrap(), None).unwrap();
+        origem.excluir_paginas(&[2]).unwrap();
+        assert_eq!(larguras(&origem), [101, 103, 104]);
+        let mut destino = quatro();
+        assert_eq!(destino.inserir_pdf(copia.clone(), 5).unwrap(), 1);
+        assert_eq!(larguras(&destino), [101, 102, 103, 104, 102]);
+        assert_eq!(origem.inserir_pdf(copia, 1).unwrap(), 1);
+        assert_eq!(larguras(&origem), [102, 101, 103, 104]);
+    }
+
+    #[test]
     fn numeracao_aparece_no_texto() {
         let mut pdf = quatro();
         pdf.numerar(Numeracao {

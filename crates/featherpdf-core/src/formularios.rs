@@ -38,11 +38,19 @@ pub struct Campo {
     pub calculo: Option<crate::Calculo>,
     /// Máximo de caracteres (/MaxLen).
     pub limite: Option<usize>,
+    /// Bit "Required" do /Ff: o formulário não está completo sem ele.
+    pub obrigatorio: bool,
+    /// Bit "ReadOnly" do /Ff: ninguém digita nele (o cálculo ainda escreve).
+    pub so_leitura: bool,
+    /// Valor padrão (/DV): o que o campo volta a ter em "Limpar campos".
+    pub padrao: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CampoNovo { Texto, Multilinha, Caixa, Opcao, Lista(Vec<String>), Data, Assinatura }
 
+const FF_SO_LEITURA: i64 = 1;
+const FF_OBRIGATORIO: i64 = 1 << 1;
 const FF_MULTILINHA: i64 = 1 << 12;
 const FF_SEM_DESLIGAR: i64 = 1 << 14;
 const FF_RADIO: i64 = 1 << 15;
@@ -54,6 +62,14 @@ const AZUL_CAMPO: [f32; 3] = [0.14, 0.42, 0.78];
 fn tamanho_do_da(da: &str) -> f32 {
     let p: Vec<&str> = da.split_whitespace().collect();
     p.iter().position(|x| *x == "Tf").and_then(|i| i.checked_sub(1)).and_then(|i| p[i].parse().ok()).unwrap_or(0.0)
+}
+
+/// Os obrigatórios ainda vazios entre `campos` (quem já leu os campos não relê o PDF).
+pub fn obrigatorios_vazios_de(campos: &[Campo]) -> Vec<String> {
+    let mut vistos = HashSet::new();
+    campos.iter().filter(|c| c.obrigatorio && vistos.insert(c.campo))
+        .filter(|c| match c.tipo { TipoCampo::Caixa | TipoCampo::Opcao => c.valor.is_empty() || c.valor == "Off", _ => c.valor.trim().is_empty() })
+        .map(|c| c.nome.clone()).collect()
 }
 
 impl DocumentoPdf {
@@ -208,7 +224,14 @@ impl DocumentoPdf {
             && (dica.starts_with("Data (") || formato.is_some_and(|js| js.contains("AFDate_")));
         let dono = self.documento.get_dictionary(campo).ok();
         let (regra, calculo, limite) = crate::regras::ler_regras(self, &[Some(d), dono].into_iter().flatten().collect::<Vec<_>>());
-        saida.push(Campo { widget: id, campo, nome, tipo, valor, marcada, ligado, pagina, caixa, tamanho, data, regra, calculo, limite });
+        let padrao = [dono, Some(d)].into_iter().flatten().find_map(|x| x.get(b"DV").ok()).map(|o| match o {
+            // Caixa e opção: o nome do estado; "Off" é desmarcada.
+            Object::Name(n) if n.as_slice() == b"Off" => String::new(),
+            Object::Name(n) => String::from_utf8_lossy(n).into_owned(),
+            o => lopdf::decode_text_string(o).unwrap_or_default(),
+        }).unwrap_or_default();
+        let (obrigatorio, so_leitura) = (ff & FF_OBRIGATORIO != 0, ff & FF_SO_LEITURA != 0);
+        saida.push(Campo { widget: id, campo, nome, tipo, valor, marcada, ligado, pagina, caixa, tamanho, data, regra, calculo, limite, obrigatorio, so_leitura, padrao });
     }
 
     /// Aparência de texto do widget com `valor` (borda fina, Helvetica).
@@ -246,6 +269,7 @@ impl DocumentoPdf {
     /// Grava o valor do campo: texto e lista recebem o texto; caixa e opção
     /// ficam marcadas com valor não vazio. Confere a regra e o limite do campo e refaz as contas.
     pub fn preencher(&mut self, c: &Campo, valor: &str) -> Result<(), String> {
+        if c.so_leitura { return Err(format!("“{}” é somente leitura.", c.nome)); }
         if c.calculo.is_some() { return Err(format!("“{}” é calculado: muda sozinho quando os campos da conta mudam.", c.nome)); }
         let valor = match c.regra { Some(r) => r.aplicar(valor)?, None => valor.to_string() };
         if let Some(n) = c.limite.filter(|&n| valor.chars().count() > n) { return Err(format!("“{}” aceita até {n} caracteres.", c.nome)); }
@@ -257,6 +281,7 @@ impl DocumentoPdf {
     /// Enquanto a pessoa digita: grava o texto como está (a máscara entra no [`Self::preencher`]
     /// ao confirmar), mas já respeita o limite e refaz as contas.
     pub fn digitar(&mut self, c: &Campo, valor: &str) -> Result<(), String> {
+        if c.so_leitura { return Err(format!("“{}” é somente leitura.", c.nome)); }
         if c.calculo.is_some() { return Err(format!("“{}” é calculado: muda sozinho quando os campos da conta mudam.", c.nome)); }
         if let Some(n) = c.limite.filter(|&n| valor.chars().count() > n) { return Err(format!("“{}” aceita até {n} caracteres.", c.nome)); }
         self.gravar_valor(c, valor)?;
@@ -301,15 +326,63 @@ impl DocumentoPdf {
         Ok(())
     }
 
-    /// Apaga o valor de todos os campos.
+    /// Volta todos os campos ao valor padrão (/DV), ou vazio quando não têm.
     pub fn limpar_campos(&mut self) -> Result<usize, String> {
         let campos = self.campos();
         let mut feitos = HashSet::new();
         for c in campos.iter().filter(|c| !matches!(c.tipo, TipoCampo::Assinatura | TipoCampo::Botao)) {
-            if feitos.insert(c.campo) { self.gravar_valor_em(c, "", &campos)?; }
+            if !feitos.insert(c.campo) { continue; }
+            // Grupo de opções: o padrão é o estado de um dos botões; liga esse, não o primeiro.
+            let (alvo, valor) = match c.tipo {
+                TipoCampo::Opcao if !c.padrao.is_empty() => match campos.iter().find(|w| w.campo == c.campo && w.ligado == c.padrao) {
+                    Some(w) => (w, c.padrao.as_str()),
+                    None => (c, ""),
+                },
+                _ => (c, c.padrao.as_str()),
+            };
+            // Padrão que a fonte do formulário não escreve: o campo fica vazio, os outros seguem.
+            if self.gravar_valor_em(alvo, valor, &campos).is_err() { self.gravar_valor_em(alvo, "", &campos)?; }
         }
         self.recalcular()?;
         Ok(feitos.len())
+    }
+
+    /// Marca o campo como obrigatório e/ou somente leitura e grava o valor padrão (`None` não
+    /// mexe no padrão; vazio o tira). Um Ctrl+Z (quem chama guarda o documento).
+    pub fn definir_comportamento(&mut self, c: &Campo, obrigatorio: bool, so_leitura: bool, padrao: Option<&str>) -> Result<(), String> {
+        if matches!(c.tipo, TipoCampo::Assinatura | TipoCampo::Botao) && padrao.is_some_and(|p| !p.is_empty()) {
+            return Err("Esse campo não guarda valor.".into());
+        }
+        // O /Ff pode vir do pai: parte do que vale hoje, para não perder multilinha, lista etc.
+        let mut ff = 0;
+        let mut atual = Some(c.campo);
+        for _ in 0..32 {
+            let Some(id) = atual else { break };
+            let Ok(d) = self.documento.get_dictionary(id) else { break };
+            if let Ok(v) = d.get(b"Ff").and_then(Object::as_i64) { ff = v; break; }
+            atual = d.get(b"Parent").and_then(Object::as_reference).ok();
+        }
+        ff &= !(FF_OBRIGATORIO | FF_SO_LEITURA);
+        if obrigatorio { ff |= FF_OBRIGATORIO; }
+        if so_leitura { ff |= FF_SO_LEITURA; }
+        let padrao_pdf = padrao.map(|p| match c.tipo {
+            TipoCampo::Caixa | TipoCampo::Opcao => Object::Name(if p.is_empty() { b"Off".to_vec() } else { c.ligado.as_bytes().to_vec() }),
+            _ => lopdf::text_string(p),
+        });
+        let d = self.documento.get_dictionary_mut(c.campo).map_err(|e| e.to_string())?;
+        if ff == 0 { d.remove(b"Ff"); } else { d.set("Ff", ff); }
+        match (padrao, padrao_pdf) {
+            (Some(""), _) => { d.remove(b"DV"); }
+            (Some(_), Some(o)) => d.set("DV", o),
+            _ => {}
+        }
+        self.modificado = true;
+        Ok(())
+    }
+
+    /// Nomes dos campos obrigatórios ainda vazios (cada campo uma vez).
+    pub fn obrigatorios_vazios(&self) -> Vec<String> {
+        obrigatorios_vazios_de(&self.campos())
     }
 
     /// AcroForm do catálogo, criado se não houver; devolve o id dele.
@@ -544,6 +617,33 @@ mod testes {
     }
 
     #[test]
+    fn obrigatorio_somente_leitura_e_padrao() {
+        let mut pdf = crate::testes::pdf_teste();
+        pdf.criar_campo(1, [100.0, 700.0, 250.0, 720.0], &CampoNovo::Multilinha, "Obs").unwrap();
+        pdf.criar_campo(1, [100.0, 600.0, 112.0, 612.0], &CampoNovo::Caixa, "Aceito").unwrap();
+        let obs = pdf.campos().into_iter().find(|c| c.nome == "Obs").unwrap();
+        pdf.definir_comportamento(&obs, true, false, Some("Nada a declarar")).unwrap();
+        let aceito = pdf.campos().into_iter().find(|c| c.nome == "Aceito").unwrap();
+        pdf.definir_comportamento(&aceito, true, false, None).unwrap();
+        let mut faltam = pdf.obrigatorios_vazios();
+        faltam.sort();
+        assert_eq!(faltam, ["Aceito", "Obs"]);
+        pdf.limpar_campos().unwrap();
+        let pdf2 = DocumentoPdf::de_bytes(&pdf.serializar().unwrap(), None).unwrap();
+        let obs = pdf2.campos().into_iter().find(|c| c.nome == "Obs").unwrap();
+        assert!(obs.obrigatorio && !obs.so_leitura && matches!(obs.tipo, TipoCampo::Texto { multilinha: true }), "o multilinha continua");
+        assert_eq!((obs.valor.as_str(), obs.padrao.as_str()), ("Nada a declarar", "Nada a declarar"));
+        assert_eq!(pdf2.obrigatorios_vazios(), ["Aceito"]);
+        let obs = pdf.campos().into_iter().find(|c| c.nome == "Obs").unwrap();
+        pdf.definir_comportamento(&obs, false, true, Some("")).unwrap();
+        let obs = pdf.campos().into_iter().find(|c| c.nome == "Obs").unwrap();
+        assert!(obs.so_leitura && !obs.obrigatorio && obs.padrao.is_empty());
+        assert!(pdf.preencher(&obs, "x").is_err(), "somente leitura não aceita digitação");
+        // Importar dados pula o somente leitura em vez de parar no meio.
+        assert_eq!(pdf.importar_dados(&[("Obs".into(), "x".into()), ("Aceito".into(), "sim".into())]).unwrap().0, 1);
+    }
+
+    #[test]
     fn kids_em_ciclo_nao_trava() {
         let mut pdf = crate::testes::pdf_teste();
         pdf.criar_campo(1, [100.0, 700.0, 250.0, 720.0], &CampoNovo::Texto, "A").unwrap();
@@ -586,5 +686,25 @@ mod testes {
         assert!(!pdf.campos().iter().find(|c| c.nome == "Nome").unwrap().data);
         pdf.limpar_campos().unwrap();
         assert!(pdf.campos().iter().all(|c| c.valor.is_empty() || c.valor == "Off"));
+    }
+
+    /// Audit: limpar volta o grupo de opções ao botão do padrão, e um padrão fora da fonte
+    /// não impede de limpar o resto.
+    #[test]
+    fn limpar_campos_respeita_o_padrao_do_grupo_e_nao_para_no_padrao_sem_fonte() {
+        let mut pdf = crate::testes::pdf_teste();
+        pdf.criar_campo(1, [72.0, 500.0, 300.0, 520.0], &CampoNovo::Texto, "Cidade").unwrap();
+        pdf.criar_campo(1, [72.0, 400.0, 84.0, 412.0], &CampoNovo::Opcao, "Turno").unwrap();
+        pdf.criar_campo(1, [100.0, 400.0, 112.0, 412.0], &CampoNovo::Opcao, "Turno").unwrap();
+        let turnos = |p: &DocumentoPdf| p.campos().into_iter().filter(|c| c.nome == "Turno").collect::<Vec<_>>();
+        let segundo = turnos(&pdf)[1].clone();
+        pdf.definir_comportamento(&segundo, false, false, Some("x")).unwrap();
+        pdf.preencher(&turnos(&pdf)[0], "sim").unwrap();
+        let cidade = pdf.campos().into_iter().find(|c| c.nome == "Cidade").unwrap();
+        pdf.documento.get_dictionary_mut(cidade.campo).unwrap().set("DV", lopdf::text_string("東京"));
+        pdf.preencher(&cidade, "Recife").unwrap();
+        pdf.limpar_campos().unwrap();
+        assert_eq!(turnos(&pdf).iter().map(|c| c.marcada).collect::<Vec<_>>(), [false, true], "volta ao segundo");
+        assert_eq!(pdf.campos().into_iter().find(|c| c.nome == "Cidade").unwrap().valor, "", "padrão sem fonte: vazio");
     }
 }

@@ -86,12 +86,18 @@ fn programas_de_fonte(doc: &Document) -> HashSet<ObjectId> {
 }
 
 /// Troca as referências por `mapa` em todo o objeto.
-fn trocar_refs(o: &mut Object, mapa: &HashMap<ObjectId, ObjectId>) {
+pub(crate) fn trocar_refs(o: &mut Object, mapa: &HashMap<ObjectId, ObjectId>) {
+    trocar_refs_ate(o, mapa, 0);
+}
+
+/// O objeto vem do arquivo: aninhamento sem teto estourava a pilha (PDF feito para isso).
+fn trocar_refs_ate(o: &mut Object, mapa: &HashMap<ObjectId, ObjectId>, fundo: u32) {
+    if fundo > 256 { return; }
     match o {
         Object::Reference(id) => if let Some(n) = mapa.get(id) { *id = *n },
-        Object::Array(a) => a.iter_mut().for_each(|x| trocar_refs(x, mapa)),
-        Object::Dictionary(d) => d.iter_mut().for_each(|(_, x)| trocar_refs(x, mapa)),
-        Object::Stream(s) => s.dict.iter_mut().for_each(|(_, x)| trocar_refs(x, mapa)),
+        Object::Array(a) => a.iter_mut().for_each(|x| trocar_refs_ate(x, mapa, fundo + 1)),
+        Object::Dictionary(d) => d.iter_mut().for_each(|(_, x)| trocar_refs_ate(x, mapa, fundo + 1)),
+        Object::Stream(s) => s.dict.iter_mut().for_each(|(_, x)| trocar_refs_ate(x, mapa, fundo + 1)),
         _ => {}
     }
 }
@@ -146,9 +152,19 @@ pub(crate) fn ler_imagem(doc: &Document, id: ObjectId) -> Option<(u32, u32, u8, 
     let filtros = s.filters().unwrap_or_default();
     if filtros == [&b"DCTDecode"[..]] { return Some((w as u32, h as u32, comp, true, s.content.clone())); }
     if !filtros.iter().all(|f| *f == b"FlateDecode") { return None; }
-    let pixels = s.decompressed_content().ok()?;
-    (pixels.len() == (w * h) as usize * comp as usize).then_some((w as u32, h as u32, comp, false, pixels))
+    let (w, h) = (u32::try_from(w).ok()?, u32::try_from(h).ok()?);
+    let esperado = (w as u64).checked_mul(h as u64)?.checked_mul(comp as u64)?;
+    if esperado > TETO_IMAGEM { return None; }
+    // Descomprime com teto antes de confiar no fluxo: 1 KB podia inflar para gigabytes.
+    // O preditor (DecodeParms) põe um byte por linha a mais; o lopdf o desfaz depois.
+    let limite = esperado + h as u64 + 1;
+    let cru = crate::inflar_com_teto(&s.content, limite)?;
+    let pixels = if d.has(b"DecodeParms") { s.decompressed_content().ok()? } else { cru };
+    (pixels.len() as u64 == esperado).then_some((w, h, comp, false, pixels))
 }
+
+/// O maior bitmap de imagem que se descomprime (400 MB: uma foto de 10.000 × 13.000 em RGB).
+const TETO_IMAGEM: u64 = 400 << 20;
 
 pub(crate) fn trocar_por_jpeg(doc: &mut Document, id: ObjectId, jpeg: Vec<u8>, largura: u32, altura: u32) {
     let Ok(s) = doc.get_object_mut(id).and_then(Object::as_stream_mut) else { return };
@@ -323,7 +339,55 @@ pub(crate) fn tirar_anexos(doc: &mut Document) {
     }
 }
 
+/// Foto tirada de dentro do PDF, como está no arquivo: o JPEG cru (`jpeg`) ou os pixels de
+/// 8 bits (`componentes` 1 = cinza, 3 = RGB).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImagemExtraida {
+    /// Primeira página (das pedidas) em que aparece.
+    pub pagina: u32,
+    pub largura: u32,
+    pub altura: u32,
+    pub componentes: u8,
+    pub jpeg: bool,
+    pub dados: Vec<u8>,
+}
+
 impl DocumentoPdf {
+    /// As fotos que aparecem nas `paginas` (vazio = todas), cada uma uma vez, na ordem das
+    /// páginas; e quantas ficaram de fora por estarem num formato que ainda não sai
+    /// (máscara de bits, paleta, 1 bit, CMYK sem JPEG, JPEG 2000, fax).
+    /// shortcut: a máscara de transparência (/SMask) não acompanha a foto; juntar em PNG com alfa se pedirem.
+    /// As fotos das `paginas` (vazio = todas), cada uma uma vez, na página em que aparece
+    /// primeiro; a máscara de transparência não conta. Só a lista: ler é com [`Self::extrair_foto`],
+    /// uma por vez (um escaneado inteiro lido de uma vez passava de vários GB).
+    pub fn fotos_para_extrair(&self, paginas: &[u32]) -> Vec<(u32, ObjectId)> {
+        let doc = &self.documento;
+        let exibidas = exibicoes(doc);
+        let mascaras: HashSet<ObjectId> = exibidas.keys().filter_map(|id| {
+            doc.get_object(*id).and_then(Object::as_stream).ok()?.dict.get(b"SMask").ok()?.as_reference().ok()
+        }).collect();
+        let mut achadas: Vec<(u32, ObjectId)> = exibidas.iter().filter(|(id, _)| !mascaras.contains(*id))
+            .filter_map(|(id, (_, pags))| pags.iter().copied().find(|p| paginas.is_empty() || paginas.contains(p)).map(|p| (p, *id)))
+            .collect();
+        achadas.sort();
+        achadas
+    }
+
+    /// Lê uma foto da lista de [`Self::fotos_para_extrair`]. `None`: formato que ainda não sai.
+    pub fn extrair_foto(&self, pagina: u32, id: ObjectId) -> Option<ImagemExtraida> {
+        let doc = &self.documento;
+        let s = doc.get_object(id).and_then(Object::as_stream).ok()?;
+        let num = |k: &[u8]| s.dict.get(k).and_then(Object::as_i64).ok().and_then(|n| u32::try_from(n).ok());
+        // JPEG sai como está, em qualquer espaço de cor: é o arquivo original da foto.
+        if s.filters().unwrap_or_default() == [&b"DCTDecode"[..]] {
+            if let (Some(l), Some(a)) = (num(b"Width"), num(b"Height")) {
+                return Some(ImagemExtraida { pagina, largura: l, altura: a, componentes: 3, jpeg: true, dados: s.content.clone() });
+            }
+        }
+        let (largura, altura, componentes, jpeg, dados) = ler_imagem(doc, id)?;
+        Some(ImagemExtraida { pagina, largura, altura, componentes, jpeg, dados })
+    }
+
     /// Passa `clarear` nas imagens que aparecem nas `paginas` (escaneado com papel cinza) e
     /// devolve quantas mudaram. A imagem que também aparece em outra página muda lá também.
     pub fn limpar_fundo(&mut self, paginas: &[u32], clarear: &dyn Fn(ImagemCrua<'_>) -> Option<(Vec<u8>, u32, u32)>) -> usize {
@@ -423,6 +487,23 @@ mod testes {
         let cena = feather_draw::Cena::nova(595.0, 842.0);
         let bytes = feather_io::Registro::padrao().gravar("pdf", &feather_io::Documento::Desenho(cena)).unwrap();
         DocumentoPdf::de_bytes(&bytes, None).unwrap()
+    }
+
+    #[test]
+    fn extrai_fotos_sem_a_mascara() {
+        let mut pdf = exemplo();
+        pdf.inserir_em_branco(2).unwrap();
+        let rgb = vec![200u8; 16 * 16 * 3];
+        let mut alfa = vec![255u8; 16 * 16];
+        alfa[0] = 0;
+        pdf.inserir_imagem(1, [10.0, 10.0, 110.0, 110.0], crate::ImagemNova::Pixels { largura: 16, altura: 16, rgb: rgb.clone(), alfa: Some(alfa) }).unwrap();
+        let jpeg = b"\xFF\xD8 de mentira".to_vec();
+        pdf.inserir_imagem(2, [10.0, 10.0, 110.0, 110.0], crate::ImagemNova::Jpeg { bytes: jpeg.clone(), largura: 4, altura: 4, cinza: false }).unwrap();
+        let todas: Vec<_> = pdf.fotos_para_extrair(&[]).into_iter().map(|(p, id)| pdf.extrair_foto(p, id).unwrap()).collect();
+        assert_eq!(todas.len(), 2, "a máscara não sai como foto");
+        assert_eq!((todas[0].pagina, todas[0].jpeg, todas[0].componentes, &todas[0].dados), (1, false, 3, &rgb));
+        assert_eq!((todas[1].pagina, todas[1].jpeg, &todas[1].dados), (2, true, &jpeg));
+        assert_eq!(pdf.fotos_para_extrair(&[2]).len(), 1);
     }
 
     #[test]

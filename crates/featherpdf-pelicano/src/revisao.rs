@@ -37,6 +37,8 @@ pub enum Rv {
     Enviar,
     Cancelar,
     Marcar(u32, usize, &'static str),
+    /// Opacidade do comentário (página, índice, 0,1 a 1).
+    Opacidade(u32, usize, f32),
     Exportar,
     ExportarPara(Option<PathBuf>),
     ParaSheet,
@@ -77,6 +79,8 @@ impl App {
                 return self.editar(move |pdf| pdf.marcar_estado(p, i, estado, &quem)
                     .map(|_| if estado == "None" { "Estado removido.".into() } else { format!("Marcado como {}.", nome_estado(estado).to_lowercase()) }));
             }
+            Rv::Opacidade(p, i, v) => return self.editar(move |pdf| pdf.definir_opacidade(p, i, v)
+                .map(|_| format!("Comentário com {:.0}% de opacidade. Ctrl+Z desfaz.", v * 100.0))),
             Rv::Exportar => {
                 let nome = self.nome_documento().unwrap_or_else(|| "documento.pdf".into());
                 let sugestao = format!("{} - comentários.csv", nome.strip_suffix(".pdf").unwrap_or(&nome));
@@ -185,6 +189,12 @@ impl App {
                         let ativo = estado == Some(*k);
                         acoes = acoes.push(button(text(*v).size(11.5)).padding([3, 6]).style(tema::estilo_botao_pequeno(ativo))
                             .on_press(Msg::Rev(Rv::Marcar(pagina, indice, if ativo { "None" } else { k }))));
+                    }
+                    // Opacidade: três degraus (um passo de Ctrl+Z cada), o atual marcado.
+                    for v in [1.0f32, 0.7, 0.4] {
+                        let ativo = (a.opacidade - v).abs() < 0.05;
+                        acoes = acoes.push(button(text(format!("{:.0}%", v * 100.0)).size(11.5)).padding([3, 6]).style(tema::estilo_botao_pequeno(ativo))
+                            .on_press(Msg::Rev(Rv::Opacidade(pagina, indice, v))));
                     }
                     cartao = cartao.push(scrollable(acoes).direction(Direction::Horizontal));
                 }

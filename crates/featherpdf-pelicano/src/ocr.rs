@@ -3,18 +3,16 @@
 //! de texto invisível (selecionar, copiar e buscar). Uma página por tarefa, fora da thread
 //! da interface; o Aplicar é um Ctrl+Z só.
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 use feather_ui::{cromo, icones, tema};
 use featherpdf_io::Visualizador;
-use featherpdf_ocr::{Imagem, Ocr, Orientacao};
+use featherpdf_ocr::{Imagem, Ocr};
 
 use pelicano::*;
 use pelicano::column;
 use crate::compat::*;
-use crate::ocr_modelos::{self as modelos, LINGUAS, ORIENTACAO};
 use crate::{App, Auxiliar, Msg};
 
 /// Lado maior da página desenhada para o OCR, em pixels.
@@ -26,31 +24,11 @@ const CERTEZA: f32 = 0.80;
 /// Tamanho de cada página na tela (as duas lado a lado).
 const PAGINA_TELA: (f32, f32) = (380.0, 520.0);
 
-/// Os modelos carregam uma vez só (~10 MB embutidos, ~0,5 s); as outras escritas reaproveitam a detecção.
+/// O modelo embutido (latino, ~10 MB) carrega uma vez só (~0,5 s).
 static MOTOR: OnceLock<Result<Arc<Ocr>, String>> = OnceLock::new();
-static OUTRAS: Mutex<Option<HashMap<usize, Arc<Ocr>>>> = Mutex::new(None);
-static ORIENTA: Mutex<Option<Arc<Orientacao>>> = Mutex::new(None);
 
-pub(crate) fn motor(lingua: usize) -> Result<Arc<Ocr>, String> {
-    let base = MOTOR.get_or_init(|| Ocr::embutido().map(Arc::new)).clone()?;
-    let Some(m) = &LINGUAS[lingua] else { return Ok(base) };
-    let mut outras = OUTRAS.lock().map_err(|e| e.to_string())?;
-    if let Some(o) = outras.get_or_insert_with(HashMap::new).get(&lingua) { return Ok(o.clone()); }
-    let ler = |n: &str| m.caminho(n).ok_or("Sem pasta de configuração.".to_string())
-        .and_then(|p| std::fs::read(p).map_err(|e| format!("Modelo de {} não encontrado: {e}", m.nome)));
-    let dicionario = String::from_utf8(ler("dict.txt")?).map_err(|e| e.to_string())?;
-    let o = Arc::new(base.com_reconhecimento(&ler("rec.onnx")?, &dicionario)?);
-    outras.get_or_insert_with(HashMap::new).insert(lingua, o.clone());
-    Ok(o)
-}
-
-fn orientacao() -> Result<Arc<Orientacao>, String> {
-    let mut o = ORIENTA.lock().map_err(|e| e.to_string())?;
-    if let Some(x) = &*o { return Ok(x.clone()); }
-    let bytes = ORIENTACAO.caminho("modelo.onnx").and_then(|p| std::fs::read(p).ok()).ok_or("Modelo de orientação não baixado.")?;
-    let x = Arc::new(Orientacao::de_bytes(&bytes)?);
-    *o = Some(x.clone());
-    Ok(x)
+pub(crate) fn motor() -> Result<Arc<Ocr>, String> {
+    MOTOR.get_or_init(|| Ocr::embutido().map(Arc::new)).clone()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -62,14 +40,6 @@ pub struct OpcaoPaginas { escopo: Escopo, rotulo: String }
 
 impl std::fmt::Display for OpcaoPaginas {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { f.write_str(&self.rotulo) }
-}
-
-/// Item da lista "Idioma".
-#[derive(Debug, Clone, PartialEq)]
-pub struct OpcaoLingua(usize, String);
-
-impl std::fmt::Display for OpcaoLingua {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { f.write_str(&self.1) }
 }
 
 #[derive(Debug, Clone)]
@@ -121,11 +91,6 @@ pub struct EstadoOcr {
     sem_texto: Vec<u32>,
     aplicado: bool,
     pub aviso: Option<Result<String, String>>,
-    /// Índice em `LINGUAS` (0 = latino, embutido).
-    pub(crate) lingua: usize,
-    endireitar: bool,
-    /// Nome do modelo sendo baixado.
-    baixando: Option<&'static str>,
     /// Resultado: trocar a imagem pelo texto visível (em vez da camada invisível).
     trocar: bool,
     /// Resultado: o papel cinza do escaneado vira branco (só com o texto invisível; trocar já tira a imagem).
@@ -150,9 +115,6 @@ pub enum Oc {
     Editar(String),
     FimEdicao,
     Caixas(bool),
-    Lingua(usize),
-    Endireitar(bool),
-    Baixado(Result<(), String>),
     Trocar(bool),
     Limpar(bool),
     Formulario(bool),
@@ -230,8 +192,8 @@ impl EstadoOcr {
 
     /// Documento trocado ou fechado: o que estiver a caminho não vale mais.
     pub fn cancelar(&mut self) {
-        let (escopo, caixas, lingua, endireitar, baixando) = (self.escopo, self.caixas, self.lingua, self.endireitar, self.baixando);
-        *self = EstadoOcr { escopo, caixas, lingua, endireitar, baixando, rodada: self.rodada + 1, ..Default::default() };
+        let (escopo, caixas) = (self.escopo, self.caixas);
+        *self = EstadoOcr { escopo, caixas, rodada: self.rodada + 1, ..Default::default() };
     }
 
     fn opcoes(&self, atual: u32, total: usize) -> Vec<OpcaoPaginas> {
@@ -345,14 +307,6 @@ impl App {
                 }
             }
             Oc::Caixas(v) => self.ocr.caixas = v,
-            Oc::Lingua(i) => {
-                self.ocr.lingua = i;
-                if let Some(m) = &LINGUAS[i] { if !m.presente() { return self.baixar_modelo(m); } }
-            }
-            Oc::Endireitar(v) => {
-                self.ocr.endireitar = v;
-                if v && !ORIENTACAO.presente() { return self.baixar_modelo(&ORIENTACAO); }
-            }
             Oc::Trocar(v) => self.ocr.trocar = v,
             Oc::Limpar(v) => self.ocr.limpar = v,
             Oc::Formulario(v) => self.ocr.formulario = v,
@@ -362,24 +316,14 @@ impl App {
                 if let Some(o) = a.pdf.origem() { arquivos.insert(0, o.to_path_buf()); }
                 let base = a.pdf.origem().and_then(|o| o.parent()).and_then(|p| p.file_name())
                     .map_or("Fichas".into(), |n| n.to_string_lossy().into_owned());
-                let (lingua, endireitar) = (self.ocr.lingua, self.ocr.endireitar && ORIENTACAO.presente());
                 self.ocr.lendo_pasta = true;
                 return Task::perform(async move {
-                    tokio::task::spawn_blocking(move || ler_pasta(&arquivos, &base, lingua, endireitar)).await.unwrap_or_else(|e| Err(e.to_string()))
+                    tokio::task::spawn_blocking(move || ler_pasta(&arquivos, &base)).await.unwrap_or_else(|e| Err(e.to_string()))
                 }, |r| Msg::Ocr(Oc::PastaLida(r)));
             },
             Oc::PastaLida(r) => {
                 self.ocr.lendo_pasta = false;
                 match r { Ok(t) => self.status = t, Err(e) => self.ocr.aviso = Some(Err(e)) }
-            }
-            Oc::Baixado(r) => {
-                self.ocr.baixando = None;
-                if let Err(e) = r {
-                    self.ocr.aviso = Some(Err(e));
-                    // Sem o modelo, volta ao que funciona.
-                    if LINGUAS[self.ocr.lingua].as_ref().is_some_and(|m| !m.presente()) { self.ocr.lingua = 0; }
-                    if !ORIENTACAO.presente() { self.ocr.endireitar = false; }
-                }
             }
             Oc::Aplicar => {
                 let Some(a) = &mut self.aberto else { return Task::none() };
@@ -453,20 +397,11 @@ impl App {
         let vis = a.vis.clone();
         let Some(&(l, h)) = a.tamanhos.get(pagina as usize - 1) else { return Task::none() };
         let escala = (LADO / l.max(h)).clamp(1.0, 4.0);
-        let (rodada, lingua, endireitar) = (self.ocr.rodada, self.ocr.lingua, self.ocr.endireitar && ORIENTACAO.presente());
+        let rodada = self.ocr.rodada;
         Task::perform(async move {
-            tokio::task::spawn_blocking(move || ler(&vis, pagina, escala, lingua, endireitar)).await
+            tokio::task::spawn_blocking(move || ler(&vis, pagina, escala)).await
                 .unwrap_or_else(|e| Err(format!("Falha na tarefa do OCR: {e}")))
         }, move |r| Msg::Ocr(Oc::Lida(rodada, pagina, r)))
-    }
-
-    fn baixar_modelo(&mut self, m: &'static modelos::Modelo) -> Task<Msg> {
-        if self.ocr.baixando.is_some() { return Task::none(); }
-        self.ocr.baixando = Some(m.nome);
-        self.ocr.aviso = None;
-        Task::perform(async move {
-            tokio::task::spawn_blocking(move || modelos::baixar(m)).await.unwrap_or_else(|e| Err(e.to_string()))
-        }, |r| Msg::Ocr(Oc::Baixado(r)))
     }
 
     /// Desenha a página lida `i` no tamanho da janela (o dobro, para tela de alta densidade).
@@ -504,17 +439,8 @@ impl App {
             Space::with_width(16),
             text("Páginas").size(13).color(muted),
             suspensa(opcoes, escolhida, |x| Msg::Ocr(Oc::Escopo(x.escopo))).text_size(13).padding([4, 8]),
-            Space::with_width(8),
-            text("Idioma").size(13).color(muted),
-            suspensa((0..LINGUAS.len()).map(|i| OpcaoLingua(i, modelos::nome_lingua(i))).collect::<Vec<_>>(),
-                Some(OpcaoLingua(o.lingua, modelos::nome_lingua(o.lingua))), |x| Msg::Ocr(Oc::Lingua(x.0))).text_size(13).padding([4, 8]),
-            Space::with_width(8),
-            checkbox("Endireitar a página", o.endireitar).on_toggle(|v| Msg::Ocr(Oc::Endireitar(v))).size(15).text_size(13),
             Space::with_width(Length::FILL),
         ].spacing(8).align_y(Align::Center);
-        if let Some(nome) = o.baixando {
-            barra = barra.push(text(format!("Baixando o modelo: {nome}…")).size(12).color(tema::COR_AZUL_ACENTO()));
-        }
         if lendo {
             let segundos = o.desde.map_or(0, |d| d.elapsed().as_secs());
             let atual = o.fila.get(o.feitas).copied().unwrap_or(0);
@@ -525,7 +451,7 @@ impl App {
                     .style(tema::estilo_botao_pequeno(false)).on_press(Msg::Ocr(Oc::Pausar(!o.pausado))));
         } else {
             barra = barra.push(button(text(if o.lidas.is_empty() { "Reconhecer" } else { "Ler de novo" }).size(13)).padding([5, 12])
-                .style(tema::estilo_botao_pequeno(false)).on_press_maybe((self.aberto.is_some() && o.baixando.is_none()).then_some(Msg::Ocr(Oc::Reconhecer))));
+                .style(tema::estilo_botao_pequeno(false)).on_press_maybe(self.aberto.is_some().then_some(Msg::Ocr(Oc::Reconhecer))));
         }
 
         // Meio: a imagem e o texto lido, lado a lado.
@@ -594,7 +520,7 @@ impl App {
         let opcao = |rotulo: &'static str, trocar: bool| radio(rotulo, trocar, Some(o.trocar), |v| Msg::Ocr(Oc::Trocar(v))).size(15).text_size(12);
         lateral = lateral.push(opcao("Texto invisível atrás da imagem", false));
         // A Helvetica do texto visível só tem a escrita latina.
-        if o.lingua == 0 { lateral = lateral.push(opcao("Trocar a imagem por texto editável", true)); }
+        lateral = lateral.push(opcao("Trocar a imagem por texto editável", true));
         if !o.trocar {
             lateral = lateral.push(checkbox("Limpar o fundo (cinza vira branco)", o.limpar)
                 .on_toggle(|v| Msg::Ocr(Oc::Limpar(v))).size(15).text_size(12));
@@ -743,34 +669,21 @@ fn ambar() -> Color { Color::rgb8(0xd9, 0x9a, 0x06) }
 fn id_edicao() -> &'static str { "ocr-edicao" }
 
 /// Desenha a página e devolve as linhas e palavras em fração da página (0..1, y para baixo).
-pub(crate) fn ler(vis: &Visualizador, pagina: u32, escala: f32, lingua: usize, endireitar: bool) -> Lidas {
-    let ocr = motor(lingua)?;
+pub(crate) fn ler(vis: &Visualizador, pagina: u32, escala: f32) -> Lidas {
+    let ocr = motor()?;
     let r = vis.desenhar(pagina, escala)?;
     let rgb: Vec<u8> = r.rgba.as_chunks::<4>().0.iter().flat_map(|p| [p[0], p[1], p[2]]).collect();
-    let mut img = (r.largura, r.altura, rgb);
-    let mut giro = 0;
-    if endireitar {
-        let (graus, certeza) = orientacao()?.detectar(&Imagem { largura: img.0, altura: img.1, rgb: &img.2 })?;
-        // Com dúvida, deixa como está: girar errado estraga mais que não girar.
-        if graus != 0 && certeza > 0.6 {
-            giro = 360 - graus;
-            img = featherpdf_ocr::girar(&Imagem { largura: img.0, altura: img.1, rgb: &img.2 }, giro);
-        }
-    }
-    let (l, a) = (img.0 as f32, img.1 as f32);
+    let (l, a) = (r.largura as f32, r.altura as f32);
     let fracao = |c: [f32; 4]| [c[0] / l, c[1] / a, c[2] / l, c[3] / a];
-    let rtl = LINGUAS[lingua].as_ref().is_some_and(|m| m.direita_esquerda);
-    let linhas = ocr.reconhecer(&Imagem { largura: img.0, altura: img.1, rgb: &img.2 })?.into_iter().map(|x| {
-        let mut palavras: Vec<PalavraLida> = x.palavras.into_iter().map(|p| {
-            // shortcut: o árabe vira só invertendo a ordem (letras e palavras), sem algoritmo bidi; número no meio do texto sai invertido.
-            let lido = if rtl { p.texto.chars().rev().collect() } else { p.texto };
-            let original = corrigir_numero(&lido).map(|_| lido.clone());
-            PalavraLida { texto: corrigir_numero(&lido).unwrap_or(lido), original, caixa: fracao(p.caixa), confianca: p.confianca, revisada: false }
+    let linhas = ocr.reconhecer(&Imagem { largura: r.largura, altura: r.altura, rgb: &rgb })?.into_iter().map(|x| {
+        let palavras: Vec<PalavraLida> = x.palavras.into_iter().map(|p| {
+            let original = corrigir_numero(&p.texto).map(|_| p.texto.clone());
+            PalavraLida { texto: corrigir_numero(&p.texto).unwrap_or(p.texto), original, caixa: fracao(p.caixa), confianca: p.confianca, revisada: false }
         }).collect();
-        if rtl { palavras.reverse(); }
         LinhaLida { caixa: fracao(x.caixa), palavras }
     }).collect();
-    Ok((linhas, giro))
+    // Sem o classificador baixado a página não é girada: o giro é sempre 0.
+    Ok((linhas, 0))
 }
 
 /// Caixa em fração da página vista (y para baixo) -> pontos do PDF, desfazendo o /Rotate.
@@ -785,7 +698,7 @@ pub(crate) fn em_pontos(f: [f32; 4], [x0, y0, x1, y1]: [f32; 4], giro: i64) -> [
 }
 
 /// Lê todos os PDFs (todas as páginas) e leva os campos "Rótulo: valor" a uma planilha.
-fn ler_pasta(arquivos: &[std::path::PathBuf], base: &str, lingua: usize, endireitar: bool) -> Result<String, String> {
+fn ler_pasta(arquivos: &[std::path::PathBuf], base: &str) -> Result<String, String> {
     let mut linhas = Vec::new();
     for p in arquivos {
         let Ok(pdf) = featherpdf_io::abrir(p) else { continue };
@@ -794,7 +707,7 @@ fn ler_pasta(arquivos: &[std::path::PathBuf], base: &str, lingua: usize, endirei
         for n in 1..=pdf.total_paginas() {
             let Ok(([x0, y0, x1, y1], _)) = pdf.geometria(n) else { continue };
             let (l, h) = (x1 - x0, y1 - y0);
-            let Ok((lidas, _)) = ler(&vis, n, (LADO / l.max(h)).clamp(1.0, 4.0), lingua, endireitar) else { continue };
+            let Ok((lidas, _)) = ler(&vis, n, (LADO / l.max(h)).clamp(1.0, 4.0)) else { continue };
             for (nome, valor, _) in lidas.iter().flat_map(campos_da_linha) {
                 if !pares.iter().any(|(k, _)| *k == nome) { pares.push((nome, valor)); }
             }

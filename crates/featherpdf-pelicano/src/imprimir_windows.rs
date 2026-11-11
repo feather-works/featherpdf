@@ -35,7 +35,7 @@ mod sistema {
     use windows_sys::Win32::Storage::Xps::{AbortDoc, EndDoc, EndPage, StartDocW, StartPage, DOCINFOW};
 
     use super::{encaixe, folhas, grade};
-    use crate::imprimir::{Lados, Orientacao};
+    use crate::imprimir::{Lados, Orientacao, Papel};
 
     fn largo(s: &str) -> Vec<u16> { s.encode_utf16().chain([0]).collect() }
 
@@ -68,7 +68,7 @@ mod sistema {
     }
 
     /// As preferências da impressora com frente e verso, cor e orientação escolhidos.
-    fn preferencias(nome: &[u16], lados: Lados, cinza: bool) -> Result<Vec<u64>, String> {
+    fn preferencias(nome: &[u16], lados: Lados, cinza: bool, papel: Papel) -> Result<Vec<u64>, String> {
         let mut impressora = PRINTER_HANDLE::default();
         // SAFETY: nome terminado em zero; o buffer tem o tamanho que o driver pediu (com o extra dele).
         let buf = unsafe {
@@ -81,6 +81,10 @@ mod sistema {
             (*dm).dmFields |= DM_DUPLEX | DM_COLOR | DM_COPIES | DM_ORIENTATION;
             (*dm).dmDuplex = match lados { Lados::Um => DMDUP_SIMPLEX, Lados::BordaLonga => DMDUP_VERTICAL, Lados::BordaCurta => DMDUP_HORIZONTAL };
             (*dm).dmColor = if cinza { DMCOLOR_MONOCHROME } else { DMCOLOR_COLOR };
+            if let Some(n) = papel.windows() {
+                (*dm).dmFields |= DM_PAPERSIZE;
+                (*dm).Anonymous1.Anonymous1.dmPaperSize = n;
+            }
             // As cópias saem uma a uma daqui (com a ordem certa de agrupar), não pelo driver.
             (*dm).Anonymous1.Anonymous1.dmCopies = 1;
             DocumentPropertiesW(std::ptr::null_mut(), impressora, nome.as_ptr(), dm, dm, DM_IN_BUFFER | DM_OUT_BUFFER);
@@ -100,6 +104,7 @@ mod sistema {
         pub agrupar: bool,
         pub lados: Lados,
         pub orientacao: Orientacao,
+        pub papel: Papel,
         pub cinza: bool,
         pub ajustar: bool,
         pub por_folha: u32,
@@ -109,7 +114,7 @@ mod sistema {
     /// Bloqueante: desenha cada folha e manda para a impressora.
     pub(crate) fn imprimir(vis: &featherpdf_io::Visualizador, tamanhos: &[(f32, f32)], p: Pedido) -> Result<String, String> {
         let nome = largo(&p.impressora);
-        let mut dm = preferencias(&nome, p.lados, p.cinza)?;
+        let mut dm = preferencias(&nome, p.lados, p.cinza, p.papel)?;
         let devmode = dm.as_mut_ptr().cast::<DEVMODEW>();
         let tamanho = |n: u32| tamanhos.get(n as usize - 1).copied().unwrap_or((595.0, 842.0));
         let deitar = |folha: &[u32]| match p.orientacao {

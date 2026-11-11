@@ -1,10 +1,10 @@
-//! Painéis Marcadores (o sumário do PDF, clicar leva à página) e Anexos (salvar o arquivo anexado),
+//! Painéis Marcadores (o sumário do PDF: clicar leva à página; criar, renomear e excluir) e Anexos (salvar o arquivo anexado),
 //! e os links do próprio PDF clicáveis na página.
 
 use std::path::PathBuf;
 
 use feather_ui::{icones, tema};
-use featherpdf_core::{numero, Anexo, Destino, Marcador};
+use featherpdf_core::{numero, Anexo, Destino, Marcador, MoverMarcador};
 
 use pelicano::*;
 use pelicano::column;
@@ -18,6 +18,39 @@ pub enum Nv {
     Destino(u64, usize, Option<PathBuf>),
     /// Link de site do PDF (já filtrado para http/https/mailto em `DocumentoPdf::links`).
     Site(String),
+    /// Clique num marcador: escolhe e vai à página dele.
+    Escolher(usize),
+    /// Abre o campo de nome para um marcador novo (na página atual, depois do escolhido).
+    Novo,
+    /// Abre o campo de nome para um marcador novo dentro do escolhido.
+    NovoDentro,
+    /// Sobe, desce, entra no de cima ou sai do pai (com os de dentro).
+    Mover(MoverMarcador),
+    /// O escolhido passa a levar à página atual.
+    PaginaAtual,
+    /// Abre o campo de nome para renomear o escolhido.
+    Renomear,
+    Nome(String),
+    Confirmar,
+    Cancelar,
+    Excluir,
+    /// Texto que filtra a lista de marcadores.
+    Filtro(String),
+    /// Painel Links: abre o campo do destino do link `indice` da página atual.
+    EditarLink(usize, String),
+    TextoLink(String),
+    ConfirmarLink,
+    CancelarLink,
+    ApagarLink(usize),
+}
+
+/// O campo de nome aberto no painel Marcadores.
+#[derive(Debug, Clone)]
+pub enum EdicaoMarcador {
+    Novo(String),
+    /// Dentro do marcador de índice `usize`.
+    Dentro(usize, String),
+    Renomear(usize, String),
 }
 
 /// O que os dois painéis mostram, lido quando o painel abre.
@@ -25,13 +58,37 @@ pub enum Nv {
 pub struct Navegacao {
     pub marcadores: Vec<Marcador>,
     pub anexos: Vec<Anexo>,
+    /// Marcador escolhido (índice em `marcadores`), alvo de Renomear e Excluir.
+    pub escolhido: Option<usize>,
+    pub edicao: Option<EdicaoMarcador>,
+    /// Procurar nos marcadores: só os que têm esse texto no título aparecem.
+    pub filtro: String,
+    /// Link sendo editado: página, índice em /Annots e o destino digitado.
+    pub link: Option<(u32, usize, String)>,
+    /// Links da página já lidos: (página, versão do documento, links). O painel desenha a cada
+    /// movimento do mouse, e ler percorria a árvore de páginas inteira.
+    links_lidos: std::cell::RefCell<Option<(u32, u64, std::rc::Rc<Vec<featherpdf_core::LinkPdf>>)>>,
+}
+
+/// Como o destino aparece no campo: o endereço ou o número da página.
+fn destino_em_texto(d: &Option<Destino>) -> String {
+    match d { Some(Destino::Endereco(u)) => u.clone(), Some(Destino::Pagina(p)) => p.to_string(), None => String::new() }
+}
+
+/// O que se digitou no campo: número é página; o resto, endereço (o motor põe https:// ou mailto:).
+fn destino_do_texto(t: &str) -> Destino {
+    match t.trim().parse::<u32>() { Ok(n) => Destino::Pagina(n), Err(_) => Destino::Endereco(t.trim().to_string()) }
 }
 
 impl App {
     pub fn ler_navegacao(&mut self) {
+        let (escolhido, filtro, link) = (self.navegacao.escolhido, std::mem::take(&mut self.navegacao.filtro), self.navegacao.link.take());
         self.navegacao = self.aberto.as_ref()
-            .map(|a| Navegacao { marcadores: a.pdf.marcadores(), anexos: a.pdf.anexos() })
+            .map(|a| Navegacao { marcadores: a.pdf.marcadores(), anexos: a.pdf.anexos(), ..Default::default() })
             .unwrap_or_default();
+        self.navegacao.escolhido = escolhido.filter(|&i| i < self.navegacao.marcadores.len());
+        self.navegacao.filtro = filtro;
+        self.navegacao.link = link;
     }
 
     pub fn update_nav(&mut self, m: Nv) -> Task<Msg> {
@@ -43,8 +100,84 @@ impl App {
                     rfd::AsyncFileDialog::new().set_file_name(nome).save_file().await.map(|h| h.path().to_path_buf())
                 }, move |d| Msg::Nav(Nv::Destino(doc, i, d)));
             }
+            Nv::Escolher(i) => {
+                self.navegacao.escolhido = Some(i);
+                self.navegacao.edicao = None;
+                if let Some(p) = self.navegacao.marcadores.get(i).map(|m| m.pagina).filter(|&p| p > 0) {
+                    return self.update_interno(Msg::IrPagina(p));
+                }
+                self.status = "Este marcador não aponta para uma página do documento.".into();
+            }
+            Nv::Novo => self.navegacao.edicao = Some(EdicaoMarcador::Novo(format!("Página {}", self.pagina))),
+            Nv::NovoDentro => if let Some(i) = self.navegacao.escolhido {
+                self.navegacao.edicao = Some(EdicaoMarcador::Dentro(i, format!("Página {}", self.pagina)));
+            },
+            Nv::Mover(para) => if let Some(i) = self.navegacao.escolhido {
+                self.navegacao.edicao = None;
+                let mut novo = None;
+                let tarefa = self.editar(|pdf| pdf.mover_marcador(i, para).map(|n| { novo = Some(n); "Marcador movido. Ctrl+Z desfaz.".to_string() }));
+                if novo.is_some() { self.navegacao.escolhido = novo; }
+                return tarefa;
+            },
+            Nv::PaginaAtual => if let Some(i) = self.navegacao.escolhido {
+                let pagina = self.pagina;
+                return self.editar(move |pdf| pdf.trocar_pagina_marcador(i, pagina)
+                    .map(|()| format!("O marcador agora leva à página {pagina}. Ctrl+Z desfaz.")));
+            },
+            Nv::Renomear => if let Some(i) = self.navegacao.escolhido {
+                let nome = self.navegacao.marcadores.get(i).map(|m| m.titulo.clone()).unwrap_or_default();
+                self.navegacao.edicao = Some(EdicaoMarcador::Renomear(i, nome));
+            },
+            Nv::Nome(t) => match &mut self.navegacao.edicao {
+                Some(EdicaoMarcador::Novo(n) | EdicaoMarcador::Dentro(_, n) | EdicaoMarcador::Renomear(_, n)) => *n = t,
+                None => {}
+            },
+            Nv::Cancelar => self.navegacao.edicao = None,
+            Nv::Filtro(t) => self.navegacao.filtro = t,
+            Nv::EditarLink(i, atual) => self.navegacao.link = Some((self.pagina, i, atual)),
+            Nv::TextoLink(t) => if let Some((_, _, x)) = &mut self.navegacao.link { *x = t },
+            Nv::CancelarLink => self.navegacao.link = None,
+            Nv::ConfirmarLink => if let Some((pagina, i, t)) = self.navegacao.link.take() {
+                let destino = destino_do_texto(&t);
+                return self.editar(move |pdf| pdf.trocar_destino_link(pagina, i, destino).map(|()| "Destino do link trocado. Ctrl+Z desfaz.".to_string()));
+            },
+            Nv::ApagarLink(i) => {
+                self.navegacao.link = None;
+                let pagina = self.pagina;
+                return self.editar(move |pdf| pdf.apagar_link(pagina, i).map(|()| "Link apagado. Ctrl+Z desfaz.".to_string()));
+            }
+            Nv::Confirmar => {
+                let Some(edicao) = self.navegacao.edicao.take() else { return Task::none() };
+                return match edicao {
+                    EdicaoMarcador::Novo(nome) => {
+                        let (pagina, depois_de) = (self.pagina, self.navegacao.escolhido);
+                        let mut criado = None;
+                        let tarefa = self.editar(|pdf| pdf.criar_marcador(&nome, pagina, depois_de)
+                            .map(|i| { criado = Some(i); format!("Marcador \"{}\" criado na página {pagina}. Ctrl+Z desfaz.", nome.trim()) }));
+                        if criado.is_some() { self.navegacao.escolhido = criado; }
+                        tarefa
+                    }
+                    EdicaoMarcador::Dentro(pai, nome) => {
+                        let pagina = self.pagina;
+                        let mut criado = None;
+                        let tarefa = self.editar(|pdf| pdf.criar_marcador_dentro(&nome, pagina, pai)
+                            .map(|i| { criado = Some(i); format!("Marcador \"{}\" criado na página {pagina}, dentro do escolhido. Ctrl+Z desfaz.", nome.trim()) }));
+                        if criado.is_some() { self.navegacao.escolhido = criado; }
+                        tarefa
+                    }
+                    EdicaoMarcador::Renomear(i, nome) => self.editar(move |pdf| pdf.renomear_marcador(i, &nome)
+                        .map(|()| "Marcador renomeado. Ctrl+Z desfaz.".to_string())),
+                };
+            }
+            Nv::Excluir => if let Some(i) = self.navegacao.escolhido {
+                self.navegacao.edicao = None;
+                let tarefa = self.editar(move |pdf| pdf.excluir_marcador(i).map(|()| "Marcador excluído (com os de dentro). Ctrl+Z desfaz.".to_string()));
+                self.navegacao.escolhido = None;
+                return tarefa;
+            },
             Nv::Destino(_, _, None) => {}
             Nv::Destino(doc, _, Some(_)) if Some(doc) != self.id_aberto() => self.status = "O documento mudou: o anexo não foi salvo.".into(),
+            Nv::Site(url) if !self.config.abrir_sites => self.status = format!("Link para {url} (abrir sites está desligado nas Configurações)."),
             Nv::Site(url) => self.status = match abrir_site(&url) {
                 Ok(()) => format!("Abrindo {url} no navegador."),
                 Err(e) => format!("Não consegui abrir {url}: {e}"),
@@ -85,21 +218,110 @@ impl App {
 
     pub fn painel_marcadores(&self) -> Element<'_, Msg> {
         let muted = tema::COR_TEXTO_MUTED();
-        if self.navegacao.marcadores.is_empty() {
-            return text("Este PDF não tem marcadores (sumário).").size(13).color(muted).into();
+        let nv = &self.navegacao;
+        let tem_doc = self.aberto.is_some();
+        let acao = |icone: &'static str, dica: &'static str, msg: Option<Msg>| -> Element<'_, Msg> {
+            let b = button(icones::icone(icone, 16.)).padding([4, 6]).style(tema::estilo_botao_pequeno(false));
+            tooltip(match msg { Some(m) => b.on_press(m), None => b }, dica, TooltipPosition::Bottom).style(tema::estilo_dica).into()
+        };
+        let com_escolha = |msg: Msg| nv.escolhido.map(|_| msg);
+        let barra = row![
+            acao("plus", "Novo marcador na página atual", tem_doc.then_some(Msg::Nav(Nv::Novo))),
+            acao("copy-plus", "Novo marcador dentro do escolhido", com_escolha(Msg::Nav(Nv::NovoDentro))),
+            acao("pencil", "Renomear o marcador escolhido", com_escolha(Msg::Nav(Nv::Renomear))),
+            acao("link", "O escolhido passa a levar à página atual", com_escolha(Msg::Nav(Nv::PaginaAtual))),
+            acao("trash", "Excluir o marcador escolhido (e os de dentro)", com_escolha(Msg::Nav(Nv::Excluir))),
+        ].spacing(4);
+        let mover = row![
+            acao("chevron-up", "Subir", com_escolha(Msg::Nav(Nv::Mover(MoverMarcador::Subir)))),
+            acao("chevron-down", "Descer", com_escolha(Msg::Nav(Nv::Mover(MoverMarcador::Descer)))),
+            acao("indent-increase", "Pôr dentro do marcador de cima", com_escolha(Msg::Nav(Nv::Mover(MoverMarcador::Dentro)))),
+            acao("indent-decrease", "Tirar de dentro (sobe um nível)", com_escolha(Msg::Nav(Nv::Mover(MoverMarcador::Fora)))),
+        ].spacing(4);
+        let mut corpo = column![barra, mover].spacing(8);
+        if let Some(edicao) = &nv.edicao {
+            let (rotulo, nome) = match edicao {
+                EdicaoMarcador::Novo(n) => (format!("Marcador novo na página {}", self.pagina), n),
+                EdicaoMarcador::Dentro(_, n) => (format!("Marcador novo na página {}, dentro do escolhido", self.pagina), n),
+                EdicaoMarcador::Renomear(_, n) => ("Novo nome".to_string(), n),
+            };
+            corpo = corpo.push(column![
+                text(rotulo).size(12).color(muted),
+                text_input("Nome do marcador", nome).on_input(|t| Msg::Nav(Nv::Nome(t))).on_submit(Msg::Nav(Nv::Confirmar)).padding([5, 8]).size(13),
+                row![
+                    Space::with_width(Length::FILL),
+                    feather_ui::dialogo::botao_secundario("Cancelar", Some(Msg::Nav(Nv::Cancelar))),
+                    feather_ui::dialogo::botao_primario("OK", (!nome.trim().is_empty()).then_some(Msg::Nav(Nv::Confirmar))),
+                ].spacing(6),
+            ].spacing(4));
         }
-        // Só um destaque: o último marcador que começa até a página atual (a seção em que se está).
-        let atual_i = self.navegacao.marcadores.iter().enumerate().filter(|(_, m)| m.pagina <= self.pagina)
-            .max_by_key(|(i, m)| (m.pagina, *i)).map(|(i, _)| i);
+        if nv.marcadores.is_empty() {
+            return corpo.push(text("Este PDF não tem marcadores (sumário). Use + para criar um na página atual.").size(13).color(muted)).into();
+        }
+        // Destaque: o escolhido; sem escolha, o último marcador que começa até a página atual.
+        let atual_i = nv.escolhido.or_else(|| nv.marcadores.iter().enumerate().filter(|(_, m)| m.pagina > 0 && m.pagina <= self.pagina)
+            .max_by_key(|(i, m)| (m.pagina, *i)).map(|(i, _)| i));
+        corpo = corpo.push(text_input("Procurar nos marcadores", &nv.filtro).on_input(|t| Msg::Nav(Nv::Filtro(t))).padding([5, 8]).size(13));
         let mut lista = column![].spacing(1);
-        for (i, m) in self.navegacao.marcadores.iter().enumerate() {
+        let mut mostrados = 0;
+        for (i, m) in nv.marcadores.iter().enumerate() {
+            if !nv.filtro.trim().is_empty() && featherpdf_core::achar_sem_caixa(&m.titulo, nv.filtro.trim()).is_empty() { continue; }
+            mostrados += 1;
             let atual = Some(i) == atual_i;
             lista = lista.push(button(row![
                 Space::with_width(((m.nivel - 1).min(6) * 14) as f32),
                 text(m.titulo.clone()).size(13).width(Length::FILL),
-                text(m.pagina.to_string()).size(12).color(muted),
+                text(if m.pagina > 0 { m.pagina.to_string() } else { String::new() }).size(12).color(muted),
             ].spacing(6).align_y(Align::Center)).width(Length::FILL).padding([4, 6])
-                .style(tema::estilo_botao_pequeno(atual)).on_press(Msg::IrPagina(m.pagina)));
+                .style(tema::estilo_botao_pequeno(atual)).on_press(Msg::Nav(Nv::Escolher(i))));
+        }
+        if mostrados == 0 { lista = lista.push(text(format!("Nenhum marcador com “{}”.", nv.filtro.trim())).size(13).color(muted)); }
+        corpo.push(scrollable(lista).height(Length::FILL)).into()
+    }
+
+    /// Links da página atual: para onde cada um vai, trocar o destino e apagar.
+    pub fn painel_links(&self) -> Element<'_, Msg> {
+        let muted = tema::COR_TEXTO_MUTED();
+        let Some(a) = &self.aberto else { return text("").into() };
+        let links = {
+            let mut lidos = self.navegacao.links_lidos.borrow_mut();
+            match &*lidos {
+                Some((p, g, l)) if *p == self.pagina && *g == self.geracao_fundos => l.clone(),
+                _ => {
+                    let l = std::rc::Rc::new(a.pdf.links_da_pagina(self.pagina));
+                    *lidos = Some((self.pagina, self.geracao_fundos, l.clone()));
+                    l
+                }
+            }
+        };
+        if links.is_empty() {
+            return text(format!("A página {} não tem links. Crie um na aba Editar (Link).", self.pagina)).size(13).color(muted).into();
+        }
+        let botao = |nome: &'static str, msg: Option<Msg>| button(icones::icone(nome, 14.)).padding(4).style(tema::estilo_botao_pequeno(false)).on_press_maybe(msg);
+        let mut lista = column![text(format!("{} link(s) na página {}. Número leva à página; o resto vira endereço de site ou e-mail.", links.len(), self.pagina)).size(12).color(muted)].spacing(8);
+        for l in links.iter() {
+            match &self.navegacao.link {
+                Some((p, i, t)) if *p == self.pagina && *i == l.indice => {
+                    lista = lista.push(row![
+                        text_input("Página ou endereço", t).on_input(|t| Msg::Nav(Nv::TextoLink(t))).on_submit(Msg::Nav(Nv::ConfirmarLink)).padding([4, 8]).size(13),
+                        botao("check", (!t.trim().is_empty()).then_some(Msg::Nav(Nv::ConfirmarLink))),
+                        botao("x", Some(Msg::Nav(Nv::CancelarLink))),
+                    ].spacing(4).align_y(Align::Center));
+                }
+                _ => {
+                    let rotulo = match &l.destino {
+                        Some(Destino::Endereco(u)) => u.clone(),
+                        Some(Destino::Pagina(p)) => format!("Página {p}"),
+                        None => "Outra ação (arquivo, programa ou script): não abre aqui".into(),
+                    };
+                    lista = lista.push(row![
+                        icones::icone("link", 15.),
+                        text(rotulo).size(13).width(Length::FILL),
+                        botao("pencil", Some(Msg::Nav(Nv::EditarLink(l.indice, destino_em_texto(&l.destino))))),
+                        botao("trash", Some(Msg::Nav(Nv::ApagarLink(l.indice)))),
+                    ].spacing(6).align_y(Align::Center));
+                }
+            }
         }
         scrollable(lista).height(Length::FILL).into()
     }
@@ -111,7 +333,8 @@ impl App {
         }
         let mut lista = column![].spacing(8);
         for (i, a) in self.navegacao.anexos.iter().enumerate() {
-            let tamanho = if a.tamanho >= 1024 * 1024 { format!("{} MB", numero(a.tamanho as f64 / 1048576.0, 1)) }
+            // `usize::MAX`: comprimido e acima de 64 MB (não é descomprimido só para medir).
+            let tamanho = if a.tamanho == usize::MAX { "> 64 MB".to_string() } else if a.tamanho >= 1024 * 1024 { format!("{} MB", numero(a.tamanho as f64 / 1048576.0, 1)) }
                 else { format!("{} KB", numero((a.tamanho as f64 / 1024.0).ceil(), 0)) };
             lista = lista.push(row![
                 icones::icone("file-export", 16.),
@@ -150,5 +373,17 @@ mod testes_site {
     fn site_recusa_o_que_nao_e_endereco() {
         assert!(super::abrir_site("file:///c:/windows/calc.exe").is_err());
         assert!(super::abrir_site("javascript:alert(1)").is_err());
+    }
+}
+
+#[cfg(test)]
+mod testes_link {
+    use super::*;
+
+    #[test]
+    fn texto_do_campo_vira_destino() {
+        assert_eq!(destino_do_texto(" 3 "), Destino::Pagina(3));
+        assert_eq!(destino_do_texto("exemplo.com"), Destino::Endereco("exemplo.com".into()));
+        assert_eq!(destino_em_texto(&Some(Destino::Pagina(7))), "7");
     }
 }

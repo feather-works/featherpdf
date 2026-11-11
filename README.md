@@ -15,6 +15,14 @@
 
 Todas as versões e os `SHA256SUMS` ficam na [página de releases](https://github.com/feather-works/featherpdf/releases).
 
+### Na próxima versão (ainda sem release)
+
+- **Sem internet:** o FeatherPDF não acessa mais a rede; o aviso de versão nova e o download de modelos de OCR saíram (o OCR latino embutido continua).
+- **Páginas:** copiar, recortar e colar páginas (também entre PDFs abertos) e numeração lógica (i, ii… no prefácio, A-1…).
+- **Marcadores e links:** criar, renomear, mover e excluir marcadores; painel Links da página para trocar ou apagar o destino de cada link.
+- **Formulários:** campo obrigatório, somente leitura e valor padrão.
+- **Mais:** papel na impressão (A4, Carta, Ofício, A3, A5), extrair as fotos do PDF, opacidade dos comentários, cabeçalho e rodapé editáveis e removíveis, busca também nos campos e anexos.
+
 ### Novidades da 0.1.6
 
 - **Propriedades do documento (Ctrl+D):** título, autor, assunto e palavras-chave editáveis (com acento, Ctrl+Z desfaz), mais arquivo, tamanho, páginas, versão do PDF, datas e o programa que gerou, como no Acrobat.
@@ -29,7 +37,6 @@ Todas as versões e os `SHA256SUMS` ficam na [página de releases](https://githu
 - **Medidas batem com a planta:** a escala que o CAD grava no PDF agora é lida também quando vem sem unidade, e o fator de distância é aplicado direito. Numa planta de lote, os lados medidos passaram a bater com as cotas.
 - **Mover pontos de uma medida:** com uma ferramenta do Medir ligada, arraste um ponto de uma medida pronta para ajustar; o valor se refaz na hora.
 - **Medir em planta grande sem travar:** o imã lê os cantos do desenho uma vez só e procura só perto do mouse (planta com 375 mil vértices ficou leve no zoom).
-- **Aviso de versão nova:** ao abrir (uma vez por dia, desligável em Configurações → Sobre), o FeatherPDF avisa quando há atualização e instala pelo terminal, conferindo o SHA-256.
 - **Salvar sem travar:** salvar e preparar o desenho do PDF rodam em segundo plano; editar durante a gravação não se perde.
 - **Zoom:** dá para digitar o zoom, há o botão "Altura", e o zoom no mouse não pula quando a página pequena passa a encher a tela.
 - **Mais:** exportar por intervalo de páginas, BMP e GIF; colar imagem ou texto da área de transferência; Sanitizar pode tirar comentários; "Limpar caderno" não mexe em fotos e logotipos.
@@ -77,7 +84,7 @@ suporte de leitura inexistente no registro comum.
 - Substituir texto quando o stream e a fonte são compatíveis.
 - Inserir texto, imagens, desenhos e equações; comentar e anotar.
 - Formulários: criar, preencher, campos calculados, importar/exportar dados.
-- OCR (`featherpdf-ocr`, modelos ONNX baixados sob demanda e conferidos por SHA-256).
+- OCR local (`featherpdf-ocr`, modelo latino embutido; nada é baixado). O FeatherPDF não acessa a internet.
 - Tarja (redação) que remove o conteúdo do arquivo, limpeza de JavaScript,
   anexos e metadados, senha (AES-256/AES-128) e assinatura digital PAdES com certificado A1.
 - Scripts em JavaScript no sandbox das macros da suíte (sem arquivo nem rede).

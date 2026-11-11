@@ -13,11 +13,16 @@ impl DocumentoPdf {
     /// chama guarda o documento antes); em erro, o documento pode ter ficado pela metade e
     /// quem chama volta a cópia.
     pub fn substituir_com_refluxo(&mut self, pagina: u32, objeto: usize, busca: &str, novo: &str) -> Result<String, String> {
+        self.substituir_com_refluxo_com(pagina, objeto, busca, novo, crate::OpcoesBusca::default())
+    }
+
+    /// O mesmo, com as opções da busca (maiúsculas, palavra inteira).
+    pub fn substituir_com_refluxo_com(&mut self, pagina: u32, objeto: usize, busca: &str, novo: &str, op: crate::OpcoesBusca) -> Result<String, String> {
         if busca.is_empty() { return Err("Escreva o que procurar.".into()); }
         let objs = self.objetos(pagina)?;
         let texto_de = |o: &ObjetoPdf| match &o.tipo { TipoObjeto::Texto { texto, tamanho, .. } => Some((texto.clone(), *tamanho)), _ => None };
         let (t0, _) = objs.get(objeto).and_then(texto_de).ok_or("Escolha uma linha de texto.")?;
-        let (trocado, n) = crate::objetos::trocar_sem_caixa(&t0, busca, novo);
+        let (trocado, n) = crate::objetos::trocar_com(&t0, busca, novo, op);
         if n == 0 { return Err(format!("“{busca}” não está nessa linha.")); }
         // O parágrafo: as linhas seguintes na mesma coluna, mesmo tamanho e mesma entrelinha.
         let c0 = objs[objeto].caixa;

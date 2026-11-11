@@ -79,11 +79,10 @@ impl App {
                 }
                 let Ok((geometria, giro)) = aberto.pdf.geometria(pagina) else { return Task::none() };
                 let vis = aberto.vis.clone();
-                let lingua = self.ocr.lingua;
                 self.regiao.lendo = true;
                 self.status = "Lendo a área…".into();
                 return Task::perform(async move {
-                    tokio::task::spawn_blocking(move || ler_area(&vis, pagina, (pl, pa), f, (geometria, giro), uso == Uso::Tabela, lingua))
+                    tokio::task::spawn_blocking(move || ler_area(&vis, pagina, (pl, pa), f, (geometria, giro), uso == Uso::Tabela))
                         .await.unwrap_or_else(|e| Err(e.to_string()))
                 }, move |r| Msg::Regiao(if uso == Uso::Tabela {
                     Rr::Tabelas(r.and_then(|(palavras, _)| {
@@ -193,14 +192,14 @@ fn copiar_area(vis: &featherpdf_io::Visualizador, pagina: u32, (pl, pa): (f32, f
 /// nada lido em pé, também é lido girado 90° para cada lado (texto deitado de planta, carimbo):
 /// fica a leitura de mais confiança, e o giro dela vai junto.
 pub(crate) fn ler_area(vis: &featherpdf_io::Visualizador, pagina: u32, (pl, pa): (f32, f32), f: [f32; 4],
-    (geometria, giro): ([f32; 4], i64), tabela: bool, lingua: usize) -> Result<(Vec<(String, [f32; 4])>, u32), String> {
+    (geometria, giro): ([f32; 4], i64), tabela: bool) -> Result<(Vec<(String, [f32; 4])>, u32), String> {
     // ~216 dpi: letra pequena de carimbo ainda sai legível.
     let escala = 3.0;
     let (dl, dh) = (pl * escala, pa * escala);
     let t = [(f[0] * dl) as u32, (f[1] * dh) as u32, ((f[2] - f[0]) * dl).ceil().max(1.0) as u32, ((f[3] - f[1]) * dh).ceil().max(1.0) as u32];
     let r = vis.desenhar_trecho(pagina, escala, t)?;
     let rgb: Vec<u8> = r.rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
-    let motor = crate::ocr::motor(lingua)?;
+    let motor = crate::ocr::motor()?;
     let original = featherpdf_ocr::Imagem { largura: r.largura, altura: r.altura, rgb: &rgb };
     let (w, h) = (r.largura as f32, r.altura as f32);
     let ler = |g: u32| -> Result<(Vec<featherpdf_ocr::Linha>, f32), String> {
@@ -250,7 +249,7 @@ mod testes {
         pdf.inserir_texto(1, 72.0, 700.0, "Relatorio mensal", 28.0, false, [0.0; 3]).unwrap();
         let vis = featherpdf_io::Visualizador::novo(pdf.serializar().unwrap()).unwrap();
         let (geometria, giro) = pdf.geometria(1).unwrap();
-        let (lidas, girada) = ler_area(&vis, 1, (595.0, 842.0), [0.05, 0.1, 0.8, 0.25], (geometria, giro), false, 0).unwrap();
+        let (lidas, girada) = ler_area(&vis, 1, (595.0, 842.0), [0.05, 0.1, 0.8, 0.25], (geometria, giro), false).unwrap();
         assert_eq!(girada, 0);
         assert!(!lidas.is_empty());
         assert!(lidas.iter().all(|(_, c)| c.iter().all(|v| (0.0..=1.0).contains(v))), "{lidas:?}");
@@ -273,7 +272,7 @@ mod testes {
         let (pl, pa) = vis.tamanhos()[0];
         assert!(pl > pa, "a vista fica deitada");
         let (geometria, giro) = pdf.geometria(1).unwrap();
-        let (lidas, girada) = ler_area(&vis, 1, (pl, pa), [0.75, 0.05, 0.95, 0.6], (geometria, giro), false, 0).unwrap();
+        let (lidas, girada) = ler_area(&vis, 1, (pl, pa), [0.75, 0.05, 0.95, 0.6], (geometria, giro), false).unwrap();
         assert!(girada == 90 || girada == 270, "giro {girada}: {lidas:?}");
         let junto = lidas.iter().map(|(t, _)| t.to_lowercase()).collect::<Vec<_>>().join(" ");
         assert!(junto.contains("mensal"), "{junto:?}");

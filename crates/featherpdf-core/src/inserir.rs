@@ -7,7 +7,7 @@
 //! objeto é desenhado em pé na tela.
 
 use feather_draw::{largura_texto, Caminho, Comando, FontePdf, Ponto};
-use lopdf::{dictionary, Object, ObjectId, Stream};
+use lopdf::{dictionary, Dictionary, Object, ObjectId, Stream};
 
 use super::DocumentoPdf;
 
@@ -331,7 +331,19 @@ impl DocumentoPdf {
     /// Área clicável na caixa: abre o endereço ou vai para a página.
     pub fn inserir_link(&mut self, pagina: u32, caixa: [f32; 4], destino: Destino) -> Result<(), String> {
         let id = self.id_pagina(pagina)?;
-        let acao = match destino {
+        let acao = self.acao_do_link(destino)?;
+        let anotacao = self.documento.add_object(dictionary! {
+            "Type" => "Annot", "Subtype" => "Link",
+            "Rect" => caixa.iter().map(|&v| v.into()).collect::<Vec<Object>>(),
+            "Border" => vec![0.into(), 0.into(), 0.into()],
+            "A" => acao,
+        });
+        self.por_anotacao(id, anotacao)
+    }
+
+    /// A ação (/A) de um link: abrir o endereço ou ir para a página.
+    pub(crate) fn acao_do_link(&self, destino: Destino) -> Result<Dictionary, String> {
+        Ok(match destino {
             Destino::Endereco(url) => {
                 let url = url.trim();
                 if url.is_empty() { return Err("Endereço vazio.".into()); }
@@ -346,14 +358,7 @@ impl DocumentoPdf {
                 let alvo = self.id_pagina(n)?;
                 dictionary! { "S" => "GoTo", "D" => vec![alvo.into(), "Fit".into()] }
             }
-        };
-        let anotacao = self.documento.add_object(dictionary! {
-            "Type" => "Annot", "Subtype" => "Link",
-            "Rect" => caixa.iter().map(|&v| v.into()).collect::<Vec<Object>>(),
-            "Border" => vec![0.into(), 0.into(), 0.into()],
-            "A" => acao,
-        });
-        self.por_anotacao(id, anotacao)
+        })
     }
 
     /// Lista de anotações da página (resolvida, se vier por referência).

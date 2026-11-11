@@ -22,6 +22,8 @@ spki = "0.8"
 rsa = { version = "0.10.0-rc.19", features = ["sha2"] }
 sha2 = "0.11"
 zopfli = { version = "0.8", default-features = false, features = ["std", "zlib"] }
+# Descomprimir imagem e anexo com teto (o lopdf já traz o flate2).
+flate2 = "1"
 
 [dev-dependencies]
 # Os testes criam o PDF pelo exportador oficial da suíte, sem outro codificador.

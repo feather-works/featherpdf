@@ -31,6 +31,8 @@ pub enum AnotacaoNova {
 pub struct Anotacao {
     pub pagina: u32, pub indice: usize, pub tipo: &'static str, pub texto: String, pub autor: String, pub caixa: [f32; 4],
     pub responde_a: Option<usize>, pub data: String, pub estado: Option<String>,
+    /// /CA: 1 é opaco; 0,1 quase transparente.
+    pub opacidade: f32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -113,6 +115,17 @@ pub(crate) fn agora() -> (i64, i64, i64, i64) {
     let d = doy - (153 * mp + 2) / 5 + 1;
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     (yoe + era * 400 + (m <= 2) as i64, m, d, resto)
+}
+
+/// O nome do tipo de comentário (`None`: não é comentário, como link, campo ou popup).
+pub(crate) fn tipo_de_comentario(subtipo: &[u8]) -> Option<&'static str> {
+    Some(match subtipo {
+        b"Text" => "Nota", b"FreeText" => "Caixa de texto", b"Highlight" => "Destaque", b"Underline" => "Sublinhado",
+        b"StrikeOut" => "Riscado", b"Squiggly" => "Ondulado", b"Ink" => "Desenho", b"Stamp" => "Carimbo",
+        b"Square" => "Retângulo", b"Circle" => "Elipse", b"Line" => "Linha", b"Polygon" => "Polígono",
+        b"PolyLine" => "Polilinha", b"Caret" => "Inserção", b"FileAttachment" => "Anexo", b"Sound" => "Som",
+        _ => return None,
+    })
 }
 
 impl DocumentoPdf {
@@ -284,13 +297,7 @@ impl DocumentoPdf {
             for (indice, o) in lista.iter().enumerate() {
                 let d = match o { Object::Reference(r) => self.documento.get_dictionary(*r).ok(), o => o.as_dict().ok() };
                 let Some(d) = d else { continue };
-                let tipo = match d.get(b"Subtype").and_then(Object::as_name).unwrap_or(b"") {
-                    b"Text" => "Nota", b"FreeText" => "Caixa de texto", b"Highlight" => "Destaque", b"Underline" => "Sublinhado",
-                    b"StrikeOut" => "Riscado", b"Squiggly" => "Ondulado", b"Ink" => "Desenho", b"Stamp" => "Carimbo",
-                    b"Square" => "Retângulo", b"Circle" => "Elipse", b"Line" => "Linha", b"Polygon" => "Polígono",
-                    b"PolyLine" => "Polilinha", b"Caret" => "Inserção", b"FileAttachment" => "Anexo", b"Sound" => "Som",
-                    _ => continue,
-                };
+                let Some(tipo) = tipo_de_comentario(d.get(b"Subtype").and_then(Object::as_name).unwrap_or(b"")) else { continue };
                 let texto_de = |k: &[u8]| d.get(k).ok().and_then(|o| lopdf::decode_text_string(o).ok()).unwrap_or_default();
                 let n: Vec<f32> = d.get(b"Rect").and_then(Object::as_array).map(|v| v.iter().filter_map(|x| x.as_float().ok()).collect()).unwrap_or_default();
                 let caixa = if n.len() == 4 { [n[0].min(n[2]), n[1].min(n[3]), n[0].max(n[2]), n[1].max(n[3])] } else { [0.0; 4] };
@@ -298,7 +305,8 @@ impl DocumentoPdf {
                 let responde_a = d.get(b"IRT").and_then(Object::as_reference).ok()
                     .and_then(|r| lista.iter().position(|o| o.as_reference().ok() == Some(r)));
                 todas.push(Anotacao { pagina, indice, tipo, texto: texto_de(b"Contents"), autor: texto_de(b"T"), caixa, responde_a, data,
-                    estado: d.get(b"State").ok().and_then(|o| lopdf::decode_text_string(o).ok()) });
+                    estado: d.get(b"State").ok().and_then(|o| lopdf::decode_text_string(o).ok()),
+                    opacidade: d.get(b"CA").and_then(Object::as_float).ok().filter(|v| v.is_finite()).map_or(1.0, |v| v.clamp(0.0, 1.0)) });
             }
         }
         todas

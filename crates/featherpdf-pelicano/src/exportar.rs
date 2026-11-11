@@ -41,7 +41,8 @@ impl Formato {
 pub enum ModoPlanilha { PorTabela, Tudo, Pagina }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TipoImagem { Png, Jpg, Webp, Tiff, Svg, Bmp, Gif }
+/// `Fotos`: as imagens de dentro do PDF como estão no arquivo, não a página desenhada.
+pub enum TipoImagem { Png, Jpg, Webp, Tiff, Svg, Bmp, Gif, Fotos }
 
 #[derive(Debug, Clone)]
 pub enum Ex {
@@ -267,6 +268,17 @@ impl App {
                                 featherpdf_io::gravar_atomico(&destino, conteudo.as_bytes())?;
                                 Ok(salvo)
                             }
+                            _ if tipo == TipoImagem::Fotos => {
+                                let lista = pdf.fotos_para_extrair(&paginas);
+                                if lista.is_empty() { return Err("Nenhuma foto nessas páginas.".into()); }
+                                let pags: Vec<u32> = lista.iter().map(|(p, _)| *p).collect();
+                                let (n, puladas) = featherpdf_io::gravar_fotos(&destino, &base, &pags, |i| pdf.extrair_foto(lista[i].0, lista[i].1))?;
+                                if n == 0 {
+                                    return Err(format!("{puladas} foto(s) num formato que ainda não sai (máscara, paleta, 1 bit, JPEG 2000…)."));
+                                }
+                                Ok(if puladas > 0 { format!("{n} foto(s) em {}; {puladas} num formato que ainda não sai.", destino.display()) }
+                                    else { format!("{n} foto(s) em {}", destino.display()) })
+                            }
                             _ if tipo == TipoImagem::Tiff => {
                                 featherpdf_io::gravar_tiff(&destino, &paginas, dpi, |n| vis.desenhar_grande(n, dpi as f32 / 72.0).map(|r| (r.largura, r.altura, r.rgba)))?;
                                 Ok(format!("{} página(s) em {}", paginas.len(), destino.display()))
@@ -334,7 +346,7 @@ impl App {
                         if pdf.texto_pagina(p).is_ok_and(|t| t.trim().chars().count() > crate::ocr::MINIMO_TEXTO) { continue; }
                         let (pagina_pt, giro) = pdf.geometria(p)?;
                         let (l, h) = (pagina_pt[2] - pagina_pt[0], pagina_pt[3] - pagina_pt[1]);
-                        let (linhas, _) = crate::ocr::ler(&vis, p, (crate::ocr::LADO / l.max(h)).clamp(1.0, 4.0), 0, false)?;
+                        let (linhas, _) = crate::ocr::ler(&vis, p, (crate::ocr::LADO / l.max(h)).clamp(1.0, 4.0))?;
                         let palavras: Vec<(String, [f32; 4])> = linhas.iter().flat_map(|x| &x.palavras)
                             .map(|w| (w.texto.clone(), crate::ocr::em_pontos(w.caixa, pagina_pt, giro))).collect();
                         v.extend(featherpdf_core::tabelas_da_pagina(p, &palavras));
@@ -346,7 +358,7 @@ impl App {
         }, move |r| Msg::Exp(Ex::Tabelas(leitura, r)))
     }
 
-    fn base_nome(&self) -> String {
+    pub(crate) fn base_nome(&self) -> String {
         let nome = self.nome_documento().unwrap_or_default();
         std::path::Path::new(&nome).file_stem().map_or("documento".into(), |n| n.to_string_lossy().into_owned())
     }
@@ -386,6 +398,7 @@ impl App {
                 text(match e.imagem {
                     TipoImagem::Tiff => "Um arquivo .tif com todas as páginas, na resolução escolhida (o que arquivo digital e fax pedem).",
                     TipoImagem::Svg => "Uma página por arquivo .svg, numa pasta: texto e desenhos continuam vetoriais, com nitidez em qualquer tamanho.",
+                    TipoImagem::Fotos => "As fotos de dentro do PDF, como estão no arquivo (JPEG original ou WebP sem perda), numa pasta: sem desenhar a página.",
                     _ => "Uma imagem por página, na resolução escolhida, numa pasta.",
                 }).size(13).color(muted),
                 row![text("Formato").size(13).width(90), opcao("PNG (nítido)", e.imagem == TipoImagem::Png, Ex::Imagem(TipoImagem::Png)),
@@ -394,8 +407,9 @@ impl App {
                     opcao("TIFF (várias páginas)", e.imagem == TipoImagem::Tiff, Ex::Imagem(TipoImagem::Tiff)),
                     opcao("SVG (vetorial)", e.imagem == TipoImagem::Svg, Ex::Imagem(TipoImagem::Svg)),
                     opcao("BMP", e.imagem == TipoImagem::Bmp, Ex::Imagem(TipoImagem::Bmp)),
-                    opcao("GIF (256 cores)", e.imagem == TipoImagem::Gif, Ex::Imagem(TipoImagem::Gif))].spacing(6).align_y(Align::Center),
-            ].spacing(10).push_maybe((e.imagem != TipoImagem::Svg).then(|| row![text("Resolução").size(13).width(90), opcao("72 dpi (tela)", e.dpi == 72, Ex::Dpi(72)), opcao("150 dpi", e.dpi == 150, Ex::Dpi(150)), opcao("300 dpi (impressão)", e.dpi == 300, Ex::Dpi(300))].spacing(6).align_y(Align::Center)))
+                    opcao("GIF (256 cores)", e.imagem == TipoImagem::Gif, Ex::Imagem(TipoImagem::Gif)),
+                    opcao("Fotos do PDF", e.imagem == TipoImagem::Fotos, Ex::Imagem(TipoImagem::Fotos))].spacing(6).align_y(Align::Center),
+            ].spacing(10).push_maybe((!matches!(e.imagem, TipoImagem::Svg | TipoImagem::Fotos)).then(|| row![text("Resolução").size(13).width(90), opcao("72 dpi (tela)", e.dpi == 72, Ex::Dpi(72)), opcao("150 dpi", e.dpi == 150, Ex::Dpi(150)), opcao("300 dpi (impressão)", e.dpi == 300, Ex::Dpi(300))].spacing(6).align_y(Align::Center)))
                 .push(paginas), if e.imagem == TipoImagem::Tiff { "Salvar como…" } else { "Escolher pasta…" }),
             Formato::PdfA => {
                 use featherpdf_core::SituacaoPdfa as S;

@@ -52,7 +52,16 @@ impl DocumentoPdf {
     /// Um Ctrl+Z (quem chama guarda o documento antes).
     pub fn embutir_fonte(&mut self, id: ObjectId, f: FonteNova) -> Result<(), String> {
         if f.larguras.len() != 224 { return Err("A fonte precisa da largura dos códigos 32 a 255.".into()); }
+        let mut f = f;
         let doc = &mut self.documento;
+        // Type1 sem /Encoding usa a StandardEncoding: 0x27 e 0x60 são ’ e ‘, não ' e `.
+        // shortcut: só os dois apóstrofos; acima de 127 a Standard também difere da WinAnsi (raro em texto); mapear tudo se aparecer.
+        let padrao_type1 = doc.get_dictionary(id).is_ok_and(|d| !d.has(b"Encoding")
+            && d.get(b"Subtype").and_then(Object::as_name).is_ok_and(|s| s != b"TrueType"));
+        if padrao_type1 {
+            f.larguras[0x27 - 32] = f.larguras[0x92 - 32];
+            f.larguras[0x60 - 32] = f.larguras[0x91 - 32];
+        }
         let tamanho = f.programa.len() as i64;
         let mut programa = Stream::new(dictionary! { "Length1" => tamanho }, f.programa);
         let _ = programa.compress();
@@ -67,7 +76,12 @@ impl DocumentoPdf {
         let d: &mut Dictionary = doc.get_object_mut(id).and_then(Object::as_dict_mut).map_err(|e| e.to_string())?;
         d.set("Subtype", "TrueType");
         d.set("BaseFont", Object::Name(f.nome_ps.into_bytes()));
-        d.set("Encoding", "WinAnsiEncoding");
+        if padrao_type1 {
+            d.set("Encoding", dictionary! { "Type" => "Encoding", "BaseEncoding" => "WinAnsiEncoding",
+                "Differences" => vec![Object::Integer(0x27), Object::Name(b"quoteright".to_vec()), Object::Integer(0x60), Object::Name(b"quoteleft".to_vec())] });
+        } else {
+            d.set("Encoding", "WinAnsiEncoding");
+        }
         d.set("FirstChar", 32);
         d.set("LastChar", 255);
         d.set("Widths", f.larguras.iter().map(|&w| Object::Real(w.round())).collect::<Vec<_>>());
@@ -100,5 +114,20 @@ mod testes {
         let d = relido.documento.get_dictionary(fonte).unwrap();
         assert_eq!(d.get(b"Widths").unwrap().as_array().unwrap().len(), 224);
         assert_eq!(caractere_win_ansi(0x80), Some('€'));
+    }
+
+    #[test]
+    fn type1_sem_encoding_mantem_o_apostrofo() {
+        let mut pdf = crate::testes::pdf_teste();
+        let fonte = pdf.documento.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Times-Roman" });
+        let mut larguras = vec![500.0; 224];
+        larguras[0x92 - 32] = 333.0;
+        let nova = FonteNova { nome_ps: "LiberationSerif".into(), programa: vec![0, 1, 0, 0], larguras,
+            ascent: 891.0, descent: -216.0, cap: 662.0, caixa: [0.0, -216.0, 1000.0, 891.0], italico: 0.0, fixa: false, serifa: true };
+        pdf.embutir_fonte(fonte, nova).unwrap();
+        let d = pdf.documento.get_dictionary(fonte).unwrap();
+        let enc = d.get(b"Encoding").unwrap().as_dict().unwrap();
+        assert_eq!(enc.get(b"Differences").unwrap().as_array().unwrap().len(), 4);
+        assert_eq!(d.get(b"Widths").unwrap().as_array().unwrap()[0x27 - 32].as_float().unwrap(), 333.0);
     }
 }

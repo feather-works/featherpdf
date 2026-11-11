@@ -57,7 +57,7 @@ impl Leitor<'_> {
                     self.c.next();
                     let letra = ch.is_alphabetic();
                     if win_ansi(ch).is_none() {
-                        return Err(format!("“{ch}” não tem desenho: use o comando (ex.: \\alpha).", ));
+                        return Err(format!("“{ch}” não tem desenho: use o comando (ex.: \\alpha)."));
                     }
                     match v.last_mut() {
                         Some(No::Texto(t, l)) if *l == letra && !letra => t.push(ch),

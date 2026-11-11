@@ -108,6 +108,41 @@ pub fn gravar_webp(destino: &Path, largura: u32, altura: u32, rgba: Vec<u8>) -> 
     gravar_atomico(destino, bytes.get_ref()).map_err(|e| format!("Erro ao salvar a imagem: {e}"))
 }
 
+/// Grava as fotos tiradas do PDF na `pasta`: o JPEG como veio (.jpg) e os pixels em WebP sem
+/// perda, com nomes "{base} - página N - foto K". Recusa se um dos arquivos já existe (a pasta
+/// foi escolhida sem o "substituir?"). Devolve quantas gravou.
+pub fn gravar_fotos(pasta: &Path, base: &str, paginas: &[u32],
+    ler: impl Fn(usize) -> Option<featherpdf_core::ImagemExtraida>) -> Result<(usize, usize), String> {
+    let mut contagem: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+    let nomes: Vec<String> = paginas.iter().map(|p| {
+        let k = contagem.entry(*p).or_insert(0);
+        *k += 1;
+        format!("{base} - página {p} - foto {k}")
+    }).collect();
+    // O formato só se sabe lendo: confere as duas extensões antes de gravar qualquer coisa.
+    if let Some(existe) = nomes.iter().flat_map(|n| ["jpg", "webp"].map(|e| pasta.join(format!("{n}.{e}")))).find(|c| c.exists()) {
+        return Err(format!("{} já existe: escolha outra pasta ou apague as fotos antigas.", existe.display()));
+    }
+    let (mut gravadas, mut puladas) = (0, 0);
+    // Uma por vez: lida, gravada e solta antes da próxima.
+    for (i, nome) in nomes.iter().enumerate() {
+        let Some(f) = ler(i) else { puladas += 1; continue };
+        let destino = pasta.join(format!("{nome}.{}", if f.jpeg { "jpg" } else { "webp" }));
+        if f.jpeg {
+            gravar_atomico(&destino, &f.dados).map_err(|e| format!("{}: {e}", destino.display()))?;
+        } else {
+            let rgba: Vec<u8> = match f.componentes {
+                1 => f.dados.iter().flat_map(|&v| [v, v, v, 255]).collect(),
+                _ => f.dados.chunks_exact(3).flat_map(|p| [p[0], p[1], p[2], 255]).collect(),
+            };
+            // Tamanho que não bate com os pixels (PDF estragado): pula essa e segue.
+            if gravar_webp(&destino, f.largura, f.altura, rgba).is_err() { puladas += 1; continue; }
+        }
+        gravadas += 1;
+    }
+    Ok((gravadas, puladas))
+}
+
 /// Reamostrador do Comprimir: a imagem cabe em `lado` px (sem aumentar) e volta como JPEG
 /// na `qualidade`, com o mesmo número de canais do espaço de cor.
 pub fn reamostrar_jpeg(img: featherpdf_core::ImagemCrua<'_>, lado: u32, qualidade: u8) -> Option<(Vec<u8>, u32, u32)> {
@@ -984,6 +1019,26 @@ mod testes {
         let lido = image::open(&destino).unwrap().to_rgba8().into_raw();
         let _ = std::fs::remove_file(&destino);
         assert_eq!(lido, rgba);
+    }
+
+    #[test]
+    fn fotos_saem_com_nome_por_pagina_e_nao_sobrescrevem() {
+        use featherpdf_core::ImagemExtraida;
+        let pasta = std::env::temp_dir().join(format!("featherpdf-teste-fotos-{}", std::process::id()));
+        std::fs::create_dir_all(&pasta).unwrap();
+        let fotos = [
+            ImagemExtraida { pagina: 1, largura: 1, altura: 1, componentes: 3, jpeg: true, dados: b"jpeg cru".to_vec() },
+            ImagemExtraida { pagina: 1, largura: 2, altura: 1, componentes: 1, jpeg: false, dados: vec![0, 255] },
+        ];
+        let ler = |i: usize| fotos.get(i).cloned();
+        assert_eq!(gravar_fotos(&pasta, "doc", &[1, 1, 1], |i| if i == 2 {
+            Some(ImagemExtraida { pagina: 1, largura: 9, altura: 9, componentes: 3, jpeg: false, dados: vec![1] })
+        } else { ler(i) }).unwrap(), (2, 1), "a estragada é pulada");
+        assert_eq!(std::fs::read(pasta.join("doc - página 1 - foto 1.jpg")).unwrap(), b"jpeg cru");
+        let cinza = image::open(pasta.join("doc - página 1 - foto 2.webp")).unwrap().to_rgba8().into_raw();
+        assert_eq!(cinza, [0, 0, 0, 255, 255, 255, 255, 255]);
+        assert!(gravar_fotos(&pasta, "doc", &[1], ler).is_err(), "não sobrescreve");
+        let _ = std::fs::remove_dir_all(&pasta);
     }
 
     #[test]

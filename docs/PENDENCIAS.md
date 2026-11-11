@@ -51,21 +51,21 @@ usuário (19/10), e com ele o achado sobre `\alphax`.
 5. ✅ (já corrigido, conferido em 04/11: roda em `spawn_blocking`) **Script trava a janela em PDF grande.** `featherpdf-pelicano/src/scripts.rs` `Sc::Rodar`
    roda na thread da janela e grava o documento inteiro duas vezes só para saber se mudou.
    Correção: o hospedeiro marca `mudou` nas operações que escrevem.
-6. **Testes novos da GUI nunca rodaram:** `edicao.rs` (`arrasto_gruda_na_guia_e_na_grade`)
+6. ✅ (10/11, os dois passam) **Testes novos da GUI nunca rodaram:** `edicao.rs` (`arrasto_gruda_na_guia_e_na_grade`)
    e `scripts.rs` (`script_escreve_le_e_erro_nao_mexe`). Rodar
    `cargo test -p featherpdf-pelicano` uma vez (com o teto de memória).
 
 ### Seria bom
 
-7. **Fonte sem `/Encoding` muda o apóstrofo.** `featherpdf-core/src/fontes.rs`: vira
+7. ✅ (10/11) **Fonte sem `/Encoding` muda o apóstrofo.** Type1 sem /Encoding ganha /Differences com quoteright/quoteleft em 0x27/0x60 e a largura certa. `featherpdf-core/src/fontes.rs`: vira
    WinAnsi, e 0x27/0x60 (’ ‘ no padrão Type1) viram ' e `. Recusar essas fontes ou pôr
    `shortcut:` dizendo o limite.
 8. ✅ (04/11) **Cada equação cria três fontes novas.** Reaproveita a fonte igual que já está no arquivo. `featherpdf-core/src/latex.rs`
    `inserir_equacao`: reaproveitar a fonte com o mesmo `BaseFont` já nos recursos.
 9. ✅ (04/11) **Réguas roubam o clique na beirada.** `featherpdf-pelicano/src/edicao.rs`: só começar a guia
    se `self.achar(p)` não achar objeto.
-10. Menores: vírgula sobrando num `format!` do `latex.rs`; o bloco "Comprimir" do fluxo
-    grava o documento uma vez a mais só para o relatório de tamanho.
+10. ✅ (10/11) Menores: vírgula sobrando num `format!` do `latex.rs`; o bloco "Comprimir" do fluxo
+    grava o documento uma vez a mais só para o relatório de tamanho. (Agora o "de X" só aparece quando um bloco anterior já gravou.)
 
 ### Não auditado
 
@@ -84,5 +84,5 @@ palavras; sem entrelinha/alinhamento), Grade e réguas, Substituir com refluxo, 
 verdade (linha no meio/fim, coluna no fim), Fluxos em blocos (sem OCR/tabela/assinar no
 fluxo), Scripts (feather-macros), Equações em LaTeX (só digitar → desenho).
 
-Faltam: **Mesa infinita** e **Resumir e traduzir com IA (MCP)**. Depois, atualizar o
+Faltam: **Mesa infinita**. (**Resumir e traduzir com IA (MCP)** saiu em 10/11: decisão do usuário, nada de internet nem IA no FeatherPDF.) Depois, atualizar o
 artifact de status.

@@ -55,7 +55,8 @@ pub fn executar_fluxo(mut pdf: DocumentoPdf, blocos: &[Bloco]) -> Result<(Vec<u8
     let mut pronto: Option<Vec<u8>> = None;
     for b in blocos {
         // Comprimir e linearizar devolvem bytes: o bloco seguinte trabalha sobre eles.
-        if let Some(bytes) = pronto.take() { pdf = DocumentoPdf::de_bytes(&bytes, None)?; }
+        let mut tamanho_anterior = None;
+        if let Some(bytes) = pronto.take() { pdf = DocumentoPdf::de_bytes(&bytes, None)?; tamanho_anterior = Some(bytes.len()); }
         let todas: Vec<u32> = (1..=pdf.total_paginas()).collect();
         relato.push(match b {
             Bloco::TirarBrancas => {
@@ -73,9 +74,10 @@ pub fn executar_fluxo(mut pdf: DocumentoPdf, blocos: &[Bloco]) -> Result<(Vec<u8
             Bloco::EmbutirFontes => format!("{} fonte(s) embutidas", crate::embutir_fontes_do_sistema(&mut pdf)?.0.len()),
             Bloco::Comprimir(nivel) => {
                 let (_, dpi, qualidade) = NIVEIS_COMPRESSAO[(*nivel as usize).min(2)];
-                let antes = pdf.serializar()?.len();
                 let bytes = pdf.comprimido(OpcoesCompressao { dpi: Some(dpi), qualidade, limpar: true, anexos: false, zopfli: false }, &crate::reamostrar_jpeg)?;
-                let r = format!("comprimido de {} para {}", featherpdf_core::tamanho(antes), featherpdf_core::tamanho(bytes.len()));
+                // O tamanho de antes só quando um bloco anterior já gravou: medir gravando de novo custa uma gravação inteira.
+                let depois = featherpdf_core::tamanho(bytes.len());
+                let r = match tamanho_anterior { Some(antes) => format!("comprimido de {} para {depois}", featherpdf_core::tamanho(antes)), None => format!("comprimido para {depois}") };
                 pronto = Some(bytes);
                 r
             }

@@ -3,43 +3,41 @@
 **Data:** 19/10/2026 (revisão completa em 08/11/2026)
 
 > Em 08/11/2026 a lista inteira foi conferida de novo no código: cada item ❌ e 🟡 foi procurado no motor e na tela (botão, menu ou janela). Só conta como ✅ o que dá para fazer no app. Entraram os recursos que estavam marcados errado como ❌ (comparar texto, fluxos em lote, scripts, Bates, marca d'água, imagens para PDF, Sanitizar, Dividir e Extrair, leitor padrão de PDF e outros).
-**Base:** lista de funcionalidades do Acrobat (26 seções, 723 itens).
+**Base:** lista de funcionalidades do Acrobat, sem o que depende de internet, IA ou serviço da Adobe (24 seções, 649 itens).
 
 ## Resumo
 
-Total: **723** itens. ✅ feito: **275** · 🟡 parcial: **72** · ❌ falta: **305** · ⛔ fora do escopo (serviço da Adobe): **71**.
+Total: **649** itens. ✅ feito: **305** · 🟡 parcial: **70** · ❌ falta: **274**.
 
-Ver a contagem por seção abaixo. Os itens ⛔ dependem de nuvem ou de serviço da Adobe (Acrobat Sign remoto, PDF Spaces, Adobe Express, compartilhamento em nuvem) e ficam de fora da comparação de código.
+Ver a contagem por seção abaixo. Desde 10/11 (decisão do usuário) o FeatherPDF não tem nada que dependa de internet ou de IA: saíram da lista os serviços da Adobe (nuvem, compartilhamento, Acrobat Sign remoto, AI Assistant), as seções Compartilhamento e Inteligência artificial e os itens que pedem rede (PDF de página da internet, enviar formulário, procurar atualizações). O OCR local com o modelo latino embutido continua; os modelos baixados de outras línguas saíram. Contagem refeita a partir das linhas de cada seção.
 
-| Seção | Itens | ✅ feito | 🟡 parcial | ❌ falta | ⛔ Adobe |
-|---|---|---|---|---|---|
-| 1. Visualização e leitura de PDF | 35 | 23 | 6 | 6 | 0 |
-| 2. Edição de texto | 24 | 11 | 4 | 9 | 0 |
-| 3. Edição de imagens | 18 | 10 | 2 | 6 | 0 |
-| 4. Organização de páginas | 27 | 21 | 1 | 5 | 0 |
-| 5. Criação de PDF | 22 | 5 | 4 | 13 | 0 |
-| 6. Conversão e exportação | 33 | 18 | 3 | 12 | 0 |
-| 7. Compressão e otimização de PDF | 41 | 20 | 1 | 20 | 0 |
-| 8. OCR e digitalização | 22 | 11 | 4 | 7 | 0 |
-| 9. Comentários e anotações | 40 | 19 | 11 | 10 | 0 |
-| 10. Formulários PDF | 47 | 22 | 5 | 16 | 4 |
-| 11. Assinaturas eletrônicas e digitais | 36 | 14 | 5 | 6 | 11 |
-| 12. Segurança e proteção de documentos | 33 | 18 | 5 | 10 | 0 |
-| 13. Hiperlinks, marcadores e navegação | 21 | 4 | 1 | 16 | 0 |
-| 14. Camadas PDF | 18 | 7 | 0 | 11 | 0 |
-| 15. Cabeçalhos, rodapés, marcas d'água e numeração | 33 | 15 | 2 | 16 | 0 |
-| 16. Acessibilidade | 25 | 0 | 3 | 22 | 0 |
-| 17. Impressão | 25 | 15 | 0 | 10 | 0 |
-| 18. Produção gráfica profissional | 41 | 11 | 4 | 26 | 0 |
-| 19. Comparação e análise de documentos | 14 | 6 | 4 | 4 | 0 |
-| 20. Automação, processamento em lote e JavaScript | 32 | 10 | 2 | 20 | 0 |
-| 21. Pesquisa avançada | 18 | 2 | 0 | 16 | 0 |
-| 22. Recursos de engenharia, medições e PDF 3D | 28 | 8 | 1 | 19 | 0 |
-| 23. Multimídia e documentos interativos | 18 | 0 | 2 | 16 | 0 |
-| 24. Compartilhamento e colaboração | 15 | 0 | 0 | 0 | 15 |
-| 25. Inteligência artificial — Acrobat AI Assistant e Acrobat Studio | 40 | 0 | 0 | 0 | 40 |
-| 26. Preferências e personalização | 17 | 5 | 2 | 9 | 1 |
-| **Total** | **723** | **275** | **72** | **305** | **71** |
+| Seção | Itens | ✅ feito | 🟡 parcial | ❌ falta |
+|---|---|---|---|---|
+| 1. Visualização e leitura de PDF | 35 | 23 | 6 | 6 |
+| 2. Edição de texto | 24 | 11 | 4 | 9 |
+| 3. Edição de imagens | 18 | 11 | 2 | 5 |
+| 4. Organização de páginas | 27 | 25 | 1 | 1 |
+| 5. Criação de PDF | 21 | 5 | 4 | 12 |
+| 6. Conversão e exportação | 33 | 18 | 3 | 12 |
+| 7. Compressão e otimização de PDF | 41 | 20 | 1 | 20 |
+| 8. OCR e digitalização | 22 | 10 | 3 | 9 |
+| 9. Comentários e anotações | 40 | 20 | 11 | 9 |
+| 10. Formulários PDF | 42 | 25 | 5 | 12 |
+| 11. Assinaturas eletrônicas e digitais | 25 | 14 | 5 | 6 |
+| 12. Segurança e proteção de documentos | 33 | 19 | 5 | 9 |
+| 13. Hiperlinks, marcadores e navegação | 21 | 12 | 0 | 9 |
+| 14. Camadas PDF | 18 | 9 | 0 | 9 |
+| 15. Cabeçalhos, rodapés, marcas d'água e numeração | 33 | 19 | 2 | 12 |
+| 16. Acessibilidade | 25 | 0 | 3 | 22 |
+| 17. Impressão | 25 | 17 | 0 | 8 |
+| 18. Produção gráfica profissional | 41 | 11 | 4 | 26 |
+| 19. Comparação e análise de documentos | 14 | 6 | 4 | 4 |
+| 20. Automação, processamento em lote e JavaScript | 32 | 10 | 2 | 20 |
+| 21. Pesquisa avançada | 18 | 8 | 0 | 10 |
+| 22. Recursos de engenharia, medições e PDF 3D | 28 | 8 | 1 | 19 |
+| 23. Multimídia e documentos interativos | 18 | 0 | 2 | 16 |
+| 24. Preferências e personalização | 15 | 4 | 2 | 9 |
+| **Total** | **649** | **305** | **70** | **274** |
 
 ## Próximos lotes sugeridos
 
@@ -50,26 +48,26 @@ Critério: uso diário de PDF, sem os itens exóticos (3D, geoespacial, PDF/X, P
 **Lote 1: ver e imprimir**
 1. ~~Visualizar propriedades do documento (seção 1)~~: ✅ em 08/11 (Ctrl+D; o XMP ainda não aparece).
 2. Rotacionar temporariamente a visualização (seção 1): ❌. Para ver uma página deitada é preciso girar a página de verdade.
-3. Configurar tamanho de papel (seção 17): ❌. A impressão usa o papel padrão da impressora, sem escolher A4, Carta ou Ofício.
+3. Configurar tamanho de papel (seção 17): ✅ (10/11). Imprimir ▸ Papel.
 
 **Lote 2: páginas e arquivos**
-4. Copiar e colar páginas (seção 4): ❌. Sem área de transferência de páginas, então não há como levar página de um arquivo para outro.
-5. Alterar numeração lógica das páginas (seção 4): ❌. O PageLabels só é apagado, não dá para dizer que a página 1 é a "i".
+4. Copiar e colar páginas (seção 4): ✅ (10/11). Copiar, Recortar e Colar páginas na aba Páginas, também entre PDFs abertos.
+5. Alterar numeração lógica das páginas (seção 4): ✅ (10/11). Páginas ▸ Numeração lógica….
 6. ~~TIFF → PDF (seção 6)~~: ✅ em 08/11 (G4/fax, LZW, JPEG, CMYK, várias páginas).
 
 **Lote 3: edição de texto e imagem**
 7. Modificar fonte (seção 2): ❌. Tamanho, cor e espaço do texto existente já mudam; a fonte e o negrito não.
 8. Rotacionar imagens (seção 3): ❌. Editar imagem troca, corta e redimensiona, mas não gira.
-9. Extrair imagens do PDF (seção 3): ❌. Só dá para exportar a página inteira como imagem ou copiar uma área.
+9. Extrair imagens do PDF (seção 3): ✅ (10/11). Exportar ▸ Imagens ▸ Fotos do PDF.
 
 **Lote 4: formulários e comentários**
-10. Campo obrigatório em formulário (seção 10): ❌. As regras têm formato e cálculo, mas nenhum campo é obrigatório.
+10. Campo obrigatório em formulário (seção 10): ✅ (10/11). Regras e Tab ▸ Comportamento, com somente leitura e valor padrão.
 11. Definir formato de datas em campo (seção 10): ❌. O campo de data tem calendário, mas sem formato configurável.
 12. ~~Editar comentários (seção 9)~~: ✅ em 08/11 (painel Comentários ▸ Editar; a caixa de texto redesenha o texto na página).
 
 **Lote 5: navegação, marcas e acessibilidade**
-13. Criar e editar marcadores (seção 13): ❌. O painel Marcadores só lê o sumário que já veio no arquivo.
-14. Editar e remover cabeçalho e rodapé (seção 15): ❌. Aplicar de novo soma ao anterior; só o Ctrl+Z tira.
+13. Criar e editar marcadores (seção 13): ✅ (10/11). Criar (também dentro de outro), renomear, trocar a página, reorganizar e excluir no painel.
+14. Editar e remover cabeçalho e rodapé (seção 15): ✅ (10/11). O painel abre com o texto do arquivo, Aplicar troca o anterior e há o botão Remover.
 15. Verificar acessibilidade (seção 16): ❌. Não há verificação nem tags; o inspetor só lista problemas de estrutura.
 
 Os lotes 1 e 2 são os de maior uso no dia a dia.
@@ -169,7 +167,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Ajustar a posição de objetos gráficos. | ✅ feito | mover e alinhar (edicao.rs) |
 | Editar objetos rasterizados. | ✅ feito | core editar_imagem.rs (redimensionar, cortar, trocar, brilho e contraste) |
 | Editar objetos vetoriais. | 🟡 parcial | desenho agrupado move e apaga (edicao.rs), sem editar o traço |
-| Extrair imagens do PDF. | ❌ falta | não há no código |
+| Extrair imagens do PDF. | ✅ feito | Exportar ▸ Imagens ▸ Fotos do PDF: JPEG original ou WebP sem perda (10/11; core otimizar.rs imagens_para_extrair, io gravar_fotos); sem a máscara de transparência |
 | Copiar imagens para outros documentos. | 🟡 parcial | Copiar área + Ctrl+V cola noutro PDF como figura, não a imagem original |
 | Abrir imagens em um editor externo compatível. | ❌ falta | não há no código |
 | Atualizar imagens editadas externamente. | ❌ falta | não há no código |
@@ -185,9 +183,9 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Inserir páginas. | ✅ feito | inserir_em_branco e inserir_pdf (paginas.rs) |
 | Excluir páginas. | ✅ feito | excluir_paginas (paginas.rs) |
 | Duplicar páginas. | ✅ feito | duplicar_paginas (paginas.rs) |
-| Copiar páginas. | ❌ falta | não há no código |
-| Recortar páginas. | ❌ falta | não há no código |
-| Colar páginas. | ❌ falta | não há no código |
+| Copiar páginas. | ✅ feito | Páginas ▸ Copiar páginas: guarda as escolhidas para colar aqui ou em outro PDF aberto (10/11) |
+| Recortar páginas. | ✅ feito | Páginas ▸ Recortar páginas (copia e exclui; Ctrl+Z desfaz) (10/11) |
+| Colar páginas. | ✅ feito | Páginas ▸ Colar páginas: depois da última escolhida (10/11; core inserir_pdf) |
 | Mover páginas. | ✅ feito | mover_paginas (paginas.rs, arrastar em organizar.rs) |
 | Reordenar páginas. | ✅ feito | grade de miniaturas (organizar.rs) |
 | Extrair páginas. | ✅ feito | extrair (paginas.rs) |
@@ -204,7 +202,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Recortar páginas. | ✅ feito | cortar_margens (Caixas da página) |
 | Alterar limites visíveis da página. | ✅ feito | cortar_margens define a área visível |
 | Definir tamanhos das páginas. | ✅ feito | padronizar_tamanho (paginas.rs) |
-| Alterar numeração lógica das páginas. | ❌ falta | PageLabels só é removido (paginas.rs:201) |
+| Alterar numeração lógica das páginas. | ✅ feito | Páginas ▸ Numeração lógica… (10/11; core rotulos.rs); o rótulo aparece ao lado do número na barra de baixo |
 | Adicionar páginas em branco. | ✅ feito | inserir_em_branco (paginas.rs) |
 | Inserir páginas provenientes de outros PDFs. | ✅ feito | inserir_pdf (paginas.rs) |
 | Substituir páginas preservando determinadas informações de navegação. | ❌ falta | não há no código |
@@ -222,7 +220,6 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Criar PDF a partir de imagens. | ✅ feito | Página inicial ▸ Imagens para PDF; arrastar PNG/JPG abre como PDF (juntar.rs) |
 | Criar PDF a partir de arquivos de texto. | ❌ falta | não há no código |
 | Criar PDF a partir de páginas HTML. | ❌ falta | não há no código |
-| Criar PDF a partir de páginas da internet. | ❌ falta | não há no código |
 | Criar PDF a partir da área de transferência. | 🟡 parcial | Novo PDF (Ctrl+N) e Ctrl+V cola a imagem ou o texto; sem comando direto |
 | Criar PDF utilizando scanner. | ❌ falta | não há no código |
 | Criar PDF a partir de fotografias. | ✅ feito | Imagens para PDF (uma foto por página) e Limpar caderno (core caderno.rs) |
@@ -335,14 +332,14 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Reconhecer texto em páginas PDF. | ✅ feito | lê páginas do PDF (ocr.rs) |
 | OCR de múltiplas páginas. | ✅ feito | Todas, só a atual ou só as sem texto (ocr.rs) |
 | OCR de intervalos selecionados. | ✅ feito | páginas escolhidas (ocr.rs) |
-| Selecionar idioma do OCR. | ✅ feito | Idioma (ocr.rs, ocr_modelos.rs) |
+| Selecionar idioma do OCR. | ❌ falta | só o modelo latino embutido (português, inglês, espanhol…); outras línguas e escritas saíram com o download dos modelos (10/11) |
 | Criar PDF pesquisável. | ✅ feito | camada de texto invisível (ocr.rs, inserir_camada_ocr) |
 | Criar PDF com texto reconhecido sobre a imagem original. | ✅ feito | texto por trás da imagem original (ocr.rs) |
 | Criar PDF editável após reconhecimento. | 🟡 parcial | texto por linha (Editar texto), não por parágrafo |
 | Corrigir problemas de reconhecimento. | ✅ feito | conferir e corrigir antes de aplicar (ocr.rs) |
 | Melhorar nitidez do texto. | ❌ falta | não há no código |
 | Remover ruídos de digitalização. | ❌ falta | não há no código |
-| Corrigir inclinação das páginas (*deskew*). | 🟡 parcial | Endireitar a página pelo classificador de orientação, sem deskew fino |
+| Corrigir inclinação das páginas (*deskew*). | ❌ falta | o endireitar pelo modelo baixado saiu com o download dos modelos (10/11) |
 | Remover padrões de retícula (*descreen*). | ❌ falta | não há no código |
 | Remover ou suavizar fundos irregulares. | 🟡 parcial | Limpar o fundo (ocr.rs, core tarja.rs) |
 | Melhorar fotografias de documentos. | ✅ feito | Limpar caderno tira sombra, pauta e quadriculado da foto (core caderno.rs) |
@@ -379,7 +376,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Desenhar nuvens de revisão. | 🟡 parcial | nuvem de revisão na Medir (medir.rs gravar_nuvem) |
 | Alterar cores das anotações. | 🟡 parcial | cor escolhida antes de desenhar |
 | Alterar espessura das linhas. | 🟡 parcial | espessura escolhida antes de desenhar |
-| Alterar opacidade. | ❌ falta | não há no código |
+| Alterar opacidade. | ✅ feito | painel Comentários: 100%, 70% ou 40% em cada comentário (/CA) (10/11; core revisao.rs definir_opacidade) |
 | Adicionar carimbos. | ✅ feito | Carimbo (comentar.rs, cor_do_carimbo) |
 | Criar carimbos personalizados. | ✅ feito | Carimbo: texto próprio ou imagem PNG/JPG (comentar.rs) |
 | Criar carimbos dinâmicos. | ✅ feito | Carimbo com linha de baixo “Nome e data” ou “Só a data” (comentar.rs) |
@@ -421,9 +418,9 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Redimensionar campos. | ❌ falta | não há no código |
 | Alinhar campos. | ❌ falta | não há no código |
 | Definir ordem de navegação entre campos. | ✅ feito | Regras e Tab ▸ ordem do Tab (core regras.rs) |
-| Definir campos obrigatórios. | ❌ falta | não há no código |
-| Definir campos somente leitura. | ❌ falta | não há no código |
-| Configurar valores padrão. | ❌ falta | não há no código |
+| Definir campos obrigatórios. | ✅ feito | Regras e Tab ▸ Comportamento; o painel lista os obrigatórios vazios (10/11, core formularios.rs) |
+| Definir campos somente leitura. | ✅ feito | Regras e Tab ▸ Comportamento; o app recusa digitar nele (10/11) |
+| Configurar valores padrão. | ✅ feito | Regras e Tab ▸ Valor padrão (/DV); Limpar campos volta a ele (10/11) |
 | Definir formato de números. | ✅ feito | Regras e Tab ▸ Número (core regras.rs) |
 | Definir formato de datas. | ❌ falta | não há no código |
 | Definir formato de moedas. | ✅ feito | Regras e Tab ▸ Moeda (core regras.rs) |
@@ -436,20 +433,15 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Configurar eventos dos campos. | ❌ falta | não há no código |
 | Definir aparência dos controles. | ❌ falta | não há no código |
 | Configurar botões para limpar formulário. | ✅ feito | Limpar (formularios.rs, limpar_campos) |
-| Configurar botões para enviar formulário. | ❌ falta | não há no código |
 | Configurar ações de abertura de arquivos ou links. | ❌ falta | não há no código |
 | Preencher formulários interativos. | ✅ feito | preencher na própria página (formularios.rs, preencher) |
 | Preencher formulários não interativos. | ✅ feito | detectar e criar campo, ou texto livre |
 | Preenchimento automático de informações. | ❌ falta | não há no código |
 | Salvar informações preenchidas. | ✅ feito | Salvar |
 | Imprimir formulários. | 🟡 parcial | Imprimir (Ctrl+P) sai com a aparência gravada dos campos; sem opção “só os campos” |
-| Distribuir formulários. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Coletar respostas. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Acompanhar formulários distribuídos. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
 | Consolidar respostas. | 🟡 parcial | Pasta de fichas, uma linha por arquivo (formularios.rs ler_pasta), sem painel de respostas |
 | Exportar dados de formulários. | ✅ feito | Para o FeatherSheet (formularios.rs para_sheet) |
 | Importar dados de formulários. | ✅ feito | Importar dados JSON, XFDF ou CSV (core dados_form.rs, form_dados.rs) |
-| Publicar formulários na web por meio dos serviços compatíveis. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
 
 
 ## 11. Assinaturas eletrônicas e digitais
@@ -481,17 +473,6 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Inspecionar alterações posteriores à assinatura. | ✅ feito | `cobre_tudo` e painel Versões |
 | Comparar versões assinadas. | 🟡 parcial | Versões abre a versão assinada; salvar e usar Comparar, em dois passos |
 | Incorporar informações de validação de longo prazo. | ❌ falta | não há no código |
-| Solicitar assinaturas de outras pessoas. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Enviar documentos para assinatura. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Definir destinatários. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Definir ordem de assinatura. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Enviar solicitações em massa. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Acompanhar documentos enviados. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Acompanhar documentos assinados. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Gerenciar contratos pendentes. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Visualizar registros de auditoria. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Receber notificações do processo. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Gerenciar acordos e fluxos de assinatura. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
 
 
 ## 12. Segurança e proteção de documentos
@@ -527,7 +508,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Abrir documentos em modo protegido. | ❌ falta | não há no código |
 | Isolar documentos não confiáveis. | ❌ falta | não há no código |
 | Controlar execução de JavaScript. | ❌ falta | não há no código |
-| Controlar abertura de links externos. | ❌ falta | não há no código |
+| Controlar abertura de links externos. | ✅ feito | Configurações ▸ Documentos ▸ Links de sites: desligado, o clique só mostra o endereço (10/11) |
 | Controlar abertura de anexos. | ❌ falta | não há no código |
 | Configurar locais confiáveis. | ❌ falta | não há no código |
 | Gerenciar certificados confiáveis. | ❌ falta | não há no código |
@@ -538,8 +519,8 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Item | Estado | Evidência / o que falta |
 |---|---|---|
 | Adicionar hiperlinks. | ✅ feito | inserir_link (core inserir.rs, Editar > Link) |
-| Editar hiperlinks. | ❌ falta | não há no código |
-| Excluir hiperlinks. | 🟡 parcial | Limpar e sanitizar ▸ Links externos tira todos; sem apagar um link só |
+| Editar hiperlinks. | ✅ feito | painel Links da página: trocar o destino (página ou endereço) (10/11; core navegacao.rs trocar_destino_link) |
+| Excluir hiperlinks. | ✅ feito | painel Links da página apaga um link; Limpar e sanitizar tira todos (10/11) |
 | Criar links para páginas internas. | ✅ feito | Destino::Pagina (core inserir.rs) |
 | Criar links para páginas externas. | ✅ feito | Destino::Endereco (core inserir.rs) |
 | Criar links para arquivos. | ❌ falta | não há no código |
@@ -548,12 +529,12 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Redimensionar áreas clicáveis. | ❌ falta | não há no código |
 | Criar destinos nomeados. | ❌ falta | não há no código |
 | Gerenciar destinos nomeados. | ❌ falta | não há no código |
-| Criar marcadores (*bookmarks*). | ❌ falta | não há no código |
-| Editar marcadores. | ❌ falta | não há no código |
-| Excluir marcadores. | ❌ falta | não há no código |
-| Criar marcadores hierárquicos. | ❌ falta | não há no código |
-| Reorganizar marcadores. | ❌ falta | não há no código |
-| Associar marcadores a páginas. | ❌ falta | não há no código |
+| Criar marcadores (*bookmarks*). | ✅ feito | painel Marcadores, botão + na página atual, depois do escolhido (10/11; core navegacao.rs) |
+| Editar marcadores. | ✅ feito | painel Marcadores, Renomear (10/11) |
+| Excluir marcadores. | ✅ feito | painel Marcadores, Excluir (com os de dentro) (10/11) |
+| Criar marcadores hierárquicos. | ✅ feito | painel Marcadores: novo dentro do escolhido e recuar/tirar de dentro (10/11) |
+| Reorganizar marcadores. | ✅ feito | painel Marcadores: subir, descer, pôr dentro e tirar de dentro (10/11; core navegacao.rs mover_marcador) |
+| Associar marcadores a páginas. | ✅ feito | o novo vai para a página atual; o botão do elo faz o escolhido levar à página atual (10/11) |
 | Associar marcadores a ações. | ❌ falta | não há no código |
 | Configurar ampliação ao seguir marcadores. | ❌ falta | não há no código |
 | Adicionar ações a elementos de navegação. | ❌ falta | não há no código |
@@ -568,7 +549,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Importar arquivos como camadas. | ❌ falta | não há no código |
 | Criar uma camada a partir de um arquivo importado. | ❌ falta | não há no código |
 | Renomear camadas. | ✅ feito | painel Camadas ▸ renomear (core camadas.rs) |
-| Reorganizar camadas. | ❌ falta | não há no código |
+| Reorganizar camadas. | ✅ feito | painel Camadas, setas sobem e descem (10/11; core camadas.rs mover_camada); camada dentro de grupo fica no lugar |
 | Mostrar camadas. | ✅ feito | mostrar_camada (anotacoes.rs) |
 | Ocultar camadas. | ✅ feito | mostrar_camada, ocultar (anotacoes.rs) |
 | Configurar visibilidade inicial. | ✅ feito | ligar ou desligar no painel Camadas grava como o PDF abre (comentar.rs) |
@@ -576,7 +557,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Configurar visibilidade para exportação. | ❌ falta | não há no código |
 | Alterar propriedades das camadas. | ✅ feito | painel Camadas: travar, quando aparece e faixa de zoom (core camadas.rs) |
 | Gerenciar grupos de camadas. | ❌ falta | não há no código |
-| Mesclar camadas. | ❌ falta | não há no código |
+| Mesclar camadas. | ✅ feito | painel Camadas ▸ Juntar camadas: o conteúdo de uma passa para a outra (10/11; core camadas.rs mesclar_camada) |
 | Achatar camadas (*flatten*). | ❌ falta | não há no código |
 | Vincular camadas a marcadores. | ❌ falta | não há no código |
 | Vincular camadas a ações. | ❌ falta | não há no código |
@@ -590,10 +571,10 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 |---|---|---|
 | Adicionar cabeçalho. | ✅ feito | Páginas ▸ Cabeçalho e rodapé, três lugares (marcas.rs) |
 | Adicionar rodapé. | ✅ feito | Páginas ▸ Cabeçalho e rodapé, três lugares (marcas.rs) |
-| Editar cabeçalho. | ❌ falta | não há no código |
-| Editar rodapé. | ❌ falta | não há no código |
-| Remover cabeçalhos. | ❌ falta | não há no código |
-| Remover rodapés. | ❌ falta | não há no código |
+| Editar cabeçalho. | ✅ feito | o painel abre com o texto do arquivo (com os campos) e Aplicar troca o anterior (10/11, core marcas.rs) |
+| Editar rodapé. | ✅ feito | o painel abre com o texto do arquivo (com os campos) e Aplicar troca o anterior (10/11, core marcas.rs) |
+| Remover cabeçalhos. | ✅ feito | botão Remover no painel (10/11), só o que o FeatherPDF escreveu (core marcas.rs tirar_cabecalho_rodape) |
+| Remover rodapés. | ✅ feito | botão Remover no painel (10/11), só o que o FeatherPDF escreveu (core marcas.rs tirar_cabecalho_rodape) |
 | Inserir data. | ✅ feito | campo {data} no cabeçalho e rodapé (core marcas.rs) |
 | Inserir números de página. | ✅ feito | Números de página (organizar.rs Dialogos::Numeros, paginas.rs numerar) |
 | Aplicar cabeçalhos somente a páginas selecionadas. | ✅ feito | campo de páginas (1-3, 5) no painel (marcas.rs) |
@@ -666,7 +647,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Imprimir páginas ímpares. | ✅ feito | Paginas::Impares |
 | Imprimir em ordem inversa. | ✅ feito | Imprimir ▸ Ordem inversa (imprimir.rs) |
 | Configurar orientação. | ✅ feito | Orientacao (automática, retrato, paisagem) |
-| Configurar tamanho de papel. | ❌ falta | não há no código |
+| Configurar tamanho de papel. | ✅ feito | Imprimir ▸ Papel: o da impressora, A4, Carta, Ofício/Legal, A3 ou A5 (10/11; CUPS media=, Windows dmPaperSize) |
 | Configurar tamanhos personalizados. | ❌ falta | não há no código |
 | Ajustar impressão à página. | ✅ feito | Imprimir ▸ Tamanho ▸ Ajustar à folha (imprimir.rs) |
 | Imprimir no tamanho real. | ✅ feito | Imprimir ▸ Tamanho ▸ Tamanho real (imprimir.rs) |
@@ -679,7 +660,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Imprimir livretos. | ❌ falta | não há no código |
 | Imprimir pôsteres divididos em folhas. | ❌ falta | não há no código |
 | Imprimir regiões selecionadas. | ❌ falta | não há no código |
-| Imprimir comentários. | ❌ falta | não há no código |
+| Imprimir comentários. | ✅ feito | Imprimir ▸ Comentários: Imprimir ou Só o documento (10/11; core sanitizar.rs comentarios_na_impressao); a prévia ainda mostra como na tela |
 | Imprimir resumo de comentários. | ❌ falta | não há no código |
 | Imprimir camadas conforme suas propriedades. | ❌ falta | não há no código |
 | Criar configurações predefinidas de impressão. | ❌ falta | não há no código |
@@ -795,13 +776,13 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Item | Estado | Evidência / o que falta |
 |---|---|---|
 | Pesquisar texto no documento. | ✅ feito | Ctrl+F, busca por linha de texto (busca.rs) |
-| Pesquisar palavras inteiras. | ❌ falta | não há no código |
-| Diferenciar maiúsculas de minúsculas. | ❌ falta | não há no código |
+| Pesquisar palavras inteiras. | ✅ feito | Ctrl+F ▸ Palavra inteira; Trocar respeita (10/11; core objetos.rs achar) |
+| Diferenciar maiúsculas de minúsculas. | ✅ feito | Ctrl+F ▸ Maiúsculas/minúsculas; Trocar respeita (10/11) |
 | Pesquisar expressões. | ❌ falta | não há no código |
 | Pesquisar em comentários. | ✅ feito | filtro do painel Comentários (revisao.rs) |
-| Pesquisar em marcadores. | ❌ falta | não há no código |
-| Pesquisar em campos de formulário. | ❌ falta | não há no código |
-| Pesquisar em anexos. | ❌ falta | não há no código |
+| Pesquisar em marcadores. | ✅ feito | painel Marcadores ▸ Procurar nos marcadores (10/11) |
+| Pesquisar em campos de formulário. | ✅ feito | Ctrl+F lista os campos com o termo no nome ou no valor e leva à página (10/11) |
+| Pesquisar em anexos. | ✅ feito | Ctrl+F procura no nome e no texto dos anexos de texto (até 4 MB cada) (10/11) |
 | Pesquisar em camadas. | ❌ falta | não há no código |
 | Pesquisar em vários documentos. | ❌ falta | não há no código |
 | Utilizar operadores booleanos. | ❌ falta | não há no código |
@@ -811,7 +792,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Pesquisar índices existentes. | ❌ falta | não há no código |
 | Salvar resultados de pesquisa. | ❌ falta | não há no código |
 | Exportar resultados para PDF. | ❌ falta | não há no código |
-| Exportar resultados para CSV. | ❌ falta | não há no código |
+| Exportar resultados para CSV. | ✅ feito | Ctrl+F ▸ botão de salvar: página, posição e linha (10/11) |
 
 
 ## 22. Recursos de engenharia, medições e PDF 3D
@@ -872,74 +853,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Organizar componentes de Portfolios. | ❌ falta | não há no código |
 
 
-## 24. Compartilhamento e colaboração
-
-| Item | Estado | Evidência / o que falta |
-|---|---|---|
-| Compartilhar documentos. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Gerar links de compartilhamento. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Compartilhar por email. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Configurar permissões de acesso. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Compartilhar para visualização. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Compartilhar para revisão. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Coletar comentários. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Participar de revisões compartilhadas. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Acompanhar comentários recebidos. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Acompanhar revisões. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Gerenciar arquivos compartilhados. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Controlar acesso a documentos armazenados na nuvem. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Integrar serviços de armazenamento compatíveis. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Trabalhar com Adobe Cloud Storage. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Compartilhar documentos para assinatura. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-
-
-## 25. Inteligência artificial — Acrobat AI Assistant e Acrobat Studio
-
-| Item | Estado | Evidência / o que falta |
-|---|---|---|
-| Gerar resumo automático. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Gerar resumo por seção. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Fazer perguntas sobre documentos. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Extrair informações relevantes. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Localizar informações específicas. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Analisar contratos. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Identificar cláusulas. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Identificar informações importantes. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Responder perguntas com referências ao documento. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Navegar até as fontes das respostas. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Gerar insights a partir de documentos. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Analisar múltiplos arquivos. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Resumir transcrições de reuniões. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Solicitar edições por linguagem natural. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Solicitar formatação de texto por IA. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Solicitar destaque de texto. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Solicitar remoção de informações confidenciais. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Solicitar organização de páginas. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Solicitar conversão de arquivos. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Solicitar compressão de PDFs. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Solicitar outras operações compatíveis com o assistente. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Criar espaços de trabalho com documentos. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Adicionar múltiplos arquivos. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Adicionar links. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Consultar informações de diferentes documentos. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Criar assistentes personalizados. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Compartilhar espaços. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Colaborar em espaços compartilhados. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Gerar resumos integrados. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Gerar apresentações com IA. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Gerar resumos em áudio. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Criar conteúdo em formato de podcast. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Personalizar a apresentação de informações. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Aplicar modelos de design. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Criar páginas de capa. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Criar materiais visuais. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Estilizar documentos. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Gerar imagens com IA. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Utilizar recursos gráficos do Adobe Express. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Criar apresentações e materiais de comunicação. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-
-
-## 26. Preferências e personalização
+## 24. Preferências e personalização
 
 | Item | Estado | Evidência / o que falta |
 |---|---|---|
@@ -958,6 +872,4 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Configurar mecanismos de segurança. | ❌ falta | não há no código |
 | Configurar preferências de JavaScript. | ❌ falta | não há no código |
 | Configurar certificados. | ❌ falta | não há no código |
-| Configurar serviços conectados. | ⛔ fora do escopo (serviço da Adobe) | depende de serviço da Adobe |
-| Configurar opções de atualização. | ✅ feito | Configurações ▸ Sobre ▸ Procurar atualizações ao abrir (atualizacao.rs) |
 

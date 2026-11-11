@@ -97,6 +97,8 @@ impl DocumentoPdf {
         if !(4.0..=72.0).contains(&op.tamanho) { return Err("Tamanho da letra entre 4 e 72 pt.".into()); }
         let total = self.total_paginas();
         let paginas = self.escolhidas(&op.paginas)?;
+        // Aplicar de novo troca o anterior em vez de escrever por cima.
+        self.tirar_cabecalho_rodape(&op.paginas)?;
         let fonte = self.documento.add_object(Self::fonte_helvetica(false));
         let abre = self.fluxo("q\n".into());
         for &(n, id) in &paginas {
@@ -113,11 +115,91 @@ impl DocumentoPdf {
             }
             conteudo += "ET Q\n";
             let fecha = self.fluxo(conteudo);
+            // O modelo (com os campos, antes de trocar) fica no fluxo: reabrir o painel mostra o texto de volta.
+            let textos = |t: &[String; 3]| t.iter().map(|x| lopdf::text_string(x)).collect::<Vec<_>>();
+            if let Ok(f) = self.documento.get_object_mut(fecha).and_then(lopdf::Object::as_stream_mut) {
+                f.dict.set("FPModelo", dictionary! {
+                    "Cabecalho" => textos(&op.cabecalho), "Rodape" => textos(&op.rodape),
+                    "Tamanho" => op.tamanho, "Cor" => op.cor.iter().map(|&c| lopdf::Object::Real(c)).collect::<Vec<_>>(),
+                });
+            }
             self.envolver(id, abre, fecha)?;
             self.por_recurso(id, "Font", "FPcrF", fonte)?;
         }
         self.modificado = true;
         Ok(paginas.len() as u32)
+    }
+}
+
+impl DocumentoPdf {
+    /// O cabeçalho e rodapé que o FeatherPDF escreveu, com os campos ({pagina}…) como foram
+    /// digitados, e as páginas que o têm (vazio = todas). `None` quando não há.
+    pub fn cabecalho_rodape_atual(&self) -> Option<CabecalhoRodape> {
+        let doc = &self.documento;
+        let mut modelo: Option<CabecalhoRodape> = None;
+        let mut paginas = Vec::new();
+        let total = self.total_paginas();
+        for (id, n) in self.ids_paginas().into_iter().zip(1u32..) {
+            let partes = match doc.get_dictionary(id).ok().and_then(|d| d.get(b"Contents").ok()) {
+                Some(lopdf::Object::Array(v)) => v.clone(),
+                Some(lopdf::Object::Reference(r)) => match doc.get_object(*r) { Ok(lopdf::Object::Array(v)) => v.clone(), _ => continue },
+                _ => continue,
+            };
+            let achado = partes.iter().rev().filter_map(|o| o.as_reference().ok()).filter_map(|r| doc.get_object(r).ok()?.as_stream().ok())
+                .find_map(|s| s.dict.get(b"FPModelo").ok()?.as_dict().ok().cloned());
+            let Some(m) = achado else { continue };
+            paginas.push(n);
+            if modelo.is_some() { continue; }
+            let textos = |k: &[u8]| -> [String; 3] {
+                let v: Vec<String> = m.get(k).and_then(lopdf::Object::as_array).map(|a| a.iter().map(|t| lopdf::decode_text_string(t).unwrap_or_default()).collect()).unwrap_or_default();
+                [0usize, 1, 2].map(|i| v.get(i).cloned().unwrap_or_default())
+            };
+            let cor: Vec<f32> = m.get(b"Cor").and_then(lopdf::Object::as_array).map(|a| a.iter().filter_map(|c| c.as_float().ok()).collect()).unwrap_or_default();
+            modelo = Some(CabecalhoRodape {
+                cabecalho: textos(b"Cabecalho"), rodape: textos(b"Rodape"),
+                tamanho: m.get(b"Tamanho").and_then(lopdf::Object::as_float).unwrap_or(9.0),
+                cor: if let [r, g, b] = cor[..] { [r, g, b] } else { [0.0; 3] },
+                ..Default::default()
+            });
+        }
+        let mut m = modelo?;
+        if paginas.len() as u32 != total { m.paginas = paginas; }
+        Some(m)
+    }
+
+    /// Tira o cabeçalho e rodapé que o FeatherPDF escreveu (o fluxo com /FPcrF e um "q" de
+    /// abertura) das páginas pedidas (vazio = todas); devolve quantas tinham.
+    pub fn tirar_cabecalho_rodape(&mut self, paginas: &[u32]) -> Result<u32, String> {
+        let texto = |doc: &lopdf::Document, o: &lopdf::Object| -> Vec<u8> {
+            let Ok(r) = o.as_reference() else { return Vec::new() };
+            match doc.get_object(r) {
+                Ok(lopdf::Object::Stream(s)) => s.decompressed_content().unwrap_or_else(|_| s.content.clone()),
+                _ => Vec::new(),
+            }
+        };
+        let mut n = 0;
+        for (_, id) in self.escolhidas(paginas)? {
+            let doc = &self.documento;
+            let partes = match doc.get_dictionary(id).ok().and_then(|d| d.get(b"Contents").ok()) {
+                Some(lopdf::Object::Array(v)) => v.clone(),
+                Some(lopdf::Object::Reference(r)) => match doc.get_object(*r) { Ok(lopdf::Object::Array(v)) => v.clone(), _ => continue },
+                _ => continue,
+            };
+            let nossos = partes.iter().filter(|o| texto(doc, o).starts_with(b"Q\nq BT /FPcrF ")).count();
+            if nossos == 0 { continue; }
+            // Os "q" de abertura são todos iguais: tirar tantos quantos fechos saem mantém o q/Q par.
+            let mut aberturas = nossos;
+            let novas: Vec<lopdf::Object> = partes.into_iter().filter(|o| {
+                let t = texto(doc, o);
+                if t.starts_with(b"Q\nq BT /FPcrF ") { return false; }
+                if aberturas > 0 && t == b"q\n" { aberturas -= 1; return false; }
+                true
+            }).collect();
+            self.documento.get_dictionary_mut(id).map_err(|e| e.to_string())?.set("Contents", novas);
+            n += 1;
+        }
+        if n > 0 { self.modificado = true; }
+        Ok(n)
     }
 }
 
@@ -157,5 +239,23 @@ mod testes {
         assert!(!pdf.texto_pagina(1).unwrap().contains("CONFIDENCIAL"));
         assert_eq!(pdf.camadas()[0].nome, "Marca d'água");
         assert!(pdf.clone().marca_dagua(&MarcaDagua { texto: " ".into(), ..m }).is_err());
+    }
+
+    #[test]
+    fn cabecalho_aplicado_de_novo_troca_e_sai() {
+        let mut pdf = pdf_teste();
+        let mut op = CabecalhoRodape { rodape: [String::new(), "Primeiro".into(), String::new()], tamanho: 9.0, margem: 28.0, ..Default::default() };
+        pdf.cabecalho_rodape(&op).unwrap();
+        op.rodape[1] = "Segundo".into();
+        pdf.cabecalho_rodape(&op).unwrap();
+        let mut pdf = DocumentoPdf::de_bytes(&pdf.serializar().unwrap(), None).unwrap();
+        let t = pdf.texto_pagina(1).unwrap();
+        assert!(t.contains("Segundo") && !t.contains("Primeiro"), "{t}");
+        let atual = pdf.cabecalho_rodape_atual().expect("o modelo volta do arquivo");
+        assert_eq!((atual.rodape[1].as_str(), atual.tamanho, atual.paginas.len()), ("Segundo", 9.0, 0));
+        assert_eq!(pdf.tirar_cabecalho_rodape(&[]).unwrap(), 1);
+        assert!(pdf.cabecalho_rodape_atual().is_none());
+        assert!(!pdf.texto_pagina(1).unwrap().contains("Segundo"));
+        assert_eq!(pdf.tirar_cabecalho_rodape(&[]).unwrap(), 0);
     }
 }

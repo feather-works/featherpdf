@@ -20,6 +20,33 @@ pub enum Lados { Um, BordaLonga, BordaCurta }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Orientacao { Automatica, Retrato, Paisagem }
 
+/// Tamanho do papel: o da impressora ou um escolhido.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Papel { Impressora, A4, Carta, Oficio, A3, A5 }
+
+impl Papel {
+    pub const TODOS: [Papel; 6] = [Papel::Impressora, Papel::A4, Papel::Carta, Papel::Oficio, Papel::A3, Papel::A5];
+    /// Nome do tamanho no CUPS (`-o media=`).
+    #[cfg_attr(windows, allow(dead_code))]
+    fn cups(self) -> Option<&'static str> {
+        match self { Papel::Impressora => None, Papel::A4 => Some("A4"), Papel::Carta => Some("Letter"), Papel::Oficio => Some("Legal"), Papel::A3 => Some("A3"), Papel::A5 => Some("A5") }
+    }
+    /// Código DMPAPER_* do Windows.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    pub(crate) fn windows(self) -> Option<i16> {
+        match self { Papel::Impressora => None, Papel::A4 => Some(9), Papel::Carta => Some(1), Papel::Oficio => Some(5), Papel::A3 => Some(8), Papel::A5 => Some(11) }
+    }
+}
+
+impl std::fmt::Display for Papel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Papel::Impressora => "O da impressora", Papel::A4 => "A4 (210 × 297 mm)", Papel::Carta => "Carta (216 × 279 mm)",
+            Papel::Oficio => "Ofício / Legal (216 × 356 mm)", Papel::A3 => "A3 (297 × 420 mm)", Papel::A5 => "A5 (148 × 210 mm)",
+        })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Im {
     Abrir,
@@ -31,6 +58,9 @@ pub enum Im {
     Intervalo(String),
     Lados(Lados),
     Orientacao(Orientacao),
+    Papel(Papel),
+    /// Com ou sem os comentários no papel.
+    Comentarios(bool),
     Cinza(bool),
     Ajustar(bool),
     PorFolha(u32),
@@ -52,6 +82,8 @@ pub struct Impressao {
     intervalo: String,
     lados: Lados,
     orientacao: Orientacao,
+    papel: Papel,
+    comentarios: bool,
     cinza: bool,
     ajustar: bool,
     por_folha: u32,
@@ -67,7 +99,7 @@ pub struct Impressao {
 impl Default for Impressao {
     fn default() -> Self {
         Self { impressoras: vec![], impressora: None, procurando: false, copias: 1, agrupar: true, paginas: Paginas::Todas, intervalo: String::new(),
-            lados: Lados::Um, orientacao: Orientacao::Automatica, cinza: false, ajustar: true, por_folha: 1, inversa: false, previa: 0, imagem: None, enviando: false, resultado: None }
+            lados: Lados::Um, orientacao: Orientacao::Automatica, papel: Papel::Impressora, comentarios: true, cinza: false, ajustar: true, por_folha: 1, inversa: false, previa: 0, imagem: None, enviando: false, resultado: None }
     }
 }
 
@@ -127,6 +159,7 @@ impl Impressao {
             Orientacao::Retrato => o("orientation-requested=3".into()),
             Orientacao::Paisagem => o("orientation-requested=4".into()),
         }
+        if let Some(m) = self.papel.cups() { o(format!("media={m}")); }
         if self.cinza { o("print-color-mode=monochrome".into()); }
         if self.ajustar { o("fit-to-page".into()); }
         if self.por_folha > 1 { o(format!("number-up={}", self.por_folha)); }
@@ -182,6 +215,8 @@ impl App {
             Im::Intervalo(t) => { p.intervalo = t; p.paginas = Paginas::Intervalo; p.previa = 0; return self.pedir_previa(); }
             Im::Lados(v) => p.lados = v,
             Im::Orientacao(v) => p.orientacao = v,
+            Im::Papel(v) => p.papel = v,
+            Im::Comentarios(v) => p.comentarios = v,
             Im::Cinza(v) => { p.cinza = v; return self.pedir_previa(); }
             Im::Agrupar(v) => p.agrupar = v,
             Im::Ajustar(v) => p.ajustar = v,
@@ -201,22 +236,30 @@ impl App {
                 #[cfg(windows)]
                 {
                     let pedido = crate::imprimir_windows::Pedido { impressora, paginas: p.escolhidas(total, atual).unwrap_or_default(), copias: p.copias,
-                        agrupar: p.agrupar, lados: p.lados, orientacao: p.orientacao, cinza: p.cinza, ajustar: p.ajustar, por_folha: p.por_folha, inversa: p.inversa };
-                    let (vis, tamanhos) = (a.vis.clone(), a.tamanhos.clone());
+                        agrupar: p.agrupar, lados: p.lados, orientacao: p.orientacao, papel: p.papel, cinza: p.cinza, ajustar: p.ajustar, por_folha: p.por_folha, inversa: p.inversa };
+                    let (pdf, tamanhos, comentarios) = (a.pdf.clone(), a.tamanhos.clone(), p.comentarios);
                     return Task::perform(async move {
-                        tokio::task::spawn_blocking(move || crate::imprimir_windows::imprimir(&vis, &tamanhos, pedido)).await.unwrap_or_else(|e| Err(e.to_string()))
+                        tokio::task::spawn_blocking(move || -> Result<String, String> {
+                            // A impressão sai de uma cópia com (ou sem) os comentários, desenhada de novo.
+                            let mut pdf = pdf;
+                            pdf.comentarios_na_impressao(comentarios)?;
+                            let vis = featherpdf_io::Visualizador::novo(pdf.serializar()?)?;
+                            crate::imprimir_windows::imprimir(&vis, &tamanhos, pedido)
+                        }).await.unwrap_or_else(|e| Err(e.to_string()))
                     }, |r| Msg::Imp(Im::Pronto(r)));
                 }
                 #[cfg(not(windows))]
                 let args = p.argumentos(&impressora, atual);
                 #[cfg(not(windows))]
-                let pdf = a.pdf.clone();
+                let (pdf, comentarios) = (a.pdf.clone(), p.comentarios);
                 #[cfg(not(windows))]
                 return Task::perform(async move {
                     tokio::task::spawn_blocking(move || -> Result<String, String> {
                         // O documento como está na tela, com as edições ainda não salvas.
                         let pasta = crate::recentes::pasta_temporaria().map_err(|e| e.to_string())?;
                         let arquivo = pasta.join(format!("imprimir-{}.pdf", std::process::id()));
+                        let mut pdf = pdf;
+                        pdf.comentarios_na_impressao(comentarios)?;
                         std::fs::write(&arquivo, pdf.serializar()?).map_err(|e| e.to_string())?;
                         let saida = std::process::Command::new("lp").args(&args).arg(&arquivo).output();
                         // O lp já copiou o arquivo para a fila: a cópia (com o que não foi salvo nem tarjado) não fica no /tmp.
@@ -306,8 +349,11 @@ impl App {
             ajuste("Orientação", row![escolha("Automática".into(), 0.0, p.orientacao == Orientacao::Automatica, Im::Orientacao(Orientacao::Automatica)),
                 escolha("Retrato".into(), 0.0, p.orientacao == Orientacao::Retrato, Im::Orientacao(Orientacao::Retrato)),
                 escolha("Paisagem".into(), 0.0, p.orientacao == Orientacao::Paisagem, Im::Orientacao(Orientacao::Paisagem))].spacing(6).into()),
+            ajuste("Papel", suspensa(Papel::TODOS, Some(p.papel), |v| Msg::Imp(Im::Papel(v))).text_size(13).padding([8, 10]).width(Length::FILL).into()),
             ajuste("Páginas por folha", [1u32, 2, 4, 6, 9].into_iter().fold(row![].spacing(6), |r, n| r.push(escolha(n.to_string(), 44.0, p.por_folha == n, Im::PorFolha(n)))).into()),
             ajuste("Tamanho", row![escolha("Ajustar à folha".into(), 0.0, p.ajustar, Im::Ajustar(true)), escolha("Tamanho real".into(), 0.0, !p.ajustar, Im::Ajustar(false))].spacing(6).into()),
+            ajuste("Comentários", row![escolha("Imprimir".into(), 0.0, p.comentarios, Im::Comentarios(true)),
+                escolha("Só o documento".into(), 0.0, !p.comentarios, Im::Comentarios(false))].spacing(6).into()),
             ajuste("Cor", row![escolha("Colorido".into(), 0.0, !p.cinza, Im::Cinza(false)), escolha("Preto e branco".into(), 0.0, p.cinza, Im::Cinza(true))].spacing(6).into()),
         ].spacing(12);
         let mut form = column![
@@ -424,6 +470,8 @@ mod testes {
         assert_eq!(ler_intervalo("11", 10), None);
         assert_eq!(ler_intervalo("a", 10), None);
         let i = Impressao { paginas: Paginas::Intervalo, intervalo: "1-3; 5".into(), lados: Lados::BordaLonga, cinza: true, por_folha: 2, copias: 2, ..Default::default() };
+        assert!(Impressao { papel: Papel::Oficio, ..Default::default() }.argumentos("HP", 1).join(" ").contains("-o media=Legal"));
+        assert!(!i.argumentos("HP", 1).iter().any(|a| a.starts_with("media=")), "sem escolha, o papel é o da impressora");
         let a = i.argumentos("HP", 1).join(" ");
         assert_eq!(a, "-d HP -n 2 -t FeatherPDF -o page-ranges=1-3,5 -o sides=two-sided-long-edge -o print-color-mode=monochrome -o fit-to-page -o number-up=2 -o collate=true");
         assert_eq!(Impressao { paginas: Paginas::Pares, ..Default::default() }.escolhidas(1, 1), None);

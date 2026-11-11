@@ -26,7 +26,6 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "time", "sync"] }
 arboard = { version = "3.6", features = ["wayland-data-control"] }
 ab_glyph = "0.2"
 tiny-skia = "0.11"
-sha2 = "0.11"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif"] }
 # Scripts: o mesmo motor de macros (Boa, sandbox) do FeatherSheet.
 feather-macros = { git = "https://github.com/feather-works/feather-io", tag = "v0.1.3" }

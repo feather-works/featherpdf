@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use feather_ui::dialogo as dlg;
 use feather_ui::{icones, tema};
-use featherpdf_core::{ler_intervalos, DocumentoPdf, FormatoNumero, Numeracao, PosicaoNumero};
+use featherpdf_core::{ler_intervalos, DocumentoPdf, EstiloRotulo, FormatoNumero, Numeracao, PosicaoNumero};
 use featherpdf_io::PaginaRaster;
 
 use pelicano::*;
@@ -60,6 +60,8 @@ pub enum Dialogos {
     Bates { prefixo: String, primeiro: String, digitos: usize, posicao: PosicaoNumero },
     /// Artigo em colunas vira páginas seguidas; `todas` ou só as escolhidas.
     Colunas { colunas: u32, todas: bool },
+    /// Numeração lógica (/PageLabels): páginas de/até, estilo, prefixo e primeiro número.
+    Rotulos { de: String, ate: String, estilo: EstiloRotulo, prefixo: String, primeiro: String },
 }
 
 #[derive(Debug, Clone)]
@@ -93,6 +95,14 @@ pub enum Pag {
     AplicarBates,
     CapitulosImpar,
     AplicarColunas,
+    AplicarRotulos,
+    TirarRotulos,
+    /// Guarda as páginas escolhidas para colar (neste ou em outro PDF aberto).
+    Copiar,
+    /// Copia e exclui.
+    Recortar,
+    /// Põe as páginas guardadas depois da última escolhida.
+    Colar,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -304,6 +314,30 @@ impl App {
                     Err(e) => e,
                 };
             },
+            Pag::Copiar | Pag::Recortar => if let Some(a) = &self.aberto {
+                let alvo = self.alvo();
+                let recortar = matches!(msg, Pag::Recortar);
+                if recortar && alvo.len() >= self.total_paginas() as usize {
+                    self.status = "O PDF precisa de ao menos uma página: copie em vez de recortar.".into();
+                    return Task::none();
+                }
+                // shortcut: guarda as páginas inteiras na memória (um PDF delas); com muitas páginas pesadas, guardar só a lista e ler ao colar.
+                match a.pdf.extrair(&alvo).and_then(|b| DocumentoPdf::de_bytes(&b, None)) {
+                    Ok(copia) => {
+                        self.paginas_copiadas = Some(copia);
+                        if recortar { return self.update_interno(Msg::Excluir); }
+                        self.status = format!("{} página(s) copiada(s). Colar põe depois da página escolhida, aqui ou em outro PDF.", alvo.len());
+                    }
+                    Err(e) => self.status = e,
+                }
+            },
+            Pag::Colar => if let Some(copia) = self.paginas_copiadas.clone() {
+                let posicao = self.alvo().last().copied().unwrap_or(total) + 1;
+                return self.editar(move |pdf| {
+                    let n = pdf.inserir_pdf(copia, posicao)?;
+                    Ok(format!("{n} página(s) colada(s) a partir da {posicao}. Ctrl+Z desfaz."))
+                });
+            },
             Pag::Abrir(d) => { self.org.dialogo = Some(d); self.painel = Some(Painel::Paginas); }
             Pag::Fechar => self.fechar_dialogo(),
             Pag::AplicarFrenteVerso => if let Some(Dialogos::FrenteVerso { invertidos }) = self.org.dialogo {
@@ -337,7 +371,7 @@ impl App {
                 });
             },
             Pag::CapitulosImpar => {
-                let inicios: Vec<u32> = self.aberto.as_ref().map(|a| a.pdf.marcadores().into_iter().filter(|m| m.nivel == 1).map(|m| m.pagina).collect()).unwrap_or_default();
+                let inicios: Vec<u32> = self.aberto.as_ref().map(|a| a.pdf.marcadores().into_iter().filter(|m| m.nivel == 1 && m.pagina > 0).map(|m| m.pagina).collect()).unwrap_or_default();
                 self.fechar_dialogo();
                 return self.editar(move |pdf| match pdf.capitulos_na_impar(&inicios)? {
                     0 if inicios.is_empty() => Err("O PDF não tem marcadores de capítulo (painel Marcadores).".into()),
@@ -354,6 +388,21 @@ impl App {
                 });
             },
             Pag::Mudar(d) => if self.org.dialogo.is_some() { self.org.dialogo = Some(d) },
+            Pag::AplicarRotulos => if let Some(Dialogos::Rotulos { de, ate, estilo, prefixo, primeiro }) = self.org.dialogo.clone() {
+                let (Ok(de), Ok(ate), Ok(primeiro)) = (de.trim().parse::<u32>(), ate.trim().parse::<u32>(), primeiro.trim().parse::<u32>()) else { return Task::none() };
+                self.fechar_dialogo();
+                return self.editar(move |pdf| {
+                    pdf.numerar_logico(de, ate, estilo, &prefixo, primeiro)?;
+                    Ok(format!("Numeração lógica nas páginas {de} a {ate}. Ctrl+Z desfaz."))
+                });
+            },
+            Pag::TirarRotulos => {
+                self.fechar_dialogo();
+                return self.editar(|pdf| match pdf.tirar_numeracao_logica()? {
+                    true => Ok("Numeração lógica tirada: as páginas voltam a 1, 2, 3… Ctrl+Z desfaz.".into()),
+                    false => Err("Este PDF não tem numeração lógica.".into()),
+                });
+            }
             Pag::AplicarNumeros => if let Some(Dialogos::Numeros { formato, posicao, desde, primeiro }) = self.org.dialogo.clone() {
                 let (Ok(a_partir_de), Ok(primeiro)) = (desde.trim().parse(), primeiro.trim().parse()) else { return Task::none() };
                 self.fechar_dialogo();
@@ -735,6 +784,46 @@ impl App {
                 corpo = corpo.push(text("Para o próximo arquivo do lote, comece no número que aparece no fim. Ctrl+Z desfaz.").size(12).color(muted))
                     .push(botoes("Numerar".into(), n.map(|_| Msg::Pag(Pag::AplicarBates))));
                 ("Numeração Bates", corpo)
+            }
+            Dialogos::Rotulos { de, ate, estilo, prefixo, primeiro } => {
+                let com = |de: String, ate: String, estilo, prefixo: String, primeiro: String|
+                    Msg::Pag(Pag::Mudar(Dialogos::Rotulos { de, ate, estilo, prefixo, primeiro }));
+                let mut estilos = column![].spacing(4);
+                for (e, r) in [(EstiloRotulo::Decimal, "1, 2, 3"), (EstiloRotulo::RomanoMinusculo, "i, ii, iii"), (EstiloRotulo::RomanoMaiusculo, "I, II, III"),
+                    (EstiloRotulo::LetraMinuscula, "a, b, c"), (EstiloRotulo::LetraMaiuscula, "A, B, C"), (EstiloRotulo::Nenhum, "Só o prefixo")] {
+                    estilos = estilos.push(opcao(r.into(), e == estilo, com(de.clone(), ate.clone(), e, prefixo.clone(), primeiro.clone())));
+                }
+                let (n_de, n_ate, n_primeiro) = (de.trim().parse::<u32>().ok(), ate.trim().parse::<u32>().ok(), primeiro.trim().parse::<u32>().ok());
+                let valido = matches!((n_de, n_ate, n_primeiro), (Some(a), Some(b), Some(p)) if a >= 1 && a <= b && b <= total && p >= 1)
+                    && !(estilo == EstiloRotulo::Nenhum && prefixo.is_empty());
+                let s1 = (ate.clone(), prefixo.clone(), primeiro.clone());
+                let s2 = (de.clone(), prefixo.clone(), primeiro.clone());
+                let s3 = (de.clone(), ate.clone(), primeiro.clone());
+                let s4 = (de.clone(), ate.clone(), prefixo.clone());
+                let mut corpo = column![
+                    text("O nome que o leitor mostra para cada página (capa sem número, prefácio em i, ii…), sem escrever nada na folha.").size(12.5),
+                    dlg::secao("Páginas"),
+                    campo("Da página", &de, Box::new(move |t| com(t, s1.0.clone(), estilo, s1.1.clone(), s1.2.clone()))),
+                    campo("Até a página", &ate, Box::new(move |t| com(s2.0.clone(), t, estilo, s2.1.clone(), s2.2.clone()))),
+                    dlg::secao("Estilo"), estilos,
+                    row![text("Prefixo").size(13).width(Length::FILL), text_input("Ex.: A-", prefixo.clone())
+                        .on_input(move |t| com(s3.0.clone(), s3.1.clone(), estilo, t, s3.2.clone())).width(120).padding([4, 8]).size(13)].align_y(Align::Center),
+                    campo("Primeiro número", &primeiro, Box::new(move |t| com(s4.0.clone(), s4.1.clone(), estilo, s4.2.clone(), t))),
+                ].spacing(10);
+                match (valido, n_primeiro) {
+                    (true, Some(p)) => {
+                        let exemplo: Vec<String> = (0..3).map(|i| format!("{prefixo}{}", estilo.escrever(p.saturating_add(i)))).collect();
+                        corpo = corpo.push(container(text(format!("{} …", exemplo.join(", "))).size(13)).padding([8, 12]).style(dlg::estilo_bloco));
+                    }
+                    _ => corpo = corpo.push(dlg::aviso("alert-triangle", format!("Use páginas de 1 a {total} (a primeira antes da última) e número a partir de 1; sem estilo, escreva um prefixo."))),
+                }
+                corpo = corpo.push(text("As páginas depois do trecho continuam com o nome que tinham. Ctrl+Z desfaz.").size(12).color(muted))
+                    .push(row![
+                        dlg::botao_secundario("Tirar numeração", Some(Msg::Pag(Pag::TirarRotulos))),
+                        Space::with_width(Length::FILL),
+                        dlg::botao_primario("Numerar", valido.then_some(Msg::Pag(Pag::AplicarRotulos))),
+                    ].spacing(8));
+                ("Numeração lógica", corpo)
             }
             Dialogos::Colunas { colunas, todas } => {
                 let com = move |colunas, todas| Msg::Pag(Pag::Mudar(Dialogos::Colunas { colunas, todas }));

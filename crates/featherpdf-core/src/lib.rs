@@ -39,6 +39,8 @@ mod paragrafos;
 mod otimizar;
 mod paginas;
 mod revisao;
+mod rotulos;
+pub use rotulos::{EstiloRotulo, TrechoRotulo};
 mod sanitizar;
 mod tabela;
 mod tabelas;
@@ -59,15 +61,15 @@ pub use reconhecer::{rubricas_faltando, tinta, LocalAssinatura, TINTA_ASSINADO};
 pub use camadas::Visibilidade;
 pub use comparar::{comparar_texto, sobrepor, Mudanca, Trecho};
 pub use modo_escuro::escurecer;
-pub use navegacao::{Anexo, Marcador};
+pub use navegacao::{Anexo, LinkPdf, Marcador, MoverMarcador};
 pub use anotacoes::{cor_do_carimbo, hoje, Anotacao, AnotacaoNova, Camada, Marcacao};
-pub use formularios::{Campo, CampoNovo, TipoCampo};
+pub use formularios::{obrigatorios_vazios_de, Campo, CampoNovo, TipoCampo};
 pub use fluxo::{BlocoFluxo, CelulaFluxo, PaginaFluxo};
 pub use inserir::{DesenhoNovo, Destino, ImagemNova};
 pub use inspecao::{tamanho, Cor, DetalheObjeto, FonteInfo, Gravidade, ImagemInfo, Inspecao, LinhaArvore, NoEstrutura, Pedaco, Problema, Resumo};
 pub use medida::{comprimento, medir, numero, Escala, TipoMedida, Unidade};
-pub use objetos::{achar_sem_caixa, EstiloDesenho, ObjetoPdf, TipoObjeto};
-pub use otimizar::{ImagemCrua, OpcoesCompressao, Permissoes, Peso, Protecao, Reamostrar};
+pub use objetos::{achar, achar_sem_caixa, EstiloDesenho, ObjetoPdf, OpcoesBusca, TipoObjeto};
+pub use otimizar::{ImagemCrua, ImagemExtraida, OpcoesCompressao, Permissoes, Peso, Protecao, Reamostrar};
 pub use marcas::{expandir_campos, paginas_do_texto, CabecalhoRodape, MarcaDagua};
 pub use revisao::{comentarios_csv, data_legivel, estado_atual, nome_estado, ESTADOS};
 pub use imagens::{caixa_da_imagem, AjusteImagem};
@@ -328,3 +330,48 @@ endcodespacerange\n2 beginbfchar\n<0001><0034>\n<0002><0032>\nendbfchar\nendcmap
         assert!(!pdf.modificado());
     }
 }
+
+/// Descomprime um fluxo zlib (FlateDecode) parando em `teto` bytes: `None` se passa do teto
+/// ou se o fluxo está quebrado. Protege contra o fluxo pequeno que infla para gigabytes.
+pub(crate) fn inflar_com_teto(dados: &[u8], teto: u64) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let mut saida = Vec::new();
+    flate2::read::ZlibDecoder::new(dados).take(teto + 1).read_to_end(&mut saida).ok()?;
+    (saida.len() as u64 <= teto).then_some(saida)
+}
+
+#[cfg(test)]
+mod testes_teto {
+    use lopdf::{dictionary, Object, Stream};
+
+    fn zlib(dados: &[u8]) -> Vec<u8> {
+        use std::io::Write;
+        let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+        e.write_all(dados).unwrap();
+        e.finish().unwrap()
+    }
+
+    /// Audit: 10 KB comprimidos que viram 10 MB param no teto; imagem com medidas absurdas não
+    /// estoura a conta; anexo grande não é lido pela busca.
+    #[test]
+    fn fluxo_que_explode_para_no_teto() {
+        let bomba = zlib(&vec![0u8; 10 << 20]);
+        assert!(bomba.len() < 64 << 10);
+        assert!(super::inflar_com_teto(&bomba, 1 << 20).is_none());
+        assert_eq!(super::inflar_com_teto(&bomba, 10 << 20).map(|v| v.len()), Some(10 << 20));
+
+        let mut pdf = crate::testes::pdf_teste();
+        let imagem = pdf.documento.add_object(Stream::new(dictionary! { "Type" => "XObject", "Subtype" => "Image",
+            "Width" => 4_000_000_000i64, "Height" => 4_000_000_000i64, "BitsPerComponent" => 8, "ColorSpace" => "DeviceRGB",
+            "Filter" => "FlateDecode" }, bomba.clone()));
+        assert!(crate::otimizar::ler_imagem(&pdf.documento, imagem).is_none());
+
+        let arquivo = pdf.documento.add_object(Stream::new(dictionary! { "Type" => "EmbeddedFile", "Filter" => "FlateDecode" }, bomba));
+        let spec = pdf.documento.add_object(dictionary! { "Type" => "Filespec", "F" => Object::string_literal("grande.txt"), "EF" => dictionary! { "F" => arquivo } });
+        let nomes = pdf.documento.add_object(dictionary! { "Names" => vec![Object::string_literal("grande.txt"), Object::Reference(spec)] });
+        pdf.documento.catalog_mut().unwrap().set("Names", dictionary! { "EmbeddedFiles" => nomes });
+        assert!(pdf.anexo_ate(0, 4 << 20).is_none(), "a busca não lê anexo acima do teto");
+        assert_eq!(pdf.anexos()[0].tamanho, 10 << 20, "medido descomprimindo até 64 MB");
+    }
+}
+

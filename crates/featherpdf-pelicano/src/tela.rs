@@ -82,7 +82,6 @@ pub fn janela(app: &App) -> Element<'_, Msg> {
     if app.menu { camadas = camadas.push(menu_arquivo(app)); }
     if !app.busca_comandos.trim().is_empty() { camadas = camadas.push(resultados_comandos(app)); }
     if let Some((qual, canto)) = app.suspenso { camadas = camadas.push(menu_suspenso(qual, canto)); }
-    if let Some(c) = app.cartao_atualizacao() { camadas = camadas.push(c); }
     container(camadas).width(Length::FILL).height(Length::FILL).clip(true)
         .style(|_| Style::default().background(COR_FUNDO_JANELA()).border(Border::default().color(COR_BORDA(), 1.0)).text_color(COR_TEXTO()))
         .into()
@@ -375,6 +374,11 @@ fn faixa_paginas(app: &App) -> Vec<Element<'_, Msg>> {
             grande("rotate-clockwise", Some(VERDE), "Girar →", Some(Msg::GirarDireita), false),
             grande("trash", Some(VERMELHO), "Excluir", (alvo < total as usize).then_some(Msg::Excluir), false),
             grande("copy", None, "Duplicar", Some(Msg::Pag(Pag::Duplicar)), false),
+            column![
+                pequeno("copy-plus", None, "Copiar páginas", Some(Msg::Pag(Pag::Copiar)), false),
+                pequeno("cut", None, "Recortar páginas", (alvo < total as usize).then_some(Msg::Pag(Pag::Recortar)), false),
+                pequeno("clipboard", None, "Colar páginas", app.paginas_copiadas.is_some().then_some(Msg::Pag(Pag::Colar)), false),
+            ],
         ].spacing(4), "Seleção"),
         grupo(row![
             grande("file-plus", None, "Inserir", Some(Msg::Pag(Pag::InserirBranco)), false),
@@ -394,6 +398,9 @@ fn faixa_paginas(app: &App) -> Vec<Element<'_, Msg>> {
             column![
                 pequeno("arrows-maximize", None, "Padronizar tamanho…", p(Dialogos::Padronizar(Tamanho::A4)), dialogo(|d| matches!(d, Dialogos::Padronizar(_)))),
                 pequeno("copy", None, "Frente e verso…", p(Dialogos::FrenteVerso { invertidos: true }), dialogo(|d| matches!(d, Dialogos::FrenteVerso { .. }))),
+                pequeno("tag", None, "Numeração lógica…", p(Dialogos::Rotulos { de: "1".into(), ate: total.max(1).to_string(),
+                    estilo: featherpdf_core::EstiloRotulo::RomanoMinusculo, prefixo: String::new(), primeiro: "1".into() }),
+                    dialogo(|d| matches!(d, Dialogos::Rotulos { .. }))),
             ],
         ].spacing(4), "Formato"),
         grupo(column![
@@ -707,6 +714,7 @@ fn painel_direito(app: &App, p: Painel) -> Element<'_, Msg> {
         Painel::Comentarios => ("Comentários", app.painel_comentarios()),
         Painel::Miniaturas => ("Miniaturas", miniaturas(app)),
         Painel::Marcadores => ("Marcadores", app.painel_marcadores()),
+        Painel::Links => ("Links da página", app.painel_links()),
         Painel::Camadas => ("Camadas", app.painel_camadas()),
         Painel::Anexos => ("Anexos", app.painel_anexos()),
         Painel::Medidas => ("Medidas", app.painel_medidas()),
@@ -842,6 +850,7 @@ fn trilho(app: &App) -> Element<'_, Msg> {
         item("message-circle", "Comentários", Painel::Comentarios),
         item("layout-grid", "Miniaturas das páginas", Painel::Miniaturas),
         item("list-details", "Marcadores", Painel::Marcadores),
+        item("link", "Links da página", Painel::Links),
         item("shapes", "Camadas", Painel::Camadas),
         item("paperclip", "Anexos", Painel::Anexos),
     ].spacing(22).align(Align::Center);
@@ -883,7 +892,10 @@ fn rodape(app: &App) -> Element<'_, Msg> {
         nav("chevron-left-pipe", "Primeira página", Msg::IrPagina(1), atual > 1),
         nav("chevron-left", "Página anterior (PageUp)", Msg::Anterior, atual > 1),
         campo,
-        text(format!("/ {total}")).size(13).color(COR_TEXTO_MUTED()).no_wrap(),
+        text(match app.aberto.as_ref().and_then(|ab| ab.pdf.rotulo_da_pagina(atual)) {
+            Some(r) => format!("/ {total}  ({r})"),
+            None => format!("/ {total}"),
+        }).size(13).color(COR_TEXTO_MUTED()).no_wrap(),
         nav("chevron-right", "Próxima página (PageDown)", Msg::Proxima, atual < total),
         nav("chevron-right-pipe", "Última página", Msg::IrPagina(total), atual < total),
         container(divisoria(20.0)).padding([0u16, 10]),

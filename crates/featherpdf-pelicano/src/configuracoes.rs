@@ -24,19 +24,16 @@ pub struct Config {
     /// Painel Ferramentas e faixa como ficaram da última vez.
     pub ferramentas: bool,
     pub faixa: bool,
-    /// Índice em `ocr_modelos::LINGUAS`.
-    pub lingua_ocr: usize,
-    /// Consultar o GitHub ao abrir (uma vez por dia) e quando foi a última vez (segundos Unix).
-    pub procurar_atualizacoes: bool,
-    pub ultima_procura: u64,
+    /// Clicar num link de site do PDF abre o navegador; desligado, só mostra o endereço.
+    pub abrir_sites: bool,
 }
 
 impl Default for Config {
-    fn default() -> Self { Self { tema: Tema::Automatico, zoom: ZoomInicial::Manter, ferramentas: true, faixa: true, lingua_ocr: 0, procurar_atualizacoes: true, ultima_procura: 0 } }
+    fn default() -> Self { Self { tema: Tema::Automatico, zoom: ZoomInicial::Manter, ferramentas: true, faixa: true, abrir_sites: true } }
 }
 
 #[derive(Debug, Clone)]
-pub enum Cf { Tema(Tema), Zoom(ZoomInicial), LinguaOcr(usize), LimparRecentes, LeitorPadrao }
+pub enum Cf { Tema(Tema), Zoom(ZoomInicial), LimparRecentes, LeitorPadrao, AbrirSites(bool) }
 
 fn arquivo() -> Option<PathBuf> { crate::recentes::pasta_config().map(|p| p.join("config.txt")) }
 
@@ -56,9 +53,7 @@ impl Config {
                 ("zoom", "100") => c.zoom = ZoomInicial::Cem,
                 ("ferramentas", v) => c.ferramentas = v != "0",
                 ("faixa", v) => c.faixa = v != "0",
-                ("procurar_atualizacoes", v) => c.procurar_atualizacoes = v != "0",
-                ("ultima_procura", v) => c.ultima_procura = v.parse().unwrap_or(0),
-                ("lingua_ocr", v) => c.lingua_ocr = v.parse().ok().filter(|i| *i < crate::ocr_modelos::LINGUAS.len()).unwrap_or(0),
+                ("sites", v) => c.abrir_sites = v != "0",
                 _ => {}
             }
         }
@@ -68,8 +63,7 @@ impl Config {
     fn texto(&self) -> String {
         let tema = match self.tema { Tema::Automatico => "auto", Tema::Claro => "claro", Tema::Escuro => "escuro" };
         let zoom = match self.zoom { ZoomInicial::Largura => "largura", ZoomInicial::Inteira => "inteira", ZoomInicial::Cem => "100", ZoomInicial::Manter => "manter" };
-        format!("tema={tema}\nzoom={zoom}\nferramentas={}\nfaixa={}\nlingua_ocr={}\nprocurar_atualizacoes={}\nultima_procura={}\n",
-            self.ferramentas as u8, self.faixa as u8, self.lingua_ocr, self.procurar_atualizacoes as u8, self.ultima_procura)
+        format!("tema={tema}\nzoom={zoom}\nferramentas={}\nfaixa={}\nsites={}\n", self.ferramentas as u8, self.faixa as u8, self.abrir_sites as u8)
     }
 
     /// Falha ao gravar não atrapalha o uso: só a preferência não volta na próxima abertura.
@@ -96,7 +90,7 @@ impl App {
                 tema::definir_tema(self.tema_escuro, crate::ACENTO_PDF);
             }
             Cf::Zoom(z) => self.config.zoom = z,
-            Cf::LinguaOcr(i) => { self.config.lingua_ocr = i; self.ocr.lingua = i; }
+            Cf::AbrirSites(v) => self.config.abrir_sites = v,
             Cf::LimparRecentes => { self.recentes.limpar(); return Task::none(); }
             Cf::LeitorPadrao => {
                 self.leitor_padrao = Some(crate::leitor_padrao::pedir().unwrap_or_else(|e| e));
@@ -149,13 +143,7 @@ impl App {
                     toggler("", self.faixa_aberta).on_toggle(|_| Msg::AlternarFaixa)),
             ].into(),
             2 => {
-                let nomes: Vec<String> = (0..crate::ocr_modelos::LINGUAS.len()).map(crate::ocr_modelos::nome_lingua).collect();
-                let escolhido = nomes.get(c.lingua_ocr).cloned();
-                let lista = nomes.clone();
                 column![
-                    linha("Idioma do OCR", "O idioma que a janela de OCR, o OCR da área e os fluxos usam primeiro.",
-                        suspensa(nomes, escolhido, move |n: String| Msg::Config(Cf::LinguaOcr(lista.iter().position(|x| *x == n).unwrap_or(0))))
-                            .text_size(12.5).padding([5, 8])),
                     linha("Leitor de PDF padrão", "Dois cliques num PDF abrem no FeatherPDF.", row![
                         button(text("Tornar padrão").size(12.5))
                             .padding([6u16, 13]).style(tema::estilo_botao_pequeno(false))
@@ -167,6 +155,8 @@ impl App {
                         button(text("Limpar lista").size(12.5)).padding([6u16, 13]).style(tema::estilo_botao_pequeno(false))
                             .on_press_maybe((!self.recentes.itens.is_empty()).then_some(Msg::Config(Cf::LimparRecentes))),
                     ].spacing(10).align_y(Align::Center)),
+                    linha("Links de sites", "Clicar num link do PDF abre o navegador. Desligado, só mostra o endereço (para PDF de origem duvidosa).",
+                        toggler("", c.abrir_sites).on_toggle(|v| Msg::Config(Cf::AbrirSites(v)))),
                     linha("Motor de visualização", "Desenha as páginas na tela e nas miniaturas, sem PDFium nem MuPDF.",
                         text("Hayro (Rust puro)").size(12.5).color(muted)),
                     linha("Gravação", "Salvar grava num arquivo temporário e troca no fim: uma queda no meio não corrompe o PDF.",
@@ -189,7 +179,6 @@ impl App {
             _ => column![
                 text(format!("FeatherPDF {}", env!("CARGO_PKG_VERSION"))).size(22),
                 text("Leitor e editor de PDF nativo da suíte FeatherWorks, em Rust.").size(12.5),
-                self.sobre_atualizacao(),
                 text("Os arquivos são abertos e processados no computador: sem conta, sem telemetria, sem envio de conteúdo. O OCR roda localmente.").size(12.5),
                 text("Tema, botões, menus e esta janela vêm da biblioteca feather-ui.").size(12).color(muted),
                 feather_ui::creditos::colaboradores(),
@@ -209,12 +198,11 @@ mod testes {
     #[test]
     fn grava_e_le_de_volta() {
         let a = std::env::temp_dir().join(format!("featherpdf-config-{}.txt", std::process::id()));
-        let c = Config { tema: Tema::Escuro, zoom: ZoomInicial::Largura, ferramentas: false, faixa: false, lingua_ocr: 2,
-            procurar_atualizacoes: false, ultima_procura: 1_790_000_000 };
+        let c = Config { tema: Tema::Escuro, zoom: ZoomInicial::Largura, ferramentas: false, faixa: false, abrir_sites: false };
         std::fs::write(&a, c.texto()).unwrap();
         assert_eq!(Config::carregar_de(&a), c);
         // Arquivo estranho: o que não se entende fica no padrão.
-        std::fs::write(&a, "tema=roxo\nlingua_ocr=99\nlixo\nfaixa=0\n").unwrap();
+        std::fs::write(&a, "tema=roxo\nlingua_ocr=99\nprocurar_atualizacoes=1\nlixo\nfaixa=0\n").unwrap();
         assert_eq!(Config::carregar_de(&a), Config { faixa: false, ..Config::default() });
         let _ = std::fs::remove_file(&a);
         assert_eq!(Config::carregar_de(&a), Config::default());

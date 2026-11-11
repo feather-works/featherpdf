@@ -28,7 +28,7 @@ const MARGEM: (f32, f32) = (50.0, 40.0);
 #[derive(Clone, PartialEq)]
 pub enum Passo {
     Bloco(Bloco),
-    Ocr { so_sem_texto: bool, endireitar: bool },
+    Ocr { so_sem_texto: bool },
     /// Senha para abrir (AES-256). Só na memória: nunca vai a disco nem a log.
     Senha(String),
     /// Assinatura digital com certificado A1 (.pfx/.p12) e a senha dele, só na memória.
@@ -40,7 +40,7 @@ impl std::fmt::Debug for Passo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Passo::Bloco(b) => write!(f, "Bloco({b:?})"),
-            Passo::Ocr { so_sem_texto, endireitar } => write!(f, "Ocr({so_sem_texto}, {endireitar})"),
+            Passo::Ocr { so_sem_texto } => write!(f, "Ocr({so_sem_texto})"),
             Passo::Senha(_) => write!(f, "Senha(***)"),
             Passo::Assinar { certificado, .. } => write!(f, "Assinar({certificado:?}, ***)"),
         }
@@ -160,7 +160,7 @@ fn modelos() -> Vec<(&'static str, Vec<Passo>, Modo)> {
         ("Comprimir vários PDFs", vec![Passo::Bloco(Comprimir(1))], Modo::PorArquivo),
         ("Comprimir para e-mail", vec![Passo::Bloco(LimparMetadados), Passo::Bloco(Comprimir(2))], Modo::PorArquivo),
         ("Fotos → um PDF só", vec![Passo::Bloco(Comprimir(1))], Modo::Juntar),
-        ("Limpar scans e fazer OCR", vec![Passo::Bloco(TirarBrancas), Passo::Bloco(ClarearFundo), Passo::Ocr { so_sem_texto: true, endireitar: true }], Modo::PorArquivo),
+        ("Limpar scans e fazer OCR", vec![Passo::Bloco(TirarBrancas), Passo::Bloco(ClarearFundo), Passo::Ocr { so_sem_texto: true }], Modo::PorArquivo),
         ("Tirar dados pessoais", vec![Passo::Bloco(TarjarPadroes([true; 6])), Passo::Bloco(LimparMetadados)], Modo::PorArquivo),
         ("Arquivo de contratos", vec![Passo::Bloco(TarjarPadroes([true; 6])), Passo::Bloco(LimparMetadados), Passo::Bloco(PdfA)], Modo::PorArquivo),
         ("Plantas para cliente", vec![Passo::Bloco(Normalizar(1)), Passo::Bloco(MarcaDagua("PRELIMINAR".into())), Passo::Bloco(Linearizar)], Modo::PorArquivo),
@@ -173,7 +173,7 @@ fn paleta() -> [(&'static str, Vec<Passo>); 3] {
     [
         ("Páginas", vec![Passo::Bloco(Girar { graus: 90, quais: 0 }), Passo::Bloco(Numerar), Passo::Bloco(TirarBrancas), Passo::Bloco(Normalizar(0)),
             Passo::Bloco(Cabecalho { cabecalho: "{arquivo}".into(), rodape: "Página {pagina} de {total}".into() })]),
-        ("Conteúdo", vec![Passo::Ocr { so_sem_texto: true, endireitar: true }, Passo::Bloco(TarjarPadroes([true; 6])),
+        ("Conteúdo", vec![Passo::Ocr { so_sem_texto: true }, Passo::Bloco(TarjarPadroes([true; 6])),
             Passo::Bloco(MarcaDagua("CONFIDENCIAL".into())), Passo::Bloco(ClarearFundo), Passo::Bloco(LimparCaderno),
             Passo::Bloco(LimparMetadados), Passo::Bloco(EmbutirFontes), Passo::Bloco(Comprimir(1)), Passo::Bloco(PdfA), Passo::Bloco(Linearizar)]),
         ("Proteger", vec![Passo::Senha(String::new()), Passo::Assinar { certificado: None, senha: String::new() }]),
@@ -213,8 +213,8 @@ impl Passo {
             Passo::Senha(s) => format!("{}\nAES-256 · vai no fim", if s.is_empty() { "falta a senha" } else { "senha definida" }),
             Passo::Assinar { certificado, .. } => format!("{}\nvai sempre por último",
                 certificado.as_deref().map_or_else(|| "escolha o certificado".into(), nome)),
-            Passo::Ocr { so_sem_texto, endireitar } => format!("{}\nportuguês{}",
-                if so_sem_texto { "Só páginas sem texto" } else { "Todas as páginas" }, if endireitar { " · endireitar" } else { "" }),
+            Passo::Ocr { so_sem_texto } => format!("{}\nportuguês",
+                if so_sem_texto { "Só páginas sem texto" } else { "Todas as páginas" }),
             Passo::Bloco(b) => format!("{}\n", b.nome()),
         }
     }
@@ -693,9 +693,8 @@ impl App {
                         }
                         c = c.push(text("Apaga o texto e a imagem embaixo, não só cobre.").size(12).color(muted));
                     }
-                    Passo::Ocr { so_sem_texto, endireitar } => {
-                        c = c.push(checkbox("Só páginas sem texto", so_sem_texto).on_toggle(move |v| mudar(Passo::Ocr { so_sem_texto: v, endireitar })).size(15).text_size(12.5));
-                        c = c.push(checkbox("Endireitar a página", endireitar).on_toggle(move |v| mudar(Passo::Ocr { so_sem_texto, endireitar: v })).size(15).text_size(12.5));
+                    Passo::Ocr { so_sem_texto } => {
+                        c = c.push(checkbox("Só páginas sem texto", so_sem_texto).on_toggle(move |v| mudar(Passo::Ocr { so_sem_texto: v })).size(15).text_size(12.5));
                         c = c.push(text("Português, no computador. Põe o texto invisível atrás da imagem.").size(12).color(muted));
                     }
                     Passo::Bloco(Bloco::Comprimir(n)) => for (k, (nome, dpi, q)) in NIVEIS_COMPRESSAO.iter().enumerate() {
@@ -838,7 +837,7 @@ fn processar(mut pdf: DocumentoPdf, passos: &[Passo], nome: &str) -> Result<(Vec
                 blocos.push(Bloco::Cabecalho { cabecalho: cabecalho.replace("{arquivo}", &base), rodape: rodape.replace("{arquivo}", &base) }),
             Passo::Bloco(b) => blocos.push(b),
             Passo::Senha(_) | Passo::Assinar { .. } => {}
-            Passo::Ocr { so_sem_texto, endireitar } => {
+            Passo::Ocr { so_sem_texto } => {
                 if !blocos.is_empty() {
                     let (bytes, r) = featherpdf_io::executar_fluxo(pdf, &std::mem::take(&mut blocos))?;
                     pdf = DocumentoPdf::de_bytes(&bytes, None)?;
@@ -850,8 +849,7 @@ fn processar(mut pdf: DocumentoPdf, passos: &[Passo], nome: &str) -> Result<(Vec
                     if so_sem_texto && !pdf.texto_pagina(n).unwrap_or_default().trim().is_empty() { continue; }
                     let ([x0, y0, x1, y1], _) = pdf.geometria(n)?;
                     let escala = (crate::ocr::LADO / (x1 - x0).max(y1 - y0)).clamp(1.0, 4.0);
-                    let (linhas, giro) = crate::ocr::ler(&vis, n, escala, 0, endireitar)?;
-                    if giro != 0 { pdf.girar_paginas(&[n], giro as i64)?; }
+                    let (linhas, _) = crate::ocr::ler(&vis, n, escala)?;
                     let linhas: Vec<(String, [f32; 4])> = linhas.iter().map(|l| (
                         l.palavras.iter().map(|p| p.texto.trim()).filter(|t| !t.is_empty()).collect::<Vec<_>>().join(" "), l.caixa,
                     )).filter(|(t, _)| !t.is_empty()).collect();
@@ -1017,7 +1015,7 @@ mod testes {
 
     #[test]
     fn avisa_comprimir_antes_do_ocr_e_linearizar_no_meio() {
-        let passos = [Passo::Bloco(Bloco::Comprimir(1)), Passo::Ocr { so_sem_texto: true, endireitar: false }, Passo::Bloco(Bloco::Linearizar), Passo::Bloco(Bloco::Numerar)];
+        let passos = [Passo::Bloco(Bloco::Comprimir(1)), Passo::Ocr { so_sem_texto: true }, Passo::Bloco(Bloco::Linearizar), Passo::Bloco(Bloco::Numerar)];
         assert!(aviso_ordem(&passos, 0).is_some());
         assert!(aviso_ordem(&passos, 1).is_none());
         assert!(aviso_ordem(&passos, 2).is_some());
