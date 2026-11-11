@@ -223,6 +223,15 @@ impl DocumentoPdf {
     /// Um PDF novo só com as páginas escolhidas, na ordem do documento.
     /// Marcadores saem: apontariam para páginas que não estão no arquivo novo.
     pub fn extrair(&self, paginas: &[u32]) -> Result<Vec<u8>, String> {
+        self.so_paginas(paginas)?.serializar()
+    }
+
+    /// Como `extrair`, para gravar em arquivo: PDF com senha sai com a mesma senha.
+    pub fn extrair_para_gravar(&self, paginas: &[u32]) -> Result<Vec<u8>, String> {
+        self.so_paginas(paginas)?.bytes_para_gravar()
+    }
+
+    fn so_paginas(&self, paginas: &[u32]) -> Result<DocumentoPdf, String> {
         let indices = self.indices(paginas)?;
         let mut copia = self.clone();
         let ids = copia.achatar()?;
@@ -234,7 +243,7 @@ impl DocumentoPdf {
             c.remove(b"Outlines");
             c.remove(b"PageLabels");
         }
-        copia.serializar()
+        Ok(copia)
     }
 
     /// Largura e altura de cada página em pontos, já com o giro, lidas do documento (sem

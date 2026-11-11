@@ -45,6 +45,8 @@ pub fn ler_numero(v: &str) -> Option<f64> {
     // "1.234" sem vírgula é milhar (é assim que o próprio cálculo escreve), não 1,234.
     let milhar = |t: &str| { let g: Vec<&str> = t.trim_start_matches('-').split('.').collect();
         g.len() > 1 && (1..=3).contains(&g[0].len()) && g[1..].iter().all(|x| x.len() == 3) && g.iter().all(|x| x.bytes().all(|b| b.is_ascii_digit())) };
+    // "1,234.56" (jeito americano): a vírgula é milhar e o ponto, decimal.
+    let t = match (t.rfind(','), t.rfind('.')) { (Some(v), Some(p)) if p > v => t.replace(',', ""), _ => t };
     let t = if t.contains(',') || milhar(&t) { t.replace('.', "").replace(',', ".") } else { t };
     t.parse::<f64>().ok().filter(|x| x.is_finite())
 }
@@ -161,6 +163,8 @@ fn pecas(f: &str) -> Result<Vec<Peca>, String> {
             x => return Err(format!("Sinal que a fórmula não entende: {x}")),
         }
     }
+    // Cada "(" e "-" desce um nível na conta: fórmula do arquivo com milhares estouraria a pilha.
+    if v.iter().filter(|p| matches!(p, Peca::Op('(' | '-'))).count() > 200 { return Err("Fórmula comprida demais.".into()); }
     Ok(v)
 }
 
@@ -287,7 +291,7 @@ impl DocumentoPdf {
     fn texto_js(&self, o: &Object) -> Option<String> {
         match o {
             Object::Reference(r) => match self.documento.get_object(*r).ok()? {
-                Object::Stream(s) => Some(String::from_utf8_lossy(&s.decompressed_content().unwrap_or_else(|_| s.content.clone())).into_owned()),
+                Object::Stream(s) => Some(String::from_utf8_lossy(&s.decompressed_content_with_limit(crate::TETO_FLUXO).unwrap_or_else(|_| s.content.clone())).into_owned()),
                 o => o.as_str().ok().map(|b| String::from_utf8_lossy(b).into_owned()),
             },
             o => o.as_str().ok().map(|b| String::from_utf8_lossy(b).into_owned()),
@@ -386,11 +390,22 @@ impl DocumentoPdf {
     /// Ordem do Tab por linhas: de cima para baixo, e da esquerda para a direita na mesma linha.
     pub fn ordem_tab_por_linhas(&mut self, pagina: u32) -> Result<(), String> {
         let mut campos = self.ordem_tab(pagina)?;
-        campos.sort_by(|a, b| {
-            let mesma = (a.caixa[3] - b.caixa[3]).abs() < (a.caixa[3] - a.caixa[1]).min(b.caixa[3] - b.caixa[1]) / 2.0;
-            if mesma { a.caixa[0].total_cmp(&b.caixa[0]) } else { b.caixa[3].total_cmp(&a.caixa[3]) }
-        });
-        self.definir_ordem_tab(pagina, &campos.iter().map(|c| c.widget).collect::<Vec<_>>())
+        // Faixas de linha primeiro (de cima para baixo), depois da esquerda para a direita: comparar
+        // par a par "na mesma linha" não é transitivo e o sort podia entrar em pânico.
+        campos.sort_by(|a, b| b.caixa[3].total_cmp(&a.caixa[3]));
+        let mut linha = 0usize;
+        let mut topo = f32::INFINITY;
+        let mut faixas = Vec::with_capacity(campos.len());
+        for c in &campos {
+            let altura = (c.caixa[3] - c.caixa[1]).abs();
+            if topo.is_finite() && (topo - c.caixa[3]).abs() >= altura / 2.0 { linha += 1; topo = c.caixa[3]; }
+            if !topo.is_finite() { topo = c.caixa[3]; }
+            faixas.push(linha);
+        }
+        let mut ordem: Vec<(usize, usize)> = faixas.into_iter().enumerate().map(|(i, l)| (l, i)).collect();
+        ordem.sort_by(|&(la, a), &(lb, b)| la.cmp(&lb).then(campos[a].caixa[0].total_cmp(&campos[b].caixa[0])));
+        let ids: Vec<_> = ordem.into_iter().map(|(_, i)| campos[i].widget).collect();
+        self.definir_ordem_tab(pagina, &ids)
     }
 }
 
@@ -431,6 +446,10 @@ mod testes {
         assert_eq!(ler_numero("1.5"), Some(1.5));
         assert_eq!(ler_numero("1234.56"), Some(1234.56));
         assert_eq!(ler_numero("1.234,56"), Some(1234.56));
+        assert_eq!(ler_numero("1,234.56"), Some(1234.56));
+        assert_eq!(ler_numero("12,5"), Some(12.5));
+        // Fórmula do arquivo com milhares de parênteses é recusada, sem estourar a pilha.
+        assert!(pecas(&format!("{}1", "(".repeat(100_000))).is_err());
         assert_eq!(ler_numero(&escrever_numero(1234.0, 2).replace(",00", "")), Some(1234.0));
     }
 

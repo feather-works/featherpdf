@@ -159,7 +159,7 @@ pub(crate) fn ler_imagem(doc: &Document, id: ObjectId) -> Option<(u32, u32, u8, 
     // O preditor (DecodeParms) põe um byte por linha a mais; o lopdf o desfaz depois.
     let limite = esperado + h as u64 + 1;
     let cru = crate::inflar_com_teto(&s.content, limite)?;
-    let pixels = if d.has(b"DecodeParms") { s.decompressed_content().ok()? } else { cru };
+    let pixels = if d.has(b"DecodeParms") { s.decompressed_content_with_limit(crate::TETO_FLUXO).ok()? } else { cru };
     (pixels.len() as u64 == esperado).then_some((w, h, comp, false, pixels))
 }
 
@@ -222,7 +222,7 @@ pub(crate) fn exibicoes(doc: &Document) -> HashMap<ObjectId, ((f32, f32), BTreeS
                             let m = s.dict.get(b"Matrix").ok().and_then(matriz).unwrap_or([1.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
                             let proprios = xobjetos(doc, s.dict.get(b"Resources").ok());
                             let recursos = if proprios.is_empty() { recursos.clone() } else { proprios };
-                            let dados = s.decompressed_content().unwrap_or_else(|_| s.content.clone());
+                            let dados = s.decompressed_content_with_limit(crate::TETO_FLUXO).unwrap_or_else(|_| s.content.clone());
                             percorrer(doc, &dados, recursos, mult(m, ctm), pagina, saida, fundo + 1, orcamento);
                         }
                         _ => {}
@@ -238,7 +238,7 @@ pub(crate) fn exibicoes(doc: &Document) -> HashMap<ObjectId, ((f32, f32), BTreeS
         let (recursos, herdados) = doc.get_page_resources(id).unwrap_or((None, vec![]));
         let mut nomes = xobjetos(doc, recursos.map(|r| Object::Dictionary(r.clone())).as_ref());
         for h in herdados { for (k, v) in xobjetos(doc, Some(&Object::Reference(h))) { nomes.entry(k).or_insert(v); } }
-        let conteudo = doc.get_page_content(id);
+        let conteudo = doc.get_page_content_with_limit(id, crate::TETO_FLUXO).unwrap_or_default();
         percorrer(doc, &conteudo, nomes, [1.0, 0.0, 0.0, 1.0, 0.0, 0.0], pagina, &mut saida, 0, &mut orcamento);
     }
     // A máscara de transparência aparece onde a imagem dona dela aparece.
@@ -286,7 +286,7 @@ fn recomprimir_zopfli(doc: &mut Document) {
         let filtros = s.filters().unwrap_or_default();
         let cru = match filtros.as_slice() {
             [] => s.content.clone(),
-            [f] if *f == b"FlateDecode" => s.decompressed_content().ok()?,
+            [f] if *f == b"FlateDecode" => s.decompressed_content_with_limit(crate::TETO_FLUXO).ok()?,
             _ => return None,
         };
         (cru.len() > 64).then_some((*id, cru, s.content.len()))
@@ -337,6 +337,11 @@ pub(crate) fn tirar_anexos(doc: &mut Document) {
         }).collect();
         if let Ok(p) = doc.get_dictionary_mut(id) { p.set("Annots", ficam); }
     }
+    // Anexo pode estar só no /AF (fatura Factur-X, PDF/A-3): o conteúdo de todo arquivo embutido sai.
+    if let Ok(c) = doc.catalog_mut() { c.remove(b"AF"); }
+    let embutidos: Vec<_> = doc.objects.iter().filter(|(_, o)| o.as_stream().ok()
+        .and_then(|s| s.dict.get(b"Type").ok()).and_then(|t| t.as_name().ok()) == Some(b"EmbeddedFile")).map(|(id, _)| *id).collect();
+    for id in embutidos { doc.objects.insert(id, Object::Null); }
 }
 
 /// Foto tirada de dentro do PDF, como está no arquivo: o JPEG cru (`jpeg`) ou os pixels de
@@ -435,6 +440,14 @@ impl DocumentoPdf {
         juntar_iguais(&mut doc);
         if opcoes.zopfli { recomprimir_zopfli(&mut doc); }
         doc.compress();
+        // O clone só sai cifrado se for cifrado de novo: sem isto, comprimir tirava a senha.
+        if let Some(estado) = &self.documento.encryption_state {
+            doc.encryption_state = None;
+            doc.encrypt(estado).map_err(|e| format!("Falha ao manter a senha do PDF: {e}"))?;
+            let mut bytes = Vec::new();
+            doc.save_to(&mut bytes).map_err(|e| format!("Falha ao gravar o PDF: {e}"))?;
+            return Ok(bytes);
+        }
         gravar(&mut doc)
     }
 
@@ -537,8 +550,13 @@ mod testes {
         let (a, b) = (imagem(&mut pdf.documento), imagem(&mut pdf.documento));
         let pagina = pdf.id_pagina(1).unwrap();
         pdf.documento.get_dictionary_mut(pagina).unwrap().set("Teste", vec![Object::Reference(a), Object::Reference(b)]);
+        // Fatura PDF/A-3: o XML só pelo /AF do catálogo, fora da lista de anexos.
+        let xml = pdf.documento.add_object(lopdf::Stream::new(lopdf::dictionary! { "Type" => "EmbeddedFile" }, b"<fatura/>".to_vec()));
+        let spec = pdf.documento.add_object(lopdf::dictionary! { "Type" => "Filespec", "F" => Object::string_literal("f.xml"), "EF" => lopdf::dictionary! { "F" => xml } });
+        pdf.documento.catalog_mut().unwrap().set("AF", vec![Object::Reference(spec)]);
         let bytes = pdf.comprimido(OpcoesCompressao { dpi: None, qualidade: 75, limpar: true, anexos: true, zopfli: true }, &|_, _, _| None).unwrap();
         let d = Document::load_mem(&bytes).unwrap();
+        assert!(!d.objects.values().filter_map(|o| o.as_stream().ok()).any(|s| s.decompressed_content().unwrap_or(s.content.clone()) == b"<fatura/>"));
         let imagens = d.objects.values().filter(|o| eh_imagem(o)).count();
         assert_eq!(imagens, 1);
         assert_eq!(DocumentoPdf::de_bytes(&bytes, None).unwrap().peso(bytes.len() as u64).imagens > 0, true);
@@ -554,7 +572,7 @@ mod testes {
         let bytes = pdf.comprimido(OpcoesCompressao { dpi: None, qualidade: 75, limpar: false, anexos: false, zopfli: true }, &|_, _, _| None).unwrap();
         let d = Document::load_mem(&bytes).unwrap();
         let achou = d.objects.values().filter_map(|o| o.as_stream().ok())
-            .any(|s| s.filters().unwrap_or_default() == [&b"FlateDecode"[..]] && s.decompressed_content().ok().as_deref() == Some(&conteudo[..]));
+            .any(|s| s.filters().unwrap_or_default() == [&b"FlateDecode"[..]] && s.decompressed_content_with_limit(crate::TETO_FLUXO).ok().as_deref() == Some(&conteudo[..]));
         assert!(achou);
     }
 
@@ -570,6 +588,13 @@ mod testes {
         let salvo = pdf.bytes_para_gravar().unwrap();
         assert_eq!(DocumentoPdf::de_bytes(&salvo, None).unwrap_err(), PRECISA_SENHA);
         assert_eq!(DocumentoPdf::de_bytes_com_senha(&salvo, None, Some("abre")).unwrap().total_paginas(), 1);
+        // Comprimir e extrair páginas para arquivo também mantêm a senha.
+        let comprimido = pdf.comprimido(OpcoesCompressao { dpi: None, qualidade: 75, limpar: true, anexos: false, zopfli: false }, &|_, _, _| None).unwrap();
+        assert_eq!(DocumentoPdf::de_bytes(&comprimido, None).unwrap_err(), PRECISA_SENHA);
+        assert_eq!(DocumentoPdf::de_bytes_com_senha(&comprimido, None, Some("abre")).unwrap().total_paginas(), 1);
+        let parte = pdf.extrair_para_gravar(&[1]).unwrap();
+        assert_eq!(DocumentoPdf::de_bytes(&parte, None).unwrap_err(), PRECISA_SENHA);
+        assert_eq!(DocumentoPdf::de_bytes_com_senha(&parte, None, Some("abre")).unwrap().total_paginas(), 1);
         pdf.tirar_senha();
         assert!(!pdf.tem_senha() && pdf.modificado());
         assert!(!DocumentoPdf::de_bytes(&pdf.bytes_para_gravar().unwrap(), None).unwrap().tem_senha());

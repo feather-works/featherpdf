@@ -79,7 +79,7 @@ pub enum Pag {
     JuntarEscolhidos(Option<Vec<PathBuf>>),
     /// Posição em que as páginas entram e os PDFs já lidos.
     /// Aba que pediu, posição e os PDFs lidos.
-    Juntados(usize, u32, Result<Vec<DocumentoPdf>, String>),
+    Juntados(Option<u64>, u32, Result<Vec<DocumentoPdf>, String>),
     Extrair,
     ExtrairPara(Option<PathBuf>),
     Abrir(Dialogos),
@@ -288,7 +288,7 @@ impl App {
             }, |v| Msg::Pag(Pag::JuntarEscolhidos(v))),
             Pag::JuntarEscolhidos(Some(caminhos)) => return self.juntar(caminhos, total + 1),
             Pag::JuntarEscolhidos(None) | Pag::ExtrairPara(None) | Pag::DividirEm(None) => {}
-            Pag::Juntados(aba, _, _) if aba != self.ativa => self.status = "A aba mudou enquanto os arquivos eram lidos: nada foi juntado.".into(),
+            Pag::Juntados(doc, _, _) if doc != self.id_aberto() => self.status = "A aba mudou enquanto os arquivos eram lidos: nada foi juntado.".into(),
             Pag::Juntados(_, posicao, Ok(pdfs)) => {
                 let tarefa = self.editar(|pdf| {
                     let mut n = 0;
@@ -309,7 +309,7 @@ impl App {
             }
             Pag::ExtrairPara(Some(destino)) => if let Some(a) = &self.aberto {
                 let alvo = self.alvo();
-                self.status = match a.pdf.extrair(&alvo).and_then(|b| featherpdf_io::gravar_pdf(&destino, &b)) {
+                self.status = match a.pdf.extrair_para_gravar(&alvo).and_then(|b| featherpdf_io::gravar_pdf(&destino, &b)) {
                     Ok(()) => format!("{} página(s) salva(s) em {}", alvo.len(), destino.display()),
                     Err(e) => e,
                 };
@@ -449,7 +449,7 @@ impl App {
                             let rotulo: String = rotulo.chars().map(|c| if "/\\:*?\"<>|".contains(c) { '-' } else { c }).collect::<String>().trim().chars().take(80).collect();
                             let destino = if rotulo.is_empty() { pasta.join(format!("{base} - parte {} (p. {a}-{b}).pdf", i + 1)) }
                                 else { pasta.join(format!("{base} - {:02} {rotulo}.pdf", i + 1)) };
-                            featherpdf_io::gravar_pdf(&destino, &pdf.extrair(&paginas)?)?;
+                            featherpdf_io::gravar_pdf(&destino, &pdf.extrair_para_gravar(&paginas)?)?;
                         }
                         Ok(format!("{} arquivos salvos em {}", partes.len(), pasta.display()))
                     }).await.unwrap_or_else(|e| Err(format!("Falha ao dividir: {e}")))
@@ -463,7 +463,7 @@ impl App {
     /// Lê os PDFs fora da janela e junta a partir de `posicao`.
     pub fn juntar(&mut self, caminhos: Vec<PathBuf>, posicao: u32) -> Task<Msg> {
         self.status = format!("Lendo {} arquivo(s)…", caminhos.len());
-        let aba = self.ativa;
+        let aba = self.id_aberto();
         Task::perform(async move {
             tokio::task::spawn_blocking(move || {
                 caminhos.iter().map(|c| crate::juntar::documento_de_arquivo(c)

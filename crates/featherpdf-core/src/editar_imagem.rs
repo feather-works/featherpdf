@@ -29,6 +29,20 @@ impl DocumentoPdf {
         let (sx, sy) = (ln / lv, an / av);
         // Afim da página: escala a partir do canto da caixa velha e leva ao canto da nova.
         let afim = [sx, 0.0, 0.0, sy, nova[0] - velha[0] * sx, nova[1] - velha[1] * sy];
+        self.aplicar_afim(pagina, objeto, &mut analise, afim)
+    }
+
+    /// Gira a imagem 90° em volta do centro dela (`horario`: no sentido do relógio).
+    pub fn girar_imagem(&mut self, pagina: u32, objeto: usize, horario: bool) -> Result<(), String> {
+        let mut analise = self.imagem_da_pagina(pagina, objeto)?;
+        let c = analise.objetos[objeto].caixa;
+        let (cx, cy) = ((c[0] + c[2]) / 2.0, (c[1] + c[3]) / 2.0);
+        let afim = if horario { [0.0, -1.0, 1.0, 0.0, cx - cy, cy + cx] } else { [0.0, 1.0, -1.0, 0.0, cx + cy, cy - cx] };
+        self.aplicar_afim(pagina, objeto, &mut analise, afim)
+    }
+
+    /// Põe `afim` (no espaço da página) em volta do desenho da imagem, com o recorte junto.
+    fn aplicar_afim(&mut self, pagina: u32, objeto: usize, analise: &mut Analise, afim: crate::objetos::Matriz) -> Result<(), String> {
         let lugar = &analise.lugares[objeto];
         let (inicio, fim, ctm) = match bloco_do_recorte(&analise.ops, lugar.insercao, lugar.fim) {
             Some((i, f)) => (i, f, ctm_em(&analise.ops, i)),
@@ -145,5 +159,15 @@ mod testes {
         let pdf = crate::DocumentoPdf::de_bytes(&pdf.serializar().unwrap(), None).unwrap();
         assert!(perto(caixa(&pdf), [0.0, 13.75, 50.0, 26.25]), "{:?}", caixa(&pdf));
         assert!(matches!(pdf.objetos(1).unwrap()[0].tipo, crate::TipoObjeto::Imagem { largura: 4, altura: 1 }));
+    }
+
+    #[test]
+    fn gira_a_imagem_no_centro_e_volta() {
+        let mut pdf = pdf_com("q 50 0 0 40 300 500 cm /Im1 Do Q");
+        pdf.girar_imagem(1, 0, true).unwrap();
+        // 50×40 com centro (325, 520) vira 40×50 no mesmo centro.
+        assert!(perto(caixa(&pdf), [305.0, 495.0, 345.0, 545.0]), "{:?}", caixa(&pdf));
+        pdf.girar_imagem(1, 0, false).unwrap();
+        assert!(perto(caixa(&pdf), [300.0, 500.0, 350.0, 540.0]), "{:?}", caixa(&pdf));
     }
 }

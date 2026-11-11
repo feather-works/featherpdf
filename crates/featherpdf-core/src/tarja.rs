@@ -235,9 +235,22 @@ impl DocumentoPdf {
                 }
             }
             let mut preta = None;
+            // A imagem pode ser a mesma em outras páginas (logo, scan repetido): apaga numa cópia só
+            // desta página. A mesma imagem duas vezes aqui usa a mesma cópia (as duas tarjas valem).
+            let mut copias: std::collections::HashMap<ObjectId, ObjectId> = std::collections::HashMap::new();
             for (x, k, toca, nome) in pixels {
                 let lugar = &a.lugares[k];
-                if self.apagar_pixels(x, lugar.matriz, &toca, apagar) { continue; }
+                let alvo = match copias.get(&x) {
+                    Some(c) => Some(*c),
+                    None => self.documento.get_object(x).ok().cloned().map(|o| self.documento.add_object(o)),
+                };
+                if let Some(c) = alvo {
+                    if self.apagar_pixels(c, lugar.matriz, &toca, apagar) {
+                        if copias.insert(x, c).is_none() { self.trocar_xobjeto(id, &nome, Some(c)); }
+                        continue;
+                    }
+                    if !copias.contains_key(&x) { self.documento.objects.remove(&c); }
+                }
                 // Sem decodificar, a imagem inteira vira um pixel preto: a página digitalizada não some da tela.
                 let p = *preta.get_or_insert_with(|| self.documento.add_object(Stream::new(dictionary! {
                     "Type" => "XObject", "Subtype" => "Image", "Width" => 1, "Height" => 1, "ColorSpace" => "DeviceGray", "BitsPerComponent" => 8,
@@ -261,6 +274,11 @@ impl DocumentoPdf {
                 }
             }
             if !nomes.is_empty() { self.tirar_texto_das_propriedades(id, &nomes); }
+            // PDF com tags (Word): o elemento da estrutura desta página guarda o texto em /ActualText e /Alt.
+            let elementos: Vec<ObjectId> = self.documento.objects.iter()
+                .filter(|(_, o)| o.as_dict().ok().and_then(|d| d.get(b"Pg").ok()).and_then(|p| p.as_reference().ok()) == Some(id))
+                .map(|(k, _)| *k).collect();
+            for e in elementos { if let Ok(d) = self.documento.get_dictionary_mut(e) { tirar_texto_alt(d); } }
             // A miniatura da página mostra o que foi tarjado.
             if let Ok(p) = self.documento.get_dictionary_mut(id) { p.remove(b"Thumb"); }
             // O conteúdo antigo fica entre q/Q: o preto sai no espaço da página.
@@ -444,6 +462,25 @@ mod testes {
     }
 
     #[test]
+    fn tarja_em_imagem_repetida_nao_estraga_a_outra_pagina_e_tira_alt_da_estrutura() {
+        let mut pdf = pdf_com("q 100 0 0 100 100 100 cm /Im2 Do Q");
+        let x = com_xobjeto(&mut pdf, "Im2", Stream::new(dictionary! { "Type" => "XObject", "Subtype" => "Image", "Width" => 9, "Height" => 1,
+            "ColorSpace" => "DeviceGray", "BitsPerComponent" => 8 }, b"abcdefghi".to_vec()));
+        // A mesma imagem em "outra página" e um elemento de estrutura (PDF com tags) desta página.
+        let id = pdf.id_pagina(1).unwrap();
+        let elem = pdf.documento.add_object(dictionary! { "S" => "Figure", "Pg" => id, "Alt" => Object::string_literal("SEGREDO") });
+        let c = pdf.documento.catalog_mut().unwrap();
+        c.set("OutraPagina", x);
+        c.set("Elem", elem);
+        pdf.tarjar(&[(1, PAGINA)], "", &|_, _| Some((b"\xff\xd8JPEGPRETO".to_vec(), 9, 1))).unwrap();
+        assert_eq!(pdf.documento.get_object(x).unwrap().as_stream().unwrap().content, b"abcdefghi");
+        let rec = pdf.documento.get_page_resources(id).unwrap().0.unwrap().clone();
+        let agora = rec.get(b"XObject").unwrap().as_dict().unwrap().get(b"Im2").unwrap().as_reference().unwrap();
+        assert_ne!(agora, x, "a página tarjada aponta para a cópia");
+        assert!(!pdf.documento.get_dictionary(elem).unwrap().has(b"Alt"));
+    }
+
+    #[test]
     fn padroes_brasileiros() {
         let t: Vec<char> = "CPF 123.456.789-09, CNPJ 12.345.678/0001-90, tel (11) 98765-4321, maria.silva@email.com. CEP 01310-100; 1234.567.890-123".chars().collect();
         let texto = |p| achar_padrao(&t, p).into_iter().map(|(i, f)| t[i..f].iter().collect::<String>()).collect::<Vec<_>>();
@@ -481,7 +518,7 @@ mod testes {
             Object::String(b, _) => achar(b),
             Object::Array(v) => v.iter().any(tem),
             Object::Dictionary(d) => d.iter().any(|(_, v)| tem(v)),
-            Object::Stream(st) => achar(&st.decompressed_content().unwrap_or_else(|_| st.content.clone())) || st.dict.iter().any(|(_, v)| tem(v)),
+            Object::Stream(st) => achar(&st.decompressed_content_with_limit(crate::TETO_FLUXO).unwrap_or_else(|_| st.content.clone())) || st.dict.iter().any(|(_, v)| tem(v)),
             _ => false,
         }
     }

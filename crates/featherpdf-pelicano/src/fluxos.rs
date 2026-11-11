@@ -876,7 +876,7 @@ fn gravar_saida(modo: Modo, nome: &str, bytes: Vec<u8>, saida: &Caminho, finais:
         Modo::Dividir => {
             let pdf = DocumentoPdf::de_bytes(&bytes, None)?;
             for n in 1..=pdf.total_paginas() {
-                featherpdf_io::gravar_pdf(&saida.join(format!("{base} - página {n}.pdf")), &finais.aplicar(pdf.extrair(&[n])?, &mut relato)?)?;
+                featherpdf_io::gravar_pdf(&saida.join(format!("{base} - página {n}.pdf")), &finais.aplicar(pdf.extrair_para_gravar(&[n])?, &mut relato)?)?;
             }
             Ok(pdf.total_paginas() as usize)
         }

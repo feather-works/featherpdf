@@ -58,6 +58,16 @@ pub fn ler_bytes(caminho: &Path) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("Erro ao ler {}: {e}", caminho.display()))
 }
 
+/// O PDF no disco tem assinatura (/ByteRange)? Lê pelo mapa do arquivo, sem o teto de 128 MiB
+/// de `ler_bytes` (um PDF juntado passa dele e o Ctrl+S nunca conseguia conferir).
+pub fn arquivo_assinado(caminho: &Path) -> Result<bool, String> {
+    let arquivo = std::fs::File::open(caminho).map_err(|e| e.to_string())?;
+    if arquivo.metadata().map_err(|e| e.to_string())?.len() == 0 { return Ok(false); }
+    // SAFETY: só leitura; o arquivo mudar no meio no máximo dá uma resposta errada, e na dúvida se pede "Salvar como".
+    let mapa = unsafe { memmap2::Mmap::map(&arquivo) }.map_err(|e| e.to_string())?;
+    Ok(mapa.windows(10).any(|w| w == b"/ByteRange"))
+}
+
 /// Salva em arquivo temporario e renomeia apenas em caso de sucesso.
 pub fn salvar_como(pdf: &mut DocumentoPdf, destino: &Path) -> Result<(), String> {
     gravar_pdf(destino, &pdf.bytes_para_gravar()?)?;

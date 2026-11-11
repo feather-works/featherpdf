@@ -53,7 +53,7 @@ pub fn modelo() -> &'static Catalogo {
                         m("Ctrl+H localiza e substitui em todas as páginas."),
                         m("Insira texto, imagem, tabela, equação, link, formas e ícones pela aba Editar. No link, um e-mail sozinho (fulano@site.com) vira link de e-mail."),
                         m("Escolha objetos para mover (setas; Shift move 10), alinhar, trazer para frente ou excluir (Delete)."),
-                        m("Editar imagem ajusta brilho, contraste e recorte da foto escolhida."),
+                        m("Editar imagem gira 90°, ajusta brilho, contraste e recorte da foto escolhida."),
                         t("Ctrl+Z desfaz e Ctrl+Y refaz."),
                     ]),
                     topico("preencher", "Comentar e anotar", vec![
@@ -136,8 +136,10 @@ pub fn modelo() -> &'static Catalogo {
                     topico("exibir", "Exibir e navegar", vec![
                         t("Zoom, duas páginas, leitura e tela cheia."),
                         m("Ctrl++ e Ctrl+- mudam o zoom; Ctrl+0 volta a 100%. Na caixa do zoom dá para digitar o percentual (Enter aplica). Largura, Altura e Inteira ajustam à janela."),
+                        m("Área: arraste um retângulo e ele passa a encher a tela (zoom por área)."),
                         m("Página escura inverte as cores para ler à noite; Leitura esconde as barras."),
                         m("Painéis: Miniaturas, Marcadores, Links da página, Comentários, Camadas e Anexos, na barra da direita."),
+                        m("Anexos: Anexar arquivo… põe uma planilha, foto ou outro arquivo dentro do PDF (até 256 MB); a lixeira tira um anexo. Ctrl+Z desfaz."),
                         m("Links da página: para onde cada link vai; o lápis troca o destino (número = página, o resto = site ou e-mail) e a lixeira apaga."),
                         m("Camadas: as setas mudam a ordem; Juntar camadas passa o conteúdo de uma para a outra."),
                         m("Imprimir (Ctrl+P): Papel escolhe A4, Carta, Ofício/Legal, A3 ou A5 (ou deixa o da impressora); Comentários: Imprimir ou Só o documento."),

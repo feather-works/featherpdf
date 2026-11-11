@@ -45,6 +45,9 @@ pub fn escutar() {
     let senha = senha_aleatoria();
     let _ = destino.parent().map(std::fs::create_dir_all);
     if featherpdf_io::gravar_atomico(&destino, format!("{porta} {senha}\n").as_bytes()).is_err() { return; }
+    // Só o dono lê a senha: com 0644 outra conta da máquina mandaria abrir arquivos nesta janela.
+    #[cfg(unix)]
+    { use std::os::unix::fs::PermissionsExt; if std::fs::set_permissions(&destino, std::fs::Permissions::from_mode(0o600)).is_err() { return; } }
     let (tx, rx) = mpsc::unbounded();
     *RECEBIDOS.lock().unwrap_or_else(|e| e.into_inner()) = Some(rx);
     std::thread::spawn(move || {
@@ -57,8 +60,10 @@ pub fn escutar() {
 /// Senha e caminho, uma linha cada; responde "ok" só com a senha certa.
 fn ler_pedido(conexao: TcpStream, senha: &str) -> Option<PathBuf> {
     conexao.set_read_timeout(Some(Duration::from_secs(2))).ok()?;
-    let mut leitor = BufReader::new(conexao.try_clone().ok()?);
+    let leitor = BufReader::new(conexao.try_clone().ok()?);
     let (mut s, mut caminho) = (String::new(), String::new());
+    // Teto por pedido: quem conecta sem mandar quebra de linha não enche a memória.
+    let mut leitor = std::io::Read::take(leitor, 64 * 1024);
     leitor.read_line(&mut s).ok()?;
     leitor.read_line(&mut caminho).ok()?;
     if s.trim() != senha { return None; }

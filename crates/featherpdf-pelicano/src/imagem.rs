@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use feather_ui::dialogo as dlg;
-use feather_ui::tema;
+use feather_ui::{icones, tema};
 use featherpdf_core::{ImagemNova, TipoObjeto};
 
 use pelicano::*;
@@ -46,6 +46,8 @@ pub enum Im {
     AplicarAjuste,
     Original,
     Trocar,
+    /// Gira 90° (`true`: no sentido do relógio).
+    Girar(bool),
     Lida(Result<(Arc<ImagemNova>, u32, u32), String>),
 }
 
@@ -91,6 +93,11 @@ impl App {
                 let (cx, cy) = ((c[0] + c[2]) / 2.0, (c[1] + c[3]) / 2.0);
                 let nova = [cx - l / 2.0, cy - a / 2.0, cx + l / 2.0, cy + a / 2.0];
                 return self.editar(move |pdf| pdf.redimensionar_imagem(pagina, k, nova).map(|_| "Imagem redimensionada. Ctrl+Z desfaz.".into()));
+            }
+            Im::Girar(horario) => {
+                std::mem::swap(&mut e.largura, &mut e.altura);
+                let lado = if horario { "à direita" } else { "à esquerda" };
+                return self.editar(move |pdf| pdf.girar_imagem(pagina, k, horario).map(|_| format!("Imagem girada {lado}. Ctrl+Z desfaz.")));
             }
             Im::Corte(i, v) => e.corte[i] = v,
             Im::Cortar => {
@@ -152,6 +159,13 @@ impl App {
             checkbox("Manter a proporção", e.proporcao).on_toggle(|v| Msg::Imagem(Im::Proporcao(v))).size(16).text_size(13),
             row![Space::with_width(Length::FILL), button(text("Aplicar tamanho").size(12)).padding([4, 10])
                 .style(tema::estilo_botao_pequeno(false)).on_press(Msg::Imagem(Im::AplicarTamanho))],
+            dlg::secao("Girar"),
+            row![
+                button(row![icones::icone("rotate", 14.), text("Girar à esquerda").size(12)].spacing(4).align_y(Align::Center)).padding([4, 10])
+                    .style(tema::estilo_botao_pequeno(false)).on_press(Msg::Imagem(Im::Girar(false))),
+                button(row![icones::icone("rotate-clockwise", 14.), text("Girar à direita").size(12)].spacing(4).align_y(Align::Center)).padding([4, 10])
+                    .style(tema::estilo_botao_pequeno(false)).on_press(Msg::Imagem(Im::Girar(true))),
+            ].spacing(6),
             dlg::secao("Cortar"),
             text("Quanto sai de cada lado. O que sai fica escondido, não é apagado do arquivo.").size(11.5).color(muted),
             corte,

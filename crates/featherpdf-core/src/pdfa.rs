@@ -44,7 +44,7 @@ fn fontes_visiveis(doc: &Document) -> (HashSet<ObjectId>, HashSet<ObjectId>) {
     let (mut visiveis, mut vistas) = (HashSet::new(), HashSet::new());
     for pagina in doc.get_pages().into_values() {
         let fontes = fontes_da_pagina(doc, pagina);
-        let Ok(c) = lopdf::content::Content::decode(&doc.get_page_content(pagina)) else { continue };
+        let Ok(c) = lopdf::content::Content::decode(&doc.get_page_content_with_limit(pagina, crate::TETO_FLUXO).unwrap_or_default()) else { continue };
         let (mut fonte, mut modo, mut pilha) = (None::<ObjectId>, 0i64, Vec::new());
         for op in &c.operations {
             match op.operator.as_str() {
@@ -98,7 +98,7 @@ fn usa_cmyk(doc: &Document) -> bool {
             || d.get(b"ColorSpace").and_then(Object::as_dict).is_ok_and(|cs| cs.iter().any(|(_, v)| em_espaco(v)))
     });
     nos_objetos || doc.get_pages().into_values().any(|p| {
-        lopdf::content::Content::decode(&doc.get_page_content(p))
+        lopdf::content::Content::decode(&doc.get_page_content_with_limit(p, crate::TETO_FLUXO).unwrap_or_default())
             .is_ok_and(|c| c.operations.iter().any(|op| op.operator == "k" || op.operator == "K"))
     })
 }

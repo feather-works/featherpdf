@@ -284,7 +284,7 @@ impl DocumentoPdf {
                 .map(|p| p.iter().filter_map(|(k, v)| Some((k.clone(), v.as_reference().ok().filter(|r| ocultas.contains(r))?))).collect())
                 .unwrap_or_default();
             if nomes.is_empty() { continue; }
-            let Ok(conteudo) = self.documento.get_and_decode_page_content(id) else {
+            let Ok(conteudo) = self.documento.get_page_content_with_limit(id, crate::TETO_FLUXO).and_then(|c| lopdf::content::Content::decode(&c)) else {
                 // Conteúdo que não deu para ler continua com a camada: ela fica na lista, oculta.
                 presas.extend(nomes.values());
                 continue;

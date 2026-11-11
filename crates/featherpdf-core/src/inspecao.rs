@@ -290,7 +290,7 @@ fn previa(s: &Stream) -> String {
     let filtros = s.filters().unwrap_or_default();
     let (dados, decodificado) = if filtros.is_empty() { (s.content.clone(), true) }
         else if s.content.len() > MAX_DESCOMPRIMIR { (s.content.clone(), false) }
-        else { match s.decompressed_content() { Ok(d) => (d, true), Err(_) => (s.content.clone(), false) } };
+        else { match s.decompressed_content_with_limit(crate::TETO_FLUXO) { Ok(d) => (d, true), Err(_) => (s.content.clone(), false) } };
     let corte = &dados[..dados.len().min(MAX_FLUXO)];
     let estranhos = corte.iter().filter(|&&b| b < 9 || (b > 13 && b < 32)).count();
     if estranhos * 10 > corte.len() {

@@ -1,5 +1,34 @@
 # Pendências do FeatherPDF
 
+## Auditoria de 11/11/2026
+
+Corrigido neste dia:
+- PDF malicioso: todo fluxo descomprimido tem teto de 256 MB (bomba de compressão no /ToUnicode
+  derrubava o app ao abrir); fórmula de campo com milhares de parênteses é recusada (estourava a
+  pilha ao digitar); tabela /W com faixas enormes tem teto; árvore /Dests com /Kids repetido não
+  multiplica a busca.
+- Tarja: as marcas são descartadas ao trocar de aba, abrir outro arquivo, editar ou desfazer (caíam
+  na página errada e o texto ficava legível); imagem usada em várias páginas é apagada numa cópia
+  só da página tarjada; /ActualText e /Alt dos elementos de estrutura da página saem.
+- Comprimir e extrair/dividir páginas para arquivo mantêm a senha do PDF; tirar anexos tira
+  também os do /AF (fatura PDF/A-3).
+- Comprimir sem cópia recusa PDF assinado e fecha a aba antiga do arquivo trocado.
+- Marcador e link escolhidos e comentário pendente não passam para a outra aba; "Juntar" confere a
+  aba pelo id; cancelar o "Salvar como" do fechar não fecha a aba no próximo Ctrl+S; abrir um
+  arquivo só reaproveita a aba do Ctrl+N intocado (foto ou imagens de uma página não se perdem).
+- Ctrl+S confere assinatura pelo mapa do arquivo, sem o teto de 128 MB.
+- `instancia.txt` com permissão 0600 e pedido com teto de 64 KB.
+- Ordem de Tab "por linhas" em faixas (o sort não era transitivo e podia entrar em pânico);
+  número "1,234.56" lido como 1234,56.
+
+Ficou para depois:
+- Trabalho pesado ainda na thread da janela: abrir o Ctrl+F (lê todos os objetos e anexos), achar
+  e aplicar tarja, proteger com senha, levar ao FeatherDocs. Passar para `spawn_blocking`.
+- Cache `objetos` só cresce ao rolar documento enorme: soltar as páginas longe da tela.
+- Tarja de texto desenhado sem `Tf` (fonte vinda de `gs` com /Font) não é achada.
+- Link de site abre o navegador num clique (há a opção de desligar); pensar em confirmar o domínio.
+- `instancia.txt` velho depois de travar: apagar ao sair.
+
 ## Audit de 04/11/2026
 
 Corrigido neste dia:

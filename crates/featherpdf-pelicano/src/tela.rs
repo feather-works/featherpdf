@@ -298,6 +298,8 @@ fn grupo_zoom(app: &App) -> Element<'_, Msg> {
             pequeno("arrows-horizontal", None, "Largura", Some(Msg::AjustarLargura), false),
             pequeno("arrows-vertical", None, "Altura", Some(Msg::AjustarAltura), false),
             pequeno("arrows-maximize", None, "Inteira", Some(Msg::AjustarPagina), false),
+            pequeno("zoom-in", None, "Área", Some(Msg::Regiao(crate::regiao::Rr::Ferramenta(crate::regiao::Uso::Zoom))),
+                app.regiao() == Some(crate::regiao::Uso::Zoom)),
         ],
     ].spacing(4), "Zoom")
 }

@@ -14,6 +14,12 @@ use crate::{App, Msg};
 #[derive(Debug, Clone)]
 pub enum Nv {
     Salvar(usize),
+    /// Abre a escolha do arquivo a anexar.
+    Anexar,
+    /// Id do documento e arquivo escolhido.
+    Anexado(u64, Option<PathBuf>),
+    /// Tira o anexo da lista do PDF.
+    RemoverAnexo(usize),
     /// Id do documento (`Aberto::id`), anexo e destino.
     Destino(u64, usize, Option<PathBuf>),
     /// Link de site do PDF (já filtrado para http/https/mailto em `DocumentoPdf::links`).
@@ -99,6 +105,36 @@ impl App {
                 return Task::perform(async move {
                     rfd::AsyncFileDialog::new().set_file_name(nome).save_file().await.map(|h| h.path().to_path_buf())
                 }, move |d| Msg::Nav(Nv::Destino(doc, i, d)));
+            }
+            Nv::Anexar => {
+                let Some(doc) = self.id_aberto() else { return Task::none() };
+                return Task::perform(async move {
+                    rfd::AsyncFileDialog::new().set_title("Anexar arquivo ao PDF").pick_file().await.map(|h| h.path().to_path_buf())
+                }, move |c| Msg::Nav(Nv::Anexado(doc, c)));
+            }
+            Nv::Anexado(_, None) => {}
+            Nv::Anexado(doc, Some(_)) if Some(doc) != self.id_aberto() => self.status = "O documento mudou: nada foi anexado.".into(),
+            Nv::Anexado(_, Some(caminho)) => {
+                // Teto: o anexo vai inteiro para a memória e para o arquivo salvo.
+                const TETO: u64 = 256 << 20;
+                match std::fs::metadata(&caminho) {
+                    Ok(m) if m.len() > TETO => self.status = "Arquivo grande demais para anexar (mais de 256 MB).".into(),
+                    Err(e) => self.status = format!("Não consegui ler o arquivo: {e}"),
+                    Ok(_) => match std::fs::read(&caminho) {
+                        Err(e) => self.status = format!("Não consegui ler o arquivo: {e}"),
+                        Ok(bytes) => {
+                            let nome = caminho.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "anexo".into());
+                            let tarefa = self.editar(move |pdf| pdf.anexar(&nome, bytes).map(|n| format!("\"{n}\" anexado ao PDF. Ctrl+Z desfaz.")));
+                            self.ler_navegacao();
+                            return tarefa;
+                        }
+                    },
+                }
+            }
+            Nv::RemoverAnexo(i) => {
+                let tarefa = self.editar(move |pdf| pdf.remover_anexo(i).map(|()| "Anexo tirado do PDF. Ctrl+Z desfaz.".to_string()));
+                self.ler_navegacao();
+                return tarefa;
             }
             Nv::Escolher(i) => {
                 self.navegacao.escolhido = Some(i);
@@ -328,10 +364,12 @@ impl App {
 
     pub fn painel_anexos(&self) -> Element<'_, Msg> {
         let muted = tema::COR_TEXTO_MUTED();
+        let anexar = button(row![icones::icone("paperclip", 14.), text("Anexar arquivo…").size(12.5)].spacing(6).align_y(Align::Center))
+            .padding([5, 10]).style(tema::estilo_botao_pequeno(false)).on_press_maybe(self.aberto.is_some().then_some(Msg::Nav(Nv::Anexar)));
         if self.navegacao.anexos.is_empty() {
-            return text("Este PDF não tem arquivos anexados.").size(13).color(muted).into();
+            return column![anexar, text("Este PDF não tem arquivos anexados.").size(13).color(muted)].spacing(10).into();
         }
-        let mut lista = column![].spacing(8);
+        let mut lista = column![anexar].spacing(8);
         for (i, a) in self.navegacao.anexos.iter().enumerate() {
             // `usize::MAX`: comprimido e acima de 64 MB (não é descomprimido só para medir).
             let tamanho = if a.tamanho == usize::MAX { "> 64 MB".to_string() } else if a.tamanho >= 1024 * 1024 { format!("{} MB", numero(a.tamanho as f64 / 1048576.0, 1)) }
@@ -340,6 +378,7 @@ impl App {
                 icones::icone("file-export", 16.),
                 column![text(a.nome.clone()).size(13), text(tamanho).size(11.5).color(muted)].spacing(2).width(Length::FILL),
                 button(text("Salvar…").size(12)).padding([4, 8]).style(tema::estilo_botao_pequeno(false)).on_press(Msg::Nav(Nv::Salvar(i))),
+                button(icones::icone("trash", 14.)).padding([4, 6]).style(tema::estilo_botao_pequeno(false)).on_press(Msg::Nav(Nv::RemoverAnexo(i))),
             ].spacing(8).align_y(Align::Center));
         }
         scrollable(lista).height(Length::FILL).into()

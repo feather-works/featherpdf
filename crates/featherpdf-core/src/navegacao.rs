@@ -390,6 +390,7 @@ impl DocumentoPdf {
             .and_then(|n| n.get(b"Dests").ok()).and_then(|d| resolver(doc, d)).and_then(|d| d.as_dict().ok())?;
         let mut pilha = vec![raiz];
         let mut visitados = 0;
+        let mut vistos = std::collections::HashSet::new();
         while let (Some(no), true) = (pilha.pop(), visitados < 10_000) {
             visitados += 1;
             if let Ok(nomes) = no.get(b"Names").and_then(Object::as_array) {
@@ -400,14 +401,17 @@ impl DocumentoPdf {
                 }
             }
             if let Ok(filhos) = no.get(b"Kids").and_then(Object::as_array) {
-                pilha.extend(filhos.iter().filter_map(|k| resolver(doc, k)).filter_map(|k| k.as_dict().ok()));
+                // Cada nó uma vez: /Kids que se repete multiplicava a pilha a cada link e marcador.
+                let novos = filhos.iter().filter(|k| match k { Object::Reference(r) => vistos.insert(*r), _ => true });
+                pilha.extend(novos.filter_map(|k| resolver(doc, k)).filter_map(|k| k.as_dict().ok()));
             }
         }
         None
     }
 
-    /// Especificações de arquivo da árvore EmbeddedFiles, na ordem dos nomes.
-    fn especificacoes(&self) -> Vec<(String, &Dictionary)> {
+    /// Pares (nome, especificação) da árvore EmbeddedFiles, na ordem dos nomes; só os que
+    /// apontam para um dicionário (o índice é o mesmo de `anexos`).
+    fn pares_anexos(&self) -> Vec<(&Object, &Object)> {
         let doc = &self.documento;
         let resolver = |o| resolver(doc, o);
         let Some(raiz) = doc.catalog().ok().and_then(|c| c.get(b"Names").ok()).and_then(resolver)
@@ -421,12 +425,7 @@ impl DocumentoPdf {
             if let Ok(nomes) = no.get(b"Names").and_then(Object::as_array) {
                 for par in nomes.chunks(2) {
                     let [nome, spec] = par else { continue };
-                    let Some(spec) = resolver(spec).and_then(|s| s.as_dict().ok()) else { continue };
-                    let nome = spec.get(b"UF").or_else(|_| spec.get(b"F")).ok()
-                        .and_then(|n| lopdf::decode_text_string(n).ok())
-                        .or_else(|| lopdf::decode_text_string(nome).ok())
-                        .unwrap_or_else(|| "anexo".into());
-                    saida.push((nome, spec));
+                    if resolver(spec).is_some_and(|s| s.as_dict().is_ok()) { saida.push((nome, spec)); }
                 }
             }
             if let Ok(filhos) = no.get(b"Kids").and_then(Object::as_array) {
@@ -435,6 +434,77 @@ impl DocumentoPdf {
             }
         }
         saida
+    }
+
+    /// Especificações de arquivo da árvore EmbeddedFiles, na ordem dos nomes.
+    fn especificacoes(&self) -> Vec<(String, &Dictionary)> {
+        let doc = &self.documento;
+        self.pares_anexos().into_iter().filter_map(|(nome, spec)| {
+            let spec = resolver(doc, spec)?.as_dict().ok()?;
+            let nome = spec.get(b"UF").or_else(|_| spec.get(b"F")).ok()
+                .and_then(|n| lopdf::decode_text_string(n).ok())
+                .or_else(|| lopdf::decode_text_string(nome).ok())
+                .unwrap_or_else(|| "anexo".into());
+            Some((nome, spec))
+        }).collect()
+    }
+
+    /// Anexa o arquivo `nome` ao PDF (painel Anexos). Nome repetido ganha " (2)", " (3)"…
+    /// Devolve o nome com que ficou.
+    pub fn anexar(&mut self, nome: &str, bytes: Vec<u8>) -> Result<String, String> {
+        let nome = nome.trim();
+        if nome.is_empty() { return Err("O anexo precisa de um nome.".into()); }
+        let usados: std::collections::HashSet<String> = self.especificacoes().into_iter().map(|(n, _)| n).collect();
+        let (base, ext) = match nome.rfind('.') { Some(i) if i > 0 => (&nome[..i], &nome[i..]), _ => (nome, "") };
+        let unico = (1..).map(|k| if k == 1 { nome.to_string() } else { format!("{base} ({k}){ext}") })
+            .find(|n| !usados.contains(n)).unwrap_or_default();
+        let tamanho = bytes.len() as i64;
+        let mut fluxo = lopdf::Stream::new(dictionary! { "Type" => "EmbeddedFile", "Params" => dictionary! { "Size" => tamanho } }, bytes);
+        let _ = fluxo.compress();
+        let doc = &mut self.documento;
+        let arquivo = doc.add_object(fluxo);
+        let spec = doc.add_object(dictionary! {
+            "Type" => "Filespec", "F" => lopdf::text_string(&unico), "UF" => lopdf::text_string(&unico),
+            "EF" => dictionary! { "F" => arquivo, "UF" => arquivo },
+        });
+        let mut pares: Vec<(Object, Object)> = self.pares_anexos().into_iter().map(|(a, b)| (a.clone(), b.clone())).collect();
+        pares.push((lopdf::text_string(&unico), spec.into()));
+        self.gravar_anexos(pares)?;
+        Ok(unico)
+    }
+
+    /// Tira o anexo `i` (na ordem de `anexos`) da lista do PDF.
+    pub fn remover_anexo(&mut self, i: usize) -> Result<(), String> {
+        let mut pares: Vec<(Object, Object)> = self.pares_anexos().into_iter().map(|(a, b)| (a.clone(), b.clone())).collect();
+        if i >= pares.len() { return Err("Anexo inexistente.".into()); }
+        pares.remove(i);
+        self.gravar_anexos(pares)
+    }
+
+    /// Regrava a árvore EmbeddedFiles como uma folha só, em ordem de nome (como a norma pede).
+    fn gravar_anexos(&mut self, mut pares: Vec<(Object, Object)>) -> Result<(), String> {
+        pares.sort_by(|(a, _), (b, _)| a.as_str().unwrap_or_default().cmp(b.as_str().unwrap_or_default()));
+        let doc = &mut self.documento;
+        let names = match doc.catalog().map_err(|e| e.to_string())?.get(b"Names") {
+            Ok(Object::Reference(r)) => Some(*r),
+            _ => None,
+        };
+        let dicionario = match names {
+            Some(r) => doc.get_dictionary_mut(r).map_err(|e| e.to_string())?,
+            None => {
+                let c = doc.catalog_mut().map_err(|e| e.to_string())?;
+                if c.get(b"Names").and_then(Object::as_dict).is_err() { c.set("Names", Dictionary::new()); }
+                c.get_mut(b"Names").and_then(Object::as_dict_mut).map_err(|e| e.to_string())?
+            }
+        };
+        if pares.is_empty() {
+            dicionario.remove(b"EmbeddedFiles");
+        } else {
+            let lista: Vec<Object> = pares.into_iter().flat_map(|(a, b)| [a, b]).collect();
+            dicionario.set("EmbeddedFiles", dictionary! { "Names" => lista });
+        }
+        self.modificado = true;
+        Ok(())
     }
 
     /// O fluxo do arquivo anexado (sem descomprimir).
@@ -465,7 +535,7 @@ impl DocumentoPdf {
 
     fn conteudo_anexo(&self, spec: &Dictionary) -> Option<Vec<u8>> {
         let s = self.fluxo_anexo(spec)?;
-        s.decompressed_content().ok().or_else(|| s.filters().ok().filter(|f| f.is_empty()).map(|_| s.content.clone()))
+        s.decompressed_content_with_limit(crate::TETO_FLUXO).ok().or_else(|| s.filters().ok().filter(|f| f.is_empty()).map(|_| s.content.clone()))
     }
 
     pub fn anexos(&self) -> Vec<Anexo> {
@@ -510,6 +580,24 @@ mod testes {
         assert_eq!(pdf.anexos(), [crate::Anexo { nome: "dados.csv".into(), tamanho: 7 }]);
         assert_eq!(pdf.anexo(0).unwrap().1, b"a;b\n1;2");
         assert_eq!(pdf.marcadores(), [crate::Marcador { nivel: 1, titulo: "POLÍCIA".into(), pagina: 1 }]);
+    }
+
+    #[test]
+    fn anexar_nome_repetido_e_remover() {
+        let mut pdf = crate::testes::pdf_teste();
+        assert_eq!(pdf.anexar("planilha.csv", b"a;b".to_vec()).unwrap(), "planilha.csv");
+        assert_eq!(pdf.anexar("planilha.csv", b"x".to_vec()).unwrap(), "planilha (2).csv");
+        assert_eq!(pdf.anexar("contrato ç.txt", b"oi".to_vec()).unwrap(), "contrato ç.txt");
+        // Volta do arquivo gravado com os três, em ordem de nome.
+        let mut pdf = crate::DocumentoPdf::de_bytes(&pdf.serializar().unwrap(), None).unwrap();
+        let nomes: Vec<String> = pdf.anexos().into_iter().map(|a| a.nome).collect();
+        assert_eq!(nomes.len(), 3);
+        let i = nomes.iter().position(|n| n == "planilha (2).csv").unwrap();
+        assert_eq!(pdf.anexo(i).unwrap().1, b"x");
+        pdf.remover_anexo(i).unwrap();
+        assert!(pdf.anexos().iter().all(|a| a.nome != "planilha (2).csv") && pdf.anexos().len() == 2);
+        for _ in 0..2 { pdf.remover_anexo(0).unwrap(); }
+        assert!(pdf.anexos().is_empty() && pdf.remover_anexo(0).is_err());
     }
 
     /// Audit: sumário sem /Prev e /Parent (há geradores assim) e com volta em círculo.

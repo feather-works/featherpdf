@@ -81,7 +81,7 @@ impl DocumentoPdf {
                     let m = s.dict.get(b"Matrix").and_then(Object::as_array).ok().map(|v| v.iter().map(num).collect::<Vec<_>>())
                         .filter(|v| v.len() == 6).map_or(IDENTIDADE, |v| [v[0], v[1], v[2], v[3], v[4], v[5]]);
                     let dentro = s.dict.get(b"Resources").ok().and_then(|o| self.dict(o));
-                    let bytes = s.decompressed_content().unwrap_or_else(|_| s.content.clone());
+                    let bytes = s.decompressed_content_with_limit(crate::TETO_FLUXO).unwrap_or_else(|_| s.content.clone());
                     self.formas(&bytes, dentro.as_ref().or(recursos), mult(m, t.ctm), saida, nivel + 1, orcamento);
                 }
                 _ => {}
@@ -95,7 +95,7 @@ impl DocumentoPdf {
         let id: ObjectId = self.id_pagina(pagina)?;
         let recursos = self.documento.get_dictionary(id).ok().and_then(|d| d.get(b"Resources").ok()).and_then(|o| self.dict(o));
         let mut formas = vec![];
-        self.formas(&self.documento.get_page_content(id), recursos.as_ref(), IDENTIDADE, &mut formas, 0, &mut 10_000);
+        self.formas(&self.documento.get_page_content_with_limit(id, crate::TETO_FLUXO).unwrap_or_default(), recursos.as_ref(), IDENTIDADE, &mut formas, 0, &mut 10_000);
         let mut v: Vec<(f32, f32)> = formas.into_iter().flat_map(|(f, _)| match f { Forma::Vertices(p) => p, _ => vec![] }).collect();
         // Pontas repetidas (o fim de uma linha é o começo da outra) contam uma vez.
         v.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
@@ -108,7 +108,7 @@ impl DocumentoPdf {
         let id: ObjectId = self.id_pagina(pagina)?;
         let recursos = self.documento.get_dictionary(id).ok().and_then(|d| d.get(b"Resources").ok()).and_then(|o| self.dict(o));
         let mut formas = vec![];
-        self.formas(&self.documento.get_page_content(id), recursos.as_ref(), IDENTIDADE, &mut formas, 0, &mut 10_000);
+        self.formas(&self.documento.get_page_content_with_limit(id, crate::TETO_FLUXO).unwrap_or_default(), recursos.as_ref(), IDENTIDADE, &mut formas, 0, &mut 10_000);
         let dentro = |(x, y): (f32, f32)| x >= caixa[0] - 1.0 && x <= caixa[2] + 1.0 && y >= caixa[1] - 1.0 && y <= caixa[3] + 1.0;
         let area = (caixa[2] - caixa[0]) * (caixa[3] - caixa[1]);
         // Uma série por cor (linhas e barras separadas).

@@ -173,7 +173,7 @@ impl DocumentoPdf {
         let texto = |doc: &lopdf::Document, o: &lopdf::Object| -> Vec<u8> {
             let Ok(r) = o.as_reference() else { return Vec::new() };
             match doc.get_object(r) {
-                Ok(lopdf::Object::Stream(s)) => s.decompressed_content().unwrap_or_else(|_| s.content.clone()),
+                Ok(lopdf::Object::Stream(s)) => s.decompressed_content_with_limit(crate::TETO_FLUXO).unwrap_or_else(|_| s.content.clone()),
                 _ => Vec::new(),
             }
         };

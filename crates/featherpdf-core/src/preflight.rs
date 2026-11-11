@@ -106,7 +106,7 @@ fn recursos(doc: &Document, res: &Dictionary, uso: &mut Uso, vistos: &mut BTreeS
 
 fn uso_da_pagina(doc: &Document, id: ObjectId) -> Uso {
     let mut uso = Uso::default();
-    for op in lopdf::content::Content::decode(&doc.get_page_content(id)).map(|c| c.operations).unwrap_or_default() {
+    for op in lopdf::content::Content::decode(&doc.get_page_content_with_limit(id, crate::TETO_FLUXO).unwrap_or_default()).map(|c| c.operations).unwrap_or_default() {
         match op.operator.as_str() {
             "rg" | "RG" => uso.rgb = true,
             "k" | "K" => uso.cmyk = true,

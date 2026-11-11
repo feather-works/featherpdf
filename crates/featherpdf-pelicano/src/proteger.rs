@@ -196,6 +196,11 @@ impl App {
                         if c.desde.is_some() { return Task::none(); }
                         // Sem a cópia, troca o próprio arquivo e o reabre.
                         let destino = (!c.copia).then(|| a.pdf.origem().map(PathBuf::from)).flatten();
+                        // Trocar o próprio arquivo assinado quebraria as assinaturas, como no Ctrl+S.
+                        if let Some(Err((_, e))) = destino.as_deref().map(crate::original_sem_assinatura) {
+                            self.status = format!("{e} Marque \"Salvar como cópia\".");
+                            return Task::none();
+                        }
                         let tarefa = comprimir(a.pdf.clone(), c.opcoes(c.nivel));
                         if let Some(Janela::Comprimir(c)) = &mut self.protecao { c.desde = Some(std::time::Instant::now()); }
                         self.status = "Comprimindo…".into();
@@ -216,7 +221,16 @@ impl App {
             }
             Pr::Pronto(Ok(bytes), Some(destino), _) => {
                 self.status = match featherpdf_io::gravar_pdf(&destino, &bytes) {
-                    Ok(()) => { self.protecao = None; return self.update(Msg::AbrirCaminho(destino)); }
+                    Ok(()) => {
+                        self.protecao = None;
+                        // A aba do arquivo trocado sai (o comprimido já tem as edições dela): senão ficavam
+                        // duas abas do mesmo arquivo e salvar a antiga desfazia a compressão.
+                        let fechar = if self.aberto.as_ref().and_then(|a| a.pdf.origem()) == Some(destino.as_path()) {
+                            self.fechar_pendente = Some(self.ativa);
+                            self.fechar_aba(self.ativa)
+                        } else { Task::none() };
+                        return Task::batch([fechar, self.update(Msg::AbrirCaminho(destino))]);
+                    }
                     Err(e) => {
                         if let Some(Janela::Comprimir(c)) = &mut self.protecao { c.desde = None; }
                         e

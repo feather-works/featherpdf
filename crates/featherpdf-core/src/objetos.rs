@@ -149,17 +149,23 @@ impl<'a> Fonte<'a> {
                 if let Ok(dw) = desc.get(b"DW") { padrao = numero(dw); }
                 if let Some(w) = desc.get(b"W").ok().and_then(resolver).and_then(|o| o.as_array().ok()) {
                     let mut i = 0;
-                    while i + 1 < w.len() {
-                        let c = w[i].as_i64().unwrap_or(0) as u32;
+                    // Códigos de dois bytes (até 0xFFFF) e um teto de escritas: uma /W de 1 MB com
+                    // faixas enormes repetidas pedia bilhões de inserções.
+                    let mut orcamento = 1usize << 20;
+                    while i + 1 < w.len() && orcamento > 0 {
+                        let c = w[i].as_i64().unwrap_or(0).clamp(0, 0xFFFF) as u32;
                         match resolver(&w[i + 1]) {
                             Some(Object::Array(lista)) => {
-                                for (k, v) in lista.iter().enumerate() { larguras.insert(c + k as u32, numero(v)); }
+                                for (k, v) in lista.iter().take(orcamento).enumerate() { larguras.insert(c.saturating_add(k as u32), numero(v)); }
+                                orcamento = orcamento.saturating_sub(lista.len());
                                 i += 2;
                             }
                             _ if i + 2 < w.len() => {
-                                let fim = w[i + 1].as_i64().unwrap_or(0) as u32;
+                                let fim = w[i + 1].as_i64().unwrap_or(0).clamp(0, 0xFFFF) as u32;
                                 let v = numero(&w[i + 2]);
-                                for k in c..=fim.min(c + 65_535) { larguras.insert(k, v); }
+                                let faixa = c..=fim;
+                                orcamento = orcamento.saturating_sub(faixa.clone().count());
+                                for k in faixa { larguras.insert(k, v); }
                                 i += 3;
                             }
                             _ => break,
@@ -183,7 +189,7 @@ impl<'a> Fonte<'a> {
                 if falta.is_some() { padrao *= a * 1000.0; }
             }
         }
-        Fonte { codificacao: cod.get_font_encoding(doc).ok(), dois_bytes: tipo0, larguras, padrao, nome }
+        Fonte { codificacao: cod.get_font_encoding_with_limit(doc, crate::TETO_FLUXO).ok(), dois_bytes: tipo0, larguras, padrao, nome }
     }
 
     fn codigos<'b>(&self, bytes: &'b [u8]) -> impl Iterator<Item = u32> + 'b {
@@ -879,7 +885,7 @@ pub(crate) mod testes {
     pub(crate) fn no_arquivo(bytes: &[u8], agulha: &[u8]) -> bool {
         let tem = |b: &[u8]| b.windows(agulha.len()).any(|w| w == agulha);
         tem(bytes) || Document::load_mem(bytes).unwrap().objects.values().any(|o| matches!(o, Object::Stream(s)
-            if tem(&s.decompressed_content().unwrap_or_else(|_| s.content.clone()))))
+            if tem(&s.decompressed_content_with_limit(crate::TETO_FLUXO).unwrap_or_else(|_| s.content.clone()))))
     }
 
     pub(crate) fn pdf_com(conteudo: &str) -> DocumentoPdf {

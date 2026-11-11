@@ -92,6 +92,8 @@ pub const PRECISA_SENHA: &str = "Este PDF pede senha para abrir.";
 pub const SENHA_ERRADA: &str = "Senha incorreta.";
 
 const MAX_TEXTO_PAGINA: usize = 32 * 1024 * 1024;
+/// Teto para descomprimir um fluxo do arquivo: um fluxo de 50 KB pode virar 8 GB (bomba de compressão).
+pub(crate) const TETO_FLUXO: usize = 256 << 20;
 
 #[derive(Debug, Clone)]
 pub struct DocumentoPdf {
@@ -253,7 +255,7 @@ fn normalizar_cmaps(doc: &mut Document) {
         .filter_map(|d| d.get(b"ToUnicode").and_then(Object::as_reference).ok()).collect();
     for id in ids {
         let Ok(s) = doc.get_object_mut(id).and_then(Object::as_stream_mut) else { continue };
-        let Ok(plano) = s.decompressed_content().or_else(|_| Ok::<_, lopdf::Error>(s.content.clone())) else { continue };
+        let Ok(plano) = s.decompressed_content_with_limit(crate::TETO_FLUXO).or_else(|_| Ok::<_, lopdf::Error>(s.content.clone())) else { continue };
         if !plano.windows(9).any(|w| w == b"begincmap") { continue; }
         let novo = espacar_cmap(&plano);
         if novo != plano { s.set_plain_content(novo); }

@@ -79,9 +79,9 @@ const LIMITE_DESFAZER_BYTES: usize = 512 << 20;
 /// na dúvida, "Salvar como"; original apagado não tem assinatura a proteger.
 /// Erro: (pede "Salvar como", mensagem).
 fn original_sem_assinatura(d: &std::path::Path) -> Result<(), (bool, String)> {
-    match if d.exists() { featherpdf_io::ler_bytes(d) } else { Ok(vec![]) } {
-        Ok(b) if !b.windows(10).any(|w| w == b"/ByteRange") => Ok(()),
-        Ok(_) => Err((true, "Este PDF é assinado: gravar por cima invalidaria as assinaturas. Salve com outro nome.".into())),
+    match if d.exists() { featherpdf_io::arquivo_assinado(d) } else { Ok(false) } {
+        Ok(false) => Ok(()),
+        Ok(true) => Err((true, "Este PDF é assinado: gravar por cima invalidaria as assinaturas. Salve com outro nome.".into())),
         Err(e) => Err((true, format!("Não consegui conferir se o original é assinado ({e}). Salve com outro nome."))),
     }
 }
@@ -340,6 +340,8 @@ pub struct App {
     pub ativa: usize,
     /// Aba com alterações à espera do segundo clique no ×; `usize::MAX`: fechar a janela.
     fechar_pendente: Option<usize>,
+    /// Id do "PDF em branco" do Ctrl+N: abrir um arquivo com ele intocado usa a mesma aba.
+    em_branco: Option<u64>,
     /// Pergunta "salvar antes de fechar?" aberta: a aba, ou `usize::MAX` para a janela inteira.
     pub perguntar_fechar: Option<usize>,
     /// Aba que fecha assim que o "Salvar como" dela terminar.
@@ -491,6 +493,7 @@ impl App {
             guias: vec![None],
             ativa: 0,
             fechar_pendente: None,
+            em_branco: None,
             perguntar_fechar: None,
             fechar_depois_de_salvar: None,
             vez_da_vista: 0,
@@ -1105,7 +1108,9 @@ impl App {
             self.recentes.registrar(caminho, pdf.total_paginas());
         }
         // Sem origem o PDF sempre conta como modificado: o que diz "intocado" é não ter Ctrl+Z.
-        let intocado = self.aberto.as_ref().is_none_or(|a| a.pdf.origem().is_none() && self.historico.is_empty() && a.tamanhos.len() == 1);
+        // Só o "PDF em branco" sem mexer: foto ou "Imagens para PDF" de uma página também não têm
+        // arquivo nem Ctrl+Z, e abrir outro por cima perdia o que não foi salvo.
+        let intocado = self.aberto.as_ref().is_none_or(|a| self.em_branco == Some(a.id) && self.historico.is_empty());
         if !intocado {
             self.guias[self.ativa] = self.guardar_guia();
             self.guias.push(None);
@@ -1134,6 +1139,11 @@ impl App {
         self.ocr.cancelar();
         self.exportar.esquecer();
         self.scripts.rodada += 1;
+        // Escolhas feitas no documento de antes: Excluir ou Aplicar acertariam outro item deste.
+        self.navegacao.escolhido = None;
+        self.navegacao.link = None;
+        self.tarjas.marcas.clear();
+        self.comentarios.pendente = None;
         self.ler_navegacao();
         self.pagina = 1;
         self.historico.clear();
@@ -1157,6 +1167,11 @@ impl App {
 
     /// Depois de mexer na estrutura (girar, excluir), a vista é refeita do PDF editado.
     fn refazer_vista(&mut self) -> Task<Msg> {
+        // A tarja marca página e posição: depois de excluir, mover ou desfazer, cairia no lugar errado.
+        if !self.tarjas.marcas.is_empty() {
+            self.tarjas.marcas.clear();
+            self.status.push_str(" As marcas de tarja foram descartadas (o documento mudou); marque de novo.");
+        }
         // Edição e Ctrl+Z mudam o sumário: o painel aberto relê (anexos só com o painel, ler é caro).
         if matches!(self.painel, Some(Painel::Marcadores | Painel::Anexos)) { self.ler_navegacao(); }
         let Some(aberto) = &mut self.aberto else { return Task::none() };
@@ -1289,6 +1304,7 @@ impl App {
                             self.ativa = self.guias.len() - 1;
                         }
                         let t = self.entrar_sem_registro(pdf, vis);
+                        self.em_branco = self.id_aberto();
                         self.status = "PDF A4 em branco.".into();
                         return t;
                     }
@@ -1309,7 +1325,8 @@ impl App {
                 return Self::abrir_caminho(caminho, None);
             }
             Msg::CaminhoEscolhido(None) => self.depois_de_abrir = None,
-            Msg::DestinoEscolhido(_, None) => {}
+            // Cancelou o "Salvar como" do fechar: a aba fica aberta e o próximo Ctrl+S não a fecha.
+            Msg::DestinoEscolhido(_, None) => self.fechar_depois_de_salvar = None,
             Msg::Aberto(Ok((pdf, vis))) => {
                 let entrar = self.entrar(pdf, vis);
                 return match self.depois_de_abrir.take() { Some(m) => Task::batch([entrar, self.update_interno(m)]), None => entrar };
@@ -2019,9 +2036,20 @@ mod testes {
         let (mut app, _) = App::novo();
         let bytes = featherpdf_io::criar_a4().unwrap().serializar().unwrap();
         let pdf = DocumentoPdf::de_bytes(&bytes, Some(PathBuf::from("/tmp/x.pdf"))).unwrap();
-        let vis = Visualizador::novo(bytes).unwrap();
+        let vis = Visualizador::novo(bytes.clone()).unwrap();
         let _ = app.update(Msg::Aberto(Ok((pdf, vis))));
         assert_eq!(app.guias.len(), 1);
+        // A foto aberta (sem arquivo, sem Ctrl+Z) não é a aba em branco: o próximo vai para outra aba.
+        let foto = featherpdf_io::criar_a4().unwrap();
+        let vis = Visualizador::novo(foto.serializar().unwrap()).unwrap();
+        let _ = app.update(Msg::Aberto(Ok((foto, vis))));
+        let outro = DocumentoPdf::de_bytes(&bytes, Some(PathBuf::from("/tmp/y.pdf"))).unwrap();
+        let _ = app.update(Msg::Aberto(Ok((outro, Visualizador::novo(bytes.clone()).unwrap()))));
+        assert_eq!(app.guias.len(), 3);
+        // O Ctrl+N intocado é trocado pelo arquivo aberto.
+        let _ = app.update(Msg::NovoA4);
+        let _ = app.update(Msg::Aberto(Ok((DocumentoPdf::de_bytes(&bytes, Some(PathBuf::from("/tmp/z.pdf"))).unwrap(), Visualizador::novo(bytes).unwrap()))));
+        assert_eq!(app.guias.len(), 4);
     }
 
     #[test]
@@ -2204,7 +2232,6 @@ mod testes {
 
     #[test]
     fn zoom_anota_a_rolagem_sem_esperar_o_rolou() {
-        use pelicano::App as _;
         let mut app = com_a4();
         app.viewport = Some((0.0, 1000.0, 640.0));
         // Mouse no centro da página, para o ponto caber na tela desde o começo (rolagem não fica negativa).
@@ -2221,7 +2248,6 @@ mod testes {
 
     #[test]
     fn fundo_sobrevive_ao_zoom_mas_nao_a_edicao() {
-        use pelicano::App as _;
         let mut app = com_a4();
         let raster = || Ok(featherpdf_io::PaginaRaster { largura: 2, altura: 2, rgba: vec![255; 16] });
         let _ = app.update(Msg::Fundo(app.geracao_fundos, 1, raster()));
@@ -2237,7 +2263,6 @@ mod testes {
 
     #[test]
     fn zoom_animado_chega_no_alvo() {
-        use pelicano::App as _;
         let mut app = com_a4();
         app.viewport = Some((0.0, 1000.0, 640.0));
         app.zoom_animado = Some(ZoomAnimado { alvo: 2.0, ancora: (1, 0.5, 0.5, Point::new(500.0, 320.0)) });
@@ -2250,7 +2275,6 @@ mod testes {
 
     #[test]
     fn zoom_de_pagina_pequena_nao_pula_ao_encher_a_tela() {
-        use pelicano::App as _;
         let mut app = com_a4();
         let _ = app.mudar_zoom(0.2);
         app.viewport = Some((0.0, 1000.0, 640.0));

@@ -16,7 +16,7 @@ use crate::compat::*;
 use crate::{App, Ferramenta, Msg, Painel};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Uso { Ocr, Tabela, Grafico, Imagem }
+pub enum Uso { Ocr, Tabela, Grafico, Imagem, /** Zoom por área: o retângulo enche a tela. */ Zoom }
 
 #[derive(Debug, Clone)]
 pub enum Rr {
@@ -54,6 +54,7 @@ impl App {
                         Uso::Tabela => "Arraste um retângulo em volta da tabela escaneada.",
                         Uso::Grafico => "Arraste um retângulo em volta do gráfico, incluindo os números dos eixos.",
                         Uso::Imagem => "Arraste um retângulo em volta do que quer copiar como imagem.",
+                        Uso::Zoom => "Arraste um retângulo: ele passa a encher a tela. Clique de novo em Área para sair.",
                     }.into();
                 }
                 return self.update_interno(Msg::Ferramenta(f));
@@ -68,6 +69,11 @@ impl App {
                 let (pl, pa) = aberto.tamanhos[pagina as usize - 1];
                 let (l, h) = (pl * self.zoom, pa * self.zoom);
                 let f = [a.x.min(b.x) / l, a.y.min(b.y) / h, a.x.max(b.x) / l, a.y.max(b.y) / h].map(|v| v.clamp(0.0, 1.0));
+                if uso == Uso::Zoom {
+                    let (alvo, ancora) = zoom_da_area(((f[2] - f[0]) * pl, (f[3] - f[1]) * pa), self.tamanho_mesa.get());
+                    self.zoom_animado = Some(crate::ZoomAnimado { alvo, ancora: (pagina, (f[0] + f[2]) / 2.0, (f[1] + f[3]) / 2.0, ancora) });
+                    return Task::none();
+                }
                 if uso == Uso::Imagem {
                     let vis = aberto.vis.clone();
                     let escala = escala_da_copia(((f[2] - f[0]) * pl, (f[3] - f[1]) * pa), self.zoom);
@@ -230,9 +236,26 @@ pub(crate) fn ler_area(vis: &featherpdf_io::Visualizador, pagina: u32, (pl, pa):
     }, giro_lido))
 }
 
+/// Zoom que faz a área (em pontos) caber na mesa com folga, e o centro da mesa (onde o centro
+/// da área vai parar).
+fn zoom_da_area((l, a): (f32, f32), mesa: Size) -> (f32, Point) {
+    let folga = 2.0 * crate::VAO_PAGINAS;
+    let zoom = ((mesa.width - folga) / l.max(1.0)).min((mesa.height - folga) / a.max(1.0));
+    (zoom.clamp(crate::ZOOM_MIN, crate::ZOOM_MAX), Point::new(mesa.width / 2.0, mesa.height / 2.0))
+}
+
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    #[test]
+    fn zoom_da_area_enche_a_mesa_e_respeita_o_teto() {
+        let mesa = Size::new(1032.0, 632.0);
+        let (z, centro) = zoom_da_area((250.0, 100.0), mesa);
+        assert!((z - 4.0).abs() < 1e-3 && centro == Point::new(516.0, 316.0), "{z}");
+        assert_eq!(zoom_da_area((1.0, 1.0), mesa).0, crate::ZOOM_MAX);
+        assert_eq!(zoom_da_area((10_000.0, 10_000.0), mesa).0, crate::ZOOM_MIN);
+    }
 
     #[test]
     fn copia_nitida_mas_com_teto_de_pixels() {

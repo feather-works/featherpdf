@@ -21,6 +21,8 @@ Todas as versões e os `SHA256SUMS` ficam na [página de releases](https://githu
 - **Páginas:** copiar, recortar e colar páginas (também entre PDFs abertos) e numeração lógica (i, ii… no prefácio, A-1…).
 - **Marcadores e links:** criar, renomear, mover e excluir marcadores; painel Links da página para trocar ou apagar o destino de cada link.
 - **Formulários:** campo obrigatório, somente leitura e valor padrão.
+- **Anexos, imagem e zoom:** anexar um arquivo ao PDF (e tirar um anexo); girar uma imagem 90°; zoom por área (arraste um retângulo e ele enche a tela).
+- **Mais seguro com PDF estranho:** PDF malicioso não derruba mais o app (bomba de compressão, fórmula de campo gigante); a tarja não cai na página errada depois de editar e tira também o texto alternativo das tags; comprimir e dividir mantêm a senha.
 - **Mais:** papel na impressão (A4, Carta, Ofício, A3, A5), extrair as fotos do PDF, opacidade dos comentários, cabeçalho e rodapé editáveis e removíveis, busca também nos campos e anexos.
 
 ### Novidades da 0.1.6

@@ -7,17 +7,17 @@
 
 ## Resumo
 
-Total: **649** itens. ✅ feito: **305** · 🟡 parcial: **70** · ❌ falta: **274**.
+Total: **649** itens. ✅ feito: **308** · 🟡 parcial: **70** · ❌ falta: **271**.
 
 Ver a contagem por seção abaixo. Desde 10/11 (decisão do usuário) o FeatherPDF não tem nada que dependa de internet ou de IA: saíram da lista os serviços da Adobe (nuvem, compartilhamento, Acrobat Sign remoto, AI Assistant), as seções Compartilhamento e Inteligência artificial e os itens que pedem rede (PDF de página da internet, enviar formulário, procurar atualizações). O OCR local com o modelo latino embutido continua; os modelos baixados de outras línguas saíram. Contagem refeita a partir das linhas de cada seção.
 
 | Seção | Itens | ✅ feito | 🟡 parcial | ❌ falta |
 |---|---|---|---|---|
-| 1. Visualização e leitura de PDF | 35 | 23 | 6 | 6 |
+| 1. Visualização e leitura de PDF | 35 | 24 | 6 | 5 |
 | 2. Edição de texto | 24 | 11 | 4 | 9 |
-| 3. Edição de imagens | 18 | 11 | 2 | 5 |
+| 3. Edição de imagens | 18 | 12 | 2 | 4 |
 | 4. Organização de páginas | 27 | 25 | 1 | 1 |
-| 5. Criação de PDF | 21 | 5 | 4 | 12 |
+| 5. Criação de PDF | 21 | 6 | 4 | 11 |
 | 6. Conversão e exportação | 33 | 18 | 3 | 12 |
 | 7. Compressão e otimização de PDF | 41 | 20 | 1 | 20 |
 | 8. OCR e digitalização | 22 | 10 | 3 | 9 |
@@ -37,7 +37,7 @@ Ver a contagem por seção abaixo. Desde 10/11 (decisão do usuário) o FeatherP
 | 22. Recursos de engenharia, medições e PDF 3D | 28 | 8 | 1 | 19 |
 | 23. Multimídia e documentos interativos | 18 | 0 | 2 | 16 |
 | 24. Preferências e personalização | 15 | 4 | 2 | 9 |
-| **Total** | **649** | **305** | **70** | **274** |
+| **Total** | **649** | **308** | **70** | **271** |
 
 ## Próximos lotes sugeridos
 
@@ -57,7 +57,7 @@ Critério: uso diário de PDF, sem os itens exóticos (3D, geoespacial, PDF/X, P
 
 **Lote 3: edição de texto e imagem**
 7. Modificar fonte (seção 2): ❌. Tamanho, cor e espaço do texto existente já mudam; a fonte e o negrito não.
-8. Rotacionar imagens (seção 3): ❌. Editar imagem troca, corta e redimensiona, mas não gira.
+8. Rotacionar imagens (seção 3): ✅ (11/11). Painel Imagem ▸ Girar.
 9. Extrair imagens do PDF (seção 3): ✅ (10/11). Exportar ▸ Imagens ▸ Fotos do PDF.
 
 **Lote 4: formulários e comentários**
@@ -98,7 +98,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Ajustar à largura. | ✅ feito | Msg::AjustarLargura (main.rs) |
 | Ajustar à altura. | ✅ feito | Msg::AjustarAltura (botão Altura) |
 | Zoom personalizado. | ✅ feito | caixa do zoom aceita o percentual digitado (Msg::CampoZoom) |
-| Zoom por seleção de área. | ❌ falta | não há no código |
+| Zoom por seleção de área. | ✅ feito | Exibir ▸ Zoom ▸ Área: o retângulo arrastado enche a tela (11/11; regiao.rs Uso::Zoom) |
 | Navegação por número de página. | ✅ feito | campo de página (Msg::CampoPagina) |
 | Navegação por miniaturas. | ✅ feito | painel Miniaturas (documento.rs) |
 | Navegação por marcadores. | ✅ feito | painel Marcadores, clique leva à página (navegar.rs) |
@@ -161,7 +161,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Substituir imagens existentes. | ✅ feito | Editar imagem ▸ Trocar por outra imagem (imagem.rs) |
 | Redimensionar imagens. | ✅ feito | Editar imagem ▸ Tamanho, com proporção (imagem.rs); sem alça de arrastar |
 | Mover imagens. | ✅ feito | arrastar e setas (edicao.rs) |
-| Rotacionar imagens. | ❌ falta | não há no código |
+| Rotacionar imagens. | ✅ feito | painel Imagem ▸ Girar à esquerda/direita, 90° no centro (11/11; core editar_imagem.rs girar_imagem) |
 | Recortar imagens. | ✅ feito | Editar imagem ▸ Cortar (imagem.rs) |
 | Alinhar imagens. | ✅ feito | alinhar entre si e à página (inserir.rs Ins::Alinhar) |
 | Ajustar a posição de objetos gráficos. | ✅ feito | mover e alinhar (edicao.rs) |
@@ -229,7 +229,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Criar documentos PDF com marcadores. | ❌ falta | não há no código |
 | Criar documentos PDF com links. | 🟡 parcial | Novo PDF + Editar ▸ Link; a conversão de outros formatos não existe |
 | Criar documentos PDF com formulários. | ✅ feito | modelos de formulário A4 (core modelos.rs) |
-| Criar documentos PDF com anexos. | ❌ falta | não há no código |
+| Criar documentos PDF com anexos. | ✅ feito | painel Anexos ▸ Anexar arquivo… e a lixeira tira um (11/11; core navegacao.rs anexar/remover_anexo) |
 | Criar PDFs com configurações personalizadas de compressão. | ❌ falta | não há no código |
 | Configurar qualidade de imagens durante a criação. | ❌ falta | não há no código |
 | Configurar incorporação de fontes. | ❌ falta | não há no código |
