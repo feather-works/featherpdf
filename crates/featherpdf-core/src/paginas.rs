@@ -64,6 +64,10 @@ impl DocumentoPdf {
     }
 
     fn definir_ordem(&mut self, ids: &[ObjectId]) -> Result<(), String> {
+        // A /PageLabels conta por posição: excluir, mover ou colar trocaria o nome das páginas.
+        let antes = self.ids_paginas();
+        let tem_rotulos = self.documento.catalog().is_ok_and(|c| c.has(b"PageLabels"));
+        let rotulos = (tem_rotulos && antes != ids).then(|| self.rotulos_paginas());
         let raiz = self.raiz_paginas()?;
         for &id in ids {
             self.documento.get_dictionary_mut(id).map_err(erro)?.set("Parent", Object::Reference(raiz));
@@ -72,6 +76,7 @@ impl DocumentoPdf {
         d.set("Kids", ids.iter().map(|&i| Object::Reference(i)).collect::<Vec<_>>());
         d.set("Count", ids.len() as i64);
         self.modificado = true;
+        if let Some(r) = rotulos { self.remapear_rotulos(&antes, &r)?; }
         Ok(())
     }
 

@@ -21,7 +21,20 @@ Corrigido neste dia:
 - Ordem de Tab "por linhas" em faixas (o sort não era transitivo e podia entrar em pânico);
   número "1,234.56" lido como 1234,56.
 
+Segunda auditoria do dia (sobre o que entrou):
+- Tarja: dois nomes (/Im1, /Im2) da mesma imagem passam os dois para a cópia tarjada.
+- Tirar um anexo tira também do /AF; medir anexos sem /Size tem 64 MB para todos juntos; a busca
+  conta também o anexo binário no teto.
+- Referência solta no sumário não desalinha o marcador escolhido do que é editado.
+- Excluir, mover e colar páginas mantêm o nome lógico de cada página (/PageLabels refeita).
+- Link em edição é esquecido depois de qualquer edição; girar imagem só troca largura/altura do
+  painel se girou; o nome lógico da barra de baixo fica guardado até a próxima edição; elementos
+  de estrutura lidos uma vez por tarja.
+- Comprimir sem cópia não fecha a aba que tem algo por salvar.
+
 Ficou para depois:
+- Anexar arquivo (lê e comprime até 256 MB) e Copiar/Recortar páginas (extrai o documento) rodam
+  na thread da janela.
 - Trabalho pesado ainda na thread da janela: abrir o Ctrl+F (lê todos os objetos e anexos), achar
   e aplicar tarja, proteger com senha, levar ao FeatherDocs. Passar para `spawn_blocking`.
 - Cache `objetos` só cresce ao rolar documento enorme: soltar as páginas longe da tela.

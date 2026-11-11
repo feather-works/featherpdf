@@ -225,7 +225,8 @@ impl App {
                         self.protecao = None;
                         // A aba do arquivo trocado sai (o comprimido já tem as edições dela): senão ficavam
                         // duas abas do mesmo arquivo e salvar a antiga desfazia a compressão.
-                        let fechar = if self.aberto.as_ref().and_then(|a| a.pdf.origem()) == Some(destino.as_path()) {
+                        // Com algo por salvar (talvez editado durante a compressão), a aba fica: nada se perde.
+                        let fechar = if self.aberto.as_ref().and_then(|a| a.pdf.origem()) == Some(destino.as_path()) && !self.modificada(self.ativa) {
                             self.fechar_pendente = Some(self.ativa);
                             self.fechar_aba(self.ativa)
                         } else { Task::none() };

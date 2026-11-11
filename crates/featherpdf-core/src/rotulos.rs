@@ -179,6 +179,32 @@ impl DocumentoPdf {
         Ok(())
     }
 
+    /// Depois de mudar a ordem das páginas: cada página continua com o nome que tinha (`rotulos`,
+    /// na ordem de `antes`); página nova leva o número da posição. Sequência decimal vira um trecho só.
+    pub(crate) fn remapear_rotulos(&mut self, antes: &[lopdf::ObjectId], rotulos: &[String]) -> Result<(), String> {
+        let nome: std::collections::HashMap<lopdf::ObjectId, &String> = antes.iter().copied().zip(rotulos).collect();
+        let mut nums = Vec::new();
+        let mut anterior: Option<u32> = None;
+        for (i, id) in self.ids_paginas().iter().enumerate() {
+            let r = nome.get(id).map_or_else(|| (i + 1).to_string(), |s| s.to_string());
+            let n = r.parse::<u32>().ok().filter(|&n| n > 0 && !r.starts_with('0') && !r.starts_with('+'));
+            if n.is_some() && anterior.and_then(|a| a.checked_add(1)) == n { anterior = n; continue; }
+            let mut d = Dictionary::new();
+            d.set("Type", "PageLabel");
+            match n {
+                Some(n) => { d.set("S", Object::Name(b"D".to_vec())); if n != 1 { d.set("St", i64::from(n)); } }
+                None => d.set("P", lopdf::text_string(&r)),
+            }
+            nums.push(Object::Integer(i as i64));
+            nums.push(Object::Dictionary(d));
+            anterior = n;
+        }
+        let mut raiz = Dictionary::new();
+        raiz.set("Nums", nums);
+        self.documento.catalog_mut().map_err(|e| e.to_string())?.set("PageLabels", raiz);
+        Ok(())
+    }
+
     /// Tira a numeração lógica: as páginas voltam a "1", "2"…; devolve se havia.
     pub fn tirar_numeracao_logica(&mut self) -> Result<bool, String> {
         let havia = self.documento.catalog_mut().map_err(|e| e.to_string())?.remove(b"PageLabels").is_some();
@@ -240,6 +266,12 @@ mod testes {
         pdf.numerar_logico(2, 2, EstiloRotulo::LetraMaiuscula, "", 5).unwrap();
         assert_eq!(pdf.rotulos_paginas(), ["i", "E", "A-1", "A-2"]);
         assert_eq!(pdf.rotulo_da_pagina(3).as_deref(), Some("A-1"));
+        // Excluir e inserir: cada página leva o nome que tinha; a nova, o número da posição.
+        let mut outro = pdf.clone();
+        outro.excluir_paginas(&[2]).unwrap();
+        assert_eq!(outro.rotulos_paginas(), ["i", "A-1", "A-2"]);
+        outro.inserir_em_branco(1).unwrap();
+        assert_eq!(outro.rotulos_paginas(), ["1", "i", "A-1", "A-2"]);
         assert!(pdf.numerar_logico(3, 9, EstiloRotulo::Decimal, "", 1).is_err());
         assert!(pdf.tirar_numeracao_logica().unwrap());
         assert_eq!(pdf.rotulos_paginas(), ["1", "2", "3", "4"]);

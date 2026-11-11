@@ -190,6 +190,12 @@ impl DocumentoPdf {
         let mut por_pagina: BTreeMap<u32, Vec<[f32; 4]>> = BTreeMap::new();
         for &(p, c) in marcas { por_pagina.entry(p).or_default().push(c); }
         let mut letras = 0;
+        // Elementos da estrutura (PDF com tags) por página, lidos uma vez: varrer o arquivo a cada
+        // página tarjada ficava quadrático num documento grande.
+        let mut por_pg: std::collections::HashMap<ObjectId, Vec<ObjectId>> = std::collections::HashMap::new();
+        for (k, o) in &self.documento.objects {
+            if let Some(pg) = o.as_dict().ok().and_then(|d| d.get(b"Pg").ok()).and_then(|p| p.as_reference().ok()) { por_pg.entry(pg).or_default().push(*k); }
+        }
         for (&pagina, caixas) in &por_pagina {
             let id = self.id_pagina(pagina)?;
             let mut a = self.analisar_com(pagina, true)?;
@@ -246,7 +252,9 @@ impl DocumentoPdf {
                 };
                 if let Some(c) = alvo {
                     if self.apagar_pixels(c, lugar.matriz, &toca, apagar) {
-                        if copias.insert(x, c).is_none() { self.trocar_xobjeto(id, &nome, Some(c)); }
+                        // Todo nome que desenha a mesma imagem passa para a cópia (/Im1 e /Im2 → x).
+                        copias.insert(x, c);
+                        self.trocar_xobjeto(id, &nome, Some(c));
                         continue;
                     }
                     if !copias.contains_key(&x) { self.documento.objects.remove(&c); }
@@ -275,10 +283,7 @@ impl DocumentoPdf {
             }
             if !nomes.is_empty() { self.tirar_texto_das_propriedades(id, &nomes); }
             // PDF com tags (Word): o elemento da estrutura desta página guarda o texto em /ActualText e /Alt.
-            let elementos: Vec<ObjectId> = self.documento.objects.iter()
-                .filter(|(_, o)| o.as_dict().ok().and_then(|d| d.get(b"Pg").ok()).and_then(|p| p.as_reference().ok()) == Some(id))
-                .map(|(k, _)| *k).collect();
-            for e in elementos { if let Ok(d) = self.documento.get_dictionary_mut(e) { tirar_texto_alt(d); } }
+            for &e in por_pg.get(&id).map(Vec::as_slice).unwrap_or_default() { if let Ok(d) = self.documento.get_dictionary_mut(e) { tirar_texto_alt(d); } }
             // A miniatura da página mostra o que foi tarjado.
             if let Ok(p) = self.documento.get_dictionary_mut(id) { p.remove(b"Thumb"); }
             // O conteúdo antigo fica entre q/Q: o preto sai no espaço da página.
@@ -463,9 +468,13 @@ mod testes {
 
     #[test]
     fn tarja_em_imagem_repetida_nao_estraga_a_outra_pagina_e_tira_alt_da_estrutura() {
-        let mut pdf = pdf_com("q 100 0 0 100 100 100 cm /Im2 Do Q");
+        // /Im2 e /Im3 apontam para a mesma imagem: as duas passam para a cópia tarjada.
+        let mut pdf = pdf_com("q 100 0 0 100 100 100 cm /Im2 Do Q q 100 0 0 100 300 300 cm /Im3 Do Q");
         let x = com_xobjeto(&mut pdf, "Im2", Stream::new(dictionary! { "Type" => "XObject", "Subtype" => "Image", "Width" => 9, "Height" => 1,
             "ColorSpace" => "DeviceGray", "BitsPerComponent" => 8 }, b"abcdefghi".to_vec()));
+        let pg = pdf.id_pagina(1).unwrap();
+        pdf.documento.get_dictionary_mut(pg).unwrap().get_mut(b"Resources").unwrap().as_dict_mut().unwrap()
+            .get_mut(b"XObject").unwrap().as_dict_mut().unwrap().set("Im3", x);
         // A mesma imagem em "outra página" e um elemento de estrutura (PDF com tags) desta página.
         let id = pdf.id_pagina(1).unwrap();
         let elem = pdf.documento.add_object(dictionary! { "S" => "Figure", "Pg" => id, "Alt" => Object::string_literal("SEGREDO") });
@@ -477,6 +486,8 @@ mod testes {
         let rec = pdf.documento.get_page_resources(id).unwrap().0.unwrap().clone();
         let agora = rec.get(b"XObject").unwrap().as_dict().unwrap().get(b"Im2").unwrap().as_reference().unwrap();
         assert_ne!(agora, x, "a página tarjada aponta para a cópia");
+        let im3 = rec.get(b"XObject").unwrap().as_dict().unwrap().get(b"Im3").unwrap().as_reference().unwrap();
+        assert_ne!(im3, x, "o outro nome da mesma imagem também sai do original");
         assert!(!pdf.documento.get_dictionary(elem).unwrap().has(b"Alt"));
     }
 

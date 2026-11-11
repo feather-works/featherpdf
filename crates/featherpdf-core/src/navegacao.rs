@@ -88,7 +88,9 @@ impl DocumentoPdf {
         let mut vistos = std::collections::HashSet::new();
         let mut proximo = primeiro;
         while let Some(f) = proximo {
-            if !vistos.insert(f) || saida.len() >= 100_000 { break; }
+            // Referência solta (/Next para objeto que não existe) para a corrente: senão o índice
+            // das edições contaria um item que a lista da tela não mostra.
+            if !vistos.insert(f) || saida.len() >= 100_000 || doc.get_dictionary(f).is_err() { break; }
             saida.push(f);
             proximo = doc.get_dictionary(f).ok().and_then(|d| d.get(b"Next").ok()).and_then(|o| o.as_reference().ok());
         }
@@ -477,7 +479,16 @@ impl DocumentoPdf {
     pub fn remover_anexo(&mut self, i: usize) -> Result<(), String> {
         let mut pares: Vec<(Object, Object)> = self.pares_anexos().into_iter().map(|(a, b)| (a.clone(), b.clone())).collect();
         if i >= pares.len() { return Err("Anexo inexistente.".into()); }
-        pares.remove(i);
+        let (_, spec) = pares.remove(i);
+        // Fatura PDF/A-3: o mesmo anexo pode estar também no /AF do catálogo.
+        if let Ok(r) = spec.as_reference() {
+            let af = self.documento.catalog().ok().and_then(|c| c.get(b"AF").ok()).and_then(|o| o.as_reference().ok());
+            let lista = match af {
+                Some(id) => self.documento.get_object_mut(id).ok(),
+                None => self.documento.catalog_mut().ok().and_then(|c| c.get_mut(b"AF").ok()),
+            };
+            if let Some(Object::Array(v)) = lista { v.retain(|o| o.as_reference().ok() != Some(r)); }
+        }
         self.gravar_anexos(pares)
     }
 
@@ -540,12 +551,17 @@ impl DocumentoPdf {
 
     pub fn anexos(&self) -> Vec<Anexo> {
         // O tamanho vem de /Params /Size, sem descomprimir; sem ele, do fluxo sem filtro ou
-        // descomprimido até 64 MB (acima disso vale "grande": usize::MAX).
+        // descomprimido, com 64 MB para todos juntos (mil anexos apontando para uma bomba
+        // descomprimiam cada um). Sem como medir: usize::MAX.
+        let mut orcamento: u64 = 64 << 20;
         self.especificacoes().into_iter().map(|(nome, spec)| {
             let declarado = self.fluxo_anexo(spec).and_then(|s| s.dict.get(b"Params").ok())
                 .and_then(|p| match p { Object::Reference(r) => self.documento.get_dictionary(*r).ok(), o => o.as_dict().ok() })
                 .and_then(|p| p.get(b"Size").and_then(Object::as_i64).ok()).and_then(|n| usize::try_from(n).ok());
-            let tamanho = declarado.unwrap_or_else(|| self.conteudo_anexo_ate(spec, 64 << 20).map_or(usize::MAX, |b| b.len()));
+            let tamanho = declarado.unwrap_or_else(|| match self.conteudo_anexo_ate(spec, orcamento) {
+                Some(b) => { orcamento -= b.len() as u64; b.len() }
+                None => { orcamento = 0; usize::MAX }
+            });
             Anexo { nome, tamanho }
         }).collect()
     }
@@ -594,7 +610,11 @@ mod testes {
         assert_eq!(nomes.len(), 3);
         let i = nomes.iter().position(|n| n == "planilha (2).csv").unwrap();
         assert_eq!(pdf.anexo(i).unwrap().1, b"x");
+        // Também no /AF (PDF/A-3): tirar o anexo tira dali.
+        let spec = pdf.pares_anexos()[i].1.as_reference().unwrap();
+        pdf.documento.catalog_mut().unwrap().set("AF", vec![Object::Reference(spec)]);
         pdf.remover_anexo(i).unwrap();
+        assert!(pdf.documento.catalog().unwrap().get(b"AF").unwrap().as_array().unwrap().is_empty());
         assert!(pdf.anexos().iter().all(|a| a.nome != "planilha (2).csv") && pdf.anexos().len() == 2);
         for _ in 0..2 { pdf.remover_anexo(0).unwrap(); }
         assert!(pdf.anexos().is_empty() && pdf.remover_anexo(0).is_err());

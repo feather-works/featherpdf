@@ -95,9 +95,9 @@ impl App {
         let mut lido = 0;
         self.busca.anexos = a.pdf.anexos().into_iter().enumerate().map(|(i, an)| {
             // `anexo_ate`: o /Size pode mentir; a leitura para no teto de qualquer jeito.
+            // Conta o que foi lido antes de ver se é texto: binário também custa descomprimir.
             let texto = (an.tamanho <= TETO_ANEXO && lido + an.tamanho <= TETO_ANEXOS).then(|| a.pdf.anexo_ate(i, TETO_ANEXO as u64)).flatten()
-                .and_then(|(_, b)| String::from_utf8(b).ok());
-            if let Some(t) = &texto { lido += t.len(); }
+                .and_then(|(_, b)| { lido += b.len(); String::from_utf8(b).ok() });
             (an.nome, texto)
         }).collect();
     }

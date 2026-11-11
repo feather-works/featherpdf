@@ -95,9 +95,11 @@ impl App {
                 return self.editar(move |pdf| pdf.redimensionar_imagem(pagina, k, nova).map(|_| "Imagem redimensionada. Ctrl+Z desfaz.".into()));
             }
             Im::Girar(horario) => {
-                std::mem::swap(&mut e.largura, &mut e.altura);
                 let lado = if horario { "à direita" } else { "à esquerda" };
-                return self.editar(move |pdf| pdf.girar_imagem(pagina, k, horario).map(|_| format!("Imagem girada {lado}. Ctrl+Z desfaz.")));
+                let tarefa = self.editar(move |pdf| pdf.girar_imagem(pagina, k, horario).map(|_| format!("Imagem girada {lado}. Ctrl+Z desfaz.")));
+                // Largura e altura do painel trocam só se girou (senão "Aplicar tamanho" distorceria).
+                if self.ultima_edicao_ok { let e = &mut self.imagem; std::mem::swap(&mut e.largura, &mut e.altura); }
+                return tarefa;
             }
             Im::Corte(i, v) => e.corte[i] = v,
             Im::Cortar => {

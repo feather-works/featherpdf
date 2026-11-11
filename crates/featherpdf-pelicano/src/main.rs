@@ -1168,6 +1168,8 @@ impl App {
     /// Depois de mexer na estrutura (girar, excluir), a vista é refeita do PDF editado.
     fn refazer_vista(&mut self) -> Task<Msg> {
         // A tarja marca página e posição: depois de excluir, mover ou desfazer, cairia no lugar errado.
+        // O link em edição é um índice em /Annots: apagar um comentário antes dele o deslocaria.
+        self.navegacao.link = None;
         if !self.tarjas.marcas.is_empty() {
             self.tarjas.marcas.clear();
             self.status.push_str(" As marcas de tarja foram descartadas (o documento mudou); marque de novo.");

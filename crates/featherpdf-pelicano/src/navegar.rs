@@ -371,8 +371,8 @@ impl App {
         }
         let mut lista = column![anexar].spacing(8);
         for (i, a) in self.navegacao.anexos.iter().enumerate() {
-            // `usize::MAX`: comprimido e acima de 64 MB (não é descomprimido só para medir).
-            let tamanho = if a.tamanho == usize::MAX { "> 64 MB".to_string() } else if a.tamanho >= 1024 * 1024 { format!("{} MB", numero(a.tamanho as f64 / 1048576.0, 1)) }
+            // `usize::MAX`: sem /Size e grande demais para medir (não é descomprimido só para isso).
+            let tamanho = if a.tamanho == usize::MAX { "tamanho não informado".to_string() } else if a.tamanho >= 1024 * 1024 { format!("{} MB", numero(a.tamanho as f64 / 1048576.0, 1)) }
                 else { format!("{} KB", numero((a.tamanho as f64 / 1024.0).ceil(), 0)) };
             lista = lista.push(row![
                 icones::icone("file-export", 16.),
