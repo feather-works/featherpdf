@@ -1,7 +1,7 @@
 name: featherpdf
 title: FeatherPDF
 base: core26 # mesma base e mesma placa de vídeo (gpu-2604) do snap do FeatherSheet
-version: '0.1.7' # trocar junto com a tag em `source:` a cada versão
+version: '0.1.8' # trocar junto com a tag em `source:` a cada versão
 summary: Light local PDF editor, no account needed
 description: |
   A PDF editor written in Rust with a native interface. Read, annotate,
@@ -54,7 +54,7 @@ parts:
   featherpdf:
     # Reaproveita o .deb da release (feito pelo pacote/gerar.sh), sem recompilar.
     plugin: dump
-    source: https://github.com/feather-works/featherpdf/releases/download/v0.1.7/featherpdf-linux-amd64.deb
+    source: https://github.com/feather-works/featherpdf/releases/download/v0.1.8/featherpdf-linux-amd64.deb
     source-type: deb
     # Bibliotecas que o winit/wgpu e as fontes abrem por dlopen; curl (modelos do OCR)
     # e lp/lpstat (impressão) que o FeatherPDF chama.

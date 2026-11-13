@@ -2004,7 +2004,7 @@ dependencies = [
 
 [[package]]
 name = "featherpdf-core"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "cms",
  "der",
@@ -2023,7 +2023,7 @@ dependencies = [
 
 [[package]]
 name = "featherpdf-io"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "feather-draw",
  "feather-io",
@@ -2043,7 +2043,7 @@ dependencies = [
 
 [[package]]
 name = "featherpdf-ocr"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "featherpdf-core",
  "featherpdf-io",
@@ -2053,7 +2053,7 @@ dependencies = [
 
 [[package]]
 name = "featherpdf-pelicano"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "ab_glyph",
  "arboard",

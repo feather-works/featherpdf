@@ -1,6 +1,6 @@
 # FeatherPDF
 
-**Produto FeatherOffice independente · versão 0.1.7**
+**Produto FeatherOffice independente · versão 0.1.8**
 
 ## Baixar
 
@@ -14,6 +14,15 @@
 | **Linux** (qualquer distribuição) | [featherpdf-linux-x86_64.tar.gz](https://github.com/feather-works/featherpdf/releases/latest/download/featherpdf-linux-x86_64.tar.gz) | extraia e rode `./instalar.sh` |
 
 Todas as versões e os `SHA256SUMS` ficam na [página de releases](https://github.com/feather-works/featherpdf/releases).
+
+### Novidades da 0.1.8
+
+- **Tela inicial nova:** "Continuar de onde parou" com a página onde você saiu, ferramentas em blocos e os recentes em cartões com a capa da página 1.
+- **Tema escuro mais bonito:** grafite quente no lugar do cinza quase preto, ícones mais finos e o vermelho legível; a página escura também escurece logotipo em fundo branco e página escaneada.
+- **Confirmação ao salvar:** exportar termina numa tela "Pronto!" com Abrir arquivo e Abrir pasta; dividir, extrair, comprimir, anexos e as outras ferramentas mostram um cartão "Salvo" com os mesmos botões.
+- **Modo apresentação (F5):** uma página por vez em tela cheia; setas, espaço ou Page Down passam, Esc volta como estava. Ctrl+J junta arquivos.
+- **Mais seguro e sem perder arquivo:** Ctrl+Z depois de Salvar como, o mesmo PDF em duas abas, tirar a senha e salvar por cima de um original assinado não perdem mais nada; a tarja apaga letra coberta pela metade, campos, comentários e o XFA; script de campo roda num processo à parte, com prazo.
+- **Mais rápido em PDF grande:** OCR fora da janela e sem texto duplicado, menos memória com muitas páginas, juntar mantém marcadores e links.
 
 ### Novidades da 0.1.7
 
