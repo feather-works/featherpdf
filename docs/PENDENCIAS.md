@@ -1,6 +1,6 @@
 # Pendências do FeatherPDF
 
-## Auditoria de 13/11/2026 (só anotada, nada corrigido ainda)
+## Auditoria de 13/11/2026 (só anotada, nada corrigido ainda; 30 itens)
 
 Lido no código, com o caso concreto. Ordem: o que perde arquivo ou vaza dado primeiro.
 
@@ -39,6 +39,38 @@ Deveria corrigir:
 Bom ter:
 19. `mailto:` vai inteiro ao programa de e-mail (`navegar.rs:391-406`); `?attach=` anexa arquivo.
 20. IP da assinatura vem por HTTP puro de api.ipify.org (`io lib.rs:906-909`); tirar, deixar MAC e nome.
+
+Segunda leitura (scripts, páginas, OCR), também conferida no código:
+21. Nome de campo vindo do PDF entra sem escape no comentário `/* … */` do JavaScript que o app grava
+    no cálculo (`regras.rs:232`, `:322`): campo chamado `a */ app.launchURL(…); /*` injeta código que
+    o Acrobat roda. Recusar ou escapar `*/` em `chave()`.
+22. Script: o limite de 20 milhões de voltas é por chamada de função no Boa, não pela execução toda;
+    laço que chama função ou regex catastrófica prende um núcleo para sempre e o Rodar fica
+    desligado (`scripts.rs:99-109`). Sem limite de memória: `new Array(2**30)` derruba o app e
+    perde as abas não salvas. Saída: rodar num processo filho com prazo e teto de memória.
+23. Caixa da página é o CropBox cru, sem recortar pela MediaBox (`paginas.rs:279`); o Hayro desenha
+    a interseção. CropBox maior que a MediaBox desloca a camada do OCR, a numeração e as camadas.
+24. OCR de novo duplica a camada de texto: `sem_texto` só é calculado ao abrir a janela e não é
+    esquecido depois do Aplicar (`ocr.rs:214`, `:239`); "Todas", o fluxo em lote e o
+    "Pesquisável" da região fazem o mesmo. Ctrl+F acha cada palavra duas vezes.
+25. OCR "Aplicar" (com "Limpar o fundo") roda na thread da janela (`ocr.rs:328-389`).
+26. Juntar/inserir PDF descarta o sumário do outro e resolve os destinos com nome dele pelos nomes
+    deste (`paginas.rs:213-214`): sumário some e links de LaTeX pulam para a seção errada.
+27. Rótulo de página (i–iv, 1–100): página duplicada, colada ou inserida ganha a posição como
+    rótulo ("11" entre "6" e "7") (`rotulos.rs:189`).
+28. Dividir colunas corta página com /Rotate 90 em faixas de cima e de baixo (`paginas.rs:417-440`).
+29. Dividir por tamanho copia o documento inteiro duas vezes a cada medida (`divisao.rs:62`).
+30. Página em branco inserida não copia o /Rotate da vizinha (`paginas.rs:178-188`).
+Baixo risco: `FEATHERPDF_ROTEIRO_*`, `PELICANO_ROTEIRO` e `PELICANO_GRAVAR` (este roda o ffmpeg)
+valem também no executável de release; só quem já controla o ambiente usa.
+
+Verificado e sem problema: 450 PDFs estragados de propósito (bytes trocados, cortados, números
+enormes) abertos, analisados, serializados e desenhados sem queda nem travamento. Criptografia
+(getrandom, AES-256), links (só http/https/mailto), anexos (só salvar), fórmulas de campo (sem
+interpretador JS), scripts (sem arquivo, rede nem processo; rodam numa cópia), mover páginas,
+atributos herdados, ids de objeto, OCR sem internet e com página girada.
+Item 7: com o laço confirmado, basta um monitor 4K a 100% (área de ~7000×3900 > 20 MP).
+Item 8: não dá para rodar aqui; conferir no Windows.
 
 Menores: painel lateral de miniaturas em branco fora da aba Páginas (`tela.rs:762-769`);
 VERMELHO e VERDE repetidos em vários arquivos; marcadores de páginas apagadas ficam sem destino;
