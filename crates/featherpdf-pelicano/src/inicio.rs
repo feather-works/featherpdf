@@ -33,14 +33,6 @@ pub fn fundo_vermelho() -> Color {
     if tema::escuro() { Color { a: 0.22, ..VERMELHO } } else { Color::rgb8(0xf9, 0xeb, 0xea) }
 }
 
-pub fn painel(borda_direita: bool) -> impl Fn(&Theme) -> Style {
-    move |_| Style {
-        background: Some(Background::Color(tema::COR_PAINEL())),
-        border: Border { color: if borda_direita { tema::COR_BORDA() } else { Color::TRANSPARENT }, width: 0.0, radius: [0.0; 4] },
-        ..Default::default()
-    }
-}
-
 pub fn linha_vertical<'a>() -> Element<'a, Msg> {
     container(Space::with_width(1)).height(Length::FILL).style(tema::estilo_linha).into()
 }
@@ -49,15 +41,16 @@ pub fn linha_horizontal<'a>() -> Element<'a, Msg> {
     container(Space::with_height(1)).width(Length::FILL).style(tema::estilo_linha).into()
 }
 
-fn item_lateral<'a>(rotulo: &'a str, ativo: bool, msg: Option<Msg>) -> Element<'a, Msg> {
-    button(text(rotulo).size(13).font(if ativo { Font::SEMIBOLD } else { Font::DEFAULT }))
-        .width(Length::FILL).padding([8, 10])
+fn item_lateral<'a>(icone: &str, rotulo: &'a str, ativo: bool, msg: Option<Msg>) -> Element<'a, Msg> {
+    // Ativo: fundo neutro e só o ícone na cor da marca, como no FeatherDocs (sem bloco vermelho).
+    let cor_icone = if ativo { vermelho_texto() } else { tema::COR_TEXTO_MUTED() };
+    button(row![icones::icone_traco(icone, 17.).color(cor_icone), text(rotulo).size(13).font(if ativo { Font::SEMIBOLD } else { Font::DEFAULT }), Space::with_width(Length::FILL)]
+        .spacing(11).align_y(Align::Center))
+        .width(Length::FILL).padding([8, 12])
         .style(move |_, status| Style {
-            background: if ativo { Some(Background::Color(fundo_vermelho())) }
-                else if matches!(status, Status::Hovered) { Some(Background::Color(tema::COR_HOVER())) }
-                else { None },
-            text_color: Some(if ativo { vermelho_texto() } else { tema::COR_TEXTO() }),
-            border: Border { radius: [6.0; 4], ..Default::default() },
+            background: (ativo || matches!(status, Status::Hovered)).then(|| Background::Color(tema::COR_HOVER())),
+            text_color: Some(tema::COR_TEXTO()),
+            border: Border { radius: [8.0; 4], ..Default::default() },
             ..Default::default()
         })
         .on_press_maybe(msg).into()
@@ -65,15 +58,15 @@ fn item_lateral<'a>(rotulo: &'a str, ativo: bool, msg: Option<Msg>) -> Element<'
 
 /// Ação rápida: ícone em quadrado translúcido da cor dele, título e uma linha do que faz.
 fn acao<'a>(icone: &str, cor: Color, titulo: &'a str, detalhe: &'a str, msg: Option<Msg>) -> Element<'a, Msg> {
-    let quadro = container(icones::icone_traco(icone, 18.).color(cor)).width(34).height(34).align_x(Align::Center).align_y(Align::Center)
-        .style(move |_| Style { background: Some(Background::Color(Color { a: 0.18, ..cor })), border: Border { radius: [9.0; 4], ..Default::default() }, ..Default::default() });
+    let quadro = container(icones::icone_traco(icone, 18.).color(texto_escuro(cor))).width(34).height(34).align_x(Align::Center).align_y(Align::Center)
+        .style(move |_| Style { background: Some(Background::Color(Color { a: if tema::escuro() { 0.16 } else { 0.12 }, ..cor })), border: Border { radius: [9.0; 4], ..Default::default() }, ..Default::default() });
     button(container(row![quadro, column![text(titulo).size(13.5), text(detalhe).size(12).color(tema::COR_TEXTO_MUTED()).no_wrap().ellipsis()].spacing(2)]
         .spacing(12).align_y(Align::Center)).width(Length::FILL))
         .width(Length::FILL).padding(14)
         .style(move |_, status| Style {
             background: Some(Background::Color(tema::COR_PAINEL())),
             text_color: Some(tema::COR_TEXTO()),
-            border: Border { color: if matches!(status, Status::Hovered | Status::Pressed) { Color { a: 0.6, ..VERMELHO } } else { tema::COR_BORDA() }, width: 1.0, radius: [10.0; 4] },
+            border: Border { color: if matches!(status, Status::Hovered | Status::Pressed) { tema::COR_TEXTO_MUTED() } else { tema::COR_BORDA() }, width: 1.0, radius: [10.0; 4] },
             ..Default::default()
         })
         .on_press_maybe(msg).into()
@@ -120,22 +113,24 @@ impl App {
         ].align_y(Align::Center);
 
         let soltar = button(row![
-            container(icones::icone_traco("folder-open", 26.).color(VERMELHO)).width(56).height(56).align_x(Align::Center).align_y(Align::Center)
-                .style(|_| Style { background: Some(Background::Color(fundo_vermelho())), border: Border { radius: [14.0; 4], ..Default::default() }, ..Default::default() }),
+            container(icones::icone_traco("folder-open", 24.).color(vermelho_texto())).width(48).height(48).align_x(Align::Center).align_y(Align::Center)
+                .style(|_| Style { background: Some(Background::Color(fundo_vermelho())), border: Border { radius: [12.0; 4], ..Default::default() }, ..Default::default() }),
             column![
                 text("Solte um PDF aqui ou clique para abrir").size(16).font(negrito),
                 text("Imagens (PNG, JPG) viram PDF de uma página. Vários arquivos abrem em abas.").size(13).color(muted),
             ].spacing(4).width(Length::FILL),
             container(text("Ctrl+O").size(12).font(Font::MONO).color(muted)).padding([3, 8])
                 .style(|_| Style { border: Border { color: tema::COR_BORDA(), width: 1.0, radius: [6.0; 4] }, ..Default::default() }),
-        ].spacing(22).align_y(Align::Center))
-            .width(Length::FILL).padding(28)
-            .style(|_, status| Style {
-                background: Some(Background::Color(if matches!(status, Status::Hovered | Status::Pressed) { fundo_vermelho() } else { tema::COR_PAINEL() })),
+        ].spacing(18).align_y(Align::Center))
+            .width(Length::FILL).padding([22, 24])
+            .style(|_, status| {
+                let sobre = matches!(status, Status::Hovered | Status::Pressed);
+                Style {
+                background: Some(Background::Color(if sobre { tema::COR_HOVER() } else { tema::COR_PAINEL() })),
                 text_color: Some(tema::COR_TEXTO()),
-                border: Border { color: Color { a: 0.55, ..VERMELHO }, width: 1.5, radius: [14.0; 4] },
+                border: Border { color: if sobre { Color { a: 0.7, ..vermelho_texto() } } else { tema::COR_BORDA() }, width: 1.0, radius: [12.0; 4] },
                 ..Default::default()
-            })
+            }})
             .on_press(Msg::Abrir);
 
         // As ferramentas que precisam de um PDF pedem o arquivo e abrem nele (Msg::AbrirPara).
@@ -194,12 +189,13 @@ impl App {
         ].spacing(16);
 
         let lateral = container(column![
-            item_lateral("Início", true, None),
-            item_lateral("Abrir…", false, Some(Msg::Abrir)),
-            item_lateral("PDF em branco", false, Some(Msg::NovoA4)),
+            item_lateral("layout-sidebar", "Início", true, None),
+            item_lateral("folder-open", "Abrir…", false, Some(Msg::Abrir)),
+            item_lateral("file-plus", "PDF em branco", false, Some(Msg::NovoA4)),
             Space::with_height(Length::FILL),
-            item_lateral("Configurações", false, Some(Msg::AbrirConfiguracoes)),
-        ].spacing(2)).width(220).height(Length::FILL).padding([14, 10]).style(painel(true));
+            item_lateral("settings", "Configurações", false, Some(Msg::AbrirConfiguracoes)),
+        ].spacing(3)).width(210).height(Length::FILL).padding([14, 10])
+            .style(|_| Style { background: Some(Background::Color(tema::COR_PAINEL_FAIXA())), ..Default::default() });
 
         column![
             topo,
@@ -218,8 +214,6 @@ impl App {
 
     fn tabela_recentes(&self) -> Element<'_, Msg> {
         let muted = tema::COR_TEXTO_MUTED();
-
-
         let busca = self.busca_recentes.to_lowercase();
         let agora = recentes::agora();
         let mut linhas = column![];
@@ -230,11 +224,7 @@ impl App {
             quantos += 1;
             let nome = cortar(&r.caminho.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), 60, false);
             let pasta = cortar(&r.caminho.parent().map(encurtar_pasta).unwrap_or_default(), 40, true);
-            let folha = container(Space::new(16, 20)).style(|_| Style {
-                background: Some(Background::Color(Color::WHITE)),
-                border: Border { color: VERMELHO, width: 1.0, radius: [1.0; 4] },
-                ..Default::default()
-            });
+            let folha = icones::icone_traco("file-type-pdf", 22.).color(vermelho_texto());
             let linha = row![
                 container(row![folha, column![text(nome).size(13.5).no_wrap().ellipsis(), text(pasta).size(12).color(muted).no_wrap().ellipsis()].spacing(1)]
                     .spacing(12).align_y(Align::Center)).width(Length::FILL).padding([9, 16]),
