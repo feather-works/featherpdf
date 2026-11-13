@@ -40,7 +40,7 @@ pub fn modelo() -> &'static Catalogo {
                     topico("abas", "Páginas", vec![
                         t("Girar, excluir, juntar, extrair e dividir."),
                         m("Aba Páginas ou Organizar páginas: miniaturas para arrastar e mudar a ordem; Delete exclui as escolhidas."),
-                        m("Juntar acrescenta outro PDF; Extrair e Dividir geram arquivos novos sem mexer no aberto."),
+                        m("Juntar acrescenta outro PDF, com os marcadores, links e campos dele; Extrair e Dividir geram arquivos novos sem mexer no aberto."),
                         m("Copiar, Recortar e Colar páginas: as escolhidas vão para depois da última escolhida, neste ou em outro PDF aberto."),
                         m("Números de página, Numeração Bates, Marca d'água e Cabeçalho e rodapé (o painel abre com o que o PDF já tem; Remover tira)."),
                         m("Numeração lógica: o nome que o leitor mostra para cada página (i, ii… no prefácio, A-1…), sem escrever na folha."),

@@ -199,6 +199,7 @@ impl DocumentoPdf {
         if !(1..=total + 1).contains(&posicao) { return Err(format!("Posição {posicao} inexistente.")); }
         let mut ids = self.achatar()?;
         outro.achatar()?;
+        outro.preparar_para_juntar();
         let mut doc = outro.documento;
         doc.renumber_objects_with(self.documento.max_id + 1);
         // Depois de achatado, get_pages segue a ordem do /Kids.
@@ -218,6 +219,8 @@ impl DocumentoPdf {
         let p = posicao as usize - 1;
         ids.splice(p..p, novas);
         self.definir_ordem(&ids)?;
+        // O sumário do outro (que ficou solto com o catálogo dele) entra no fim deste.
+        self.pendurar_marcadores_juntados();
         if !campos.is_empty() {
             let af = self.garantir_acroform()?;
             let d = self.documento.get_dictionary(af).map_err(erro)?;
@@ -765,6 +768,23 @@ mod testes {
         let campos = a.campos();
         assert_eq!(campos.len(), 1);
         assert_eq!(campos[0].pagina, 2);
+        // Sumário e link por nome do que entra: o marcador vem junto e o nome leva à página certa.
+        let mut base = pdf_teste();
+        base.criar_marcador("Capítulo A", 1, None).unwrap();
+        // O mesmo nome "sec" também existe aqui, na página 1 (LaTeX: section.1 nos dois).
+        let p1 = base.id_pagina(1).unwrap();
+        base.documento.catalog_mut().unwrap().set("Dests", lopdf::dictionary! { "sec" => vec![Object::Reference(p1), "Fit".into()] });
+        let mut outro = pdf_teste();
+        outro.criar_marcador("Capítulo B", 1, None).unwrap();
+        let pg = outro.id_pagina(1).unwrap();
+        outro.documento.catalog_mut().unwrap().set("Dests", lopdf::dictionary! { "sec" => vec![Object::Reference(pg), "Fit".into()] });
+        let link = outro.documento.add_object(lopdf::dictionary! { "Type" => "Annot", "Subtype" => "Link",
+            "Rect" => vec![0.into(), 0.into(), 50.into(), 50.into()], "Dest" => Object::Name(b"sec".to_vec()) });
+        outro.documento.get_dictionary_mut(pg).unwrap().set("Annots", vec![Object::Reference(link)]);
+        base.inserir_pdf(outro, 2).unwrap();
+        let m: Vec<(String, u32)> = base.marcadores().into_iter().map(|m| (m.titulo, m.pagina)).collect();
+        assert_eq!(m, [("Capítulo A".to_string(), 1), ("Capítulo B".to_string(), 2)]);
+        assert_eq!(base.links(2).first().map(|l| l.1.clone()), Some(crate::Destino::Pagina(2)));
         // O mesmo formulário de duas pessoas: o "Nome" de quem chega vira "Nome 2".
         let mut c = pdf_teste();
         c.criar_campo(1, [100.0, 700.0, 250.0, 720.0], &crate::CampoNovo::Texto, "Nome").unwrap();

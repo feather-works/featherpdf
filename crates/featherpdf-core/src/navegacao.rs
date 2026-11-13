@@ -158,6 +158,69 @@ impl DocumentoPdf {
         }
     }
 
+    /// Antes de juntar este PDF a outro: destino por nome vira o vetor da página (os nomes são
+    /// deste arquivo; no outro, `section.1` levaria à seção dele) e os marcadores de primeiro
+    /// nível ganham `/FPJuntar` com a ordem, para o outro pendurá-los depois de renumerar.
+    pub(crate) fn preparar_para_juntar(&mut self) {
+        let nomeado = |o: &Object| matches!(o, Object::Name(_) | Object::String(..));
+        let mut trocas: Vec<(lopdf::ObjectId, Option<&'static str>, &'static str, Object)> = Vec::new();
+        for (&id, o) in &self.documento.objects {
+            let Ok(d) = o.as_dict() else { continue };
+            let vetor = |n: &Object| {
+                let nome = match n { Object::Name(b) | Object::String(b, _) => b.as_slice(), _ => return None };
+                let v = self.destino_com_nome(nome)?;
+                match v { Object::Dictionary(x) => x.get(b"D").ok().and_then(|d| resolver(&self.documento, d)).cloned(), o => Some(o.clone()) }
+            };
+            if let Some(v) = d.get(b"Dest").ok().filter(|o| nomeado(o)).and_then(vetor) { trocas.push((id, None, "Dest", v)); }
+            if d.get(b"S").and_then(Object::as_name).is_ok_and(|s| s == b"GoTo") {
+                if let Some(v) = d.get(b"D").ok().filter(|o| nomeado(o)).and_then(vetor) { trocas.push((id, None, "D", v)); }
+            }
+            if let Ok(a) = d.get(b"A").and_then(Object::as_dict) {
+                if a.get(b"S").and_then(Object::as_name).is_ok_and(|s| s == b"GoTo") {
+                    if let Some(v) = a.get(b"D").ok().filter(|o| nomeado(o)).and_then(vetor) { trocas.push((id, Some("A"), "D", v)); }
+                }
+            }
+        }
+        for (id, dentro, chave, v) in trocas {
+            let Ok(d) = self.documento.get_dictionary_mut(id) else { continue };
+            match dentro {
+                Some(k) => if let Ok(a) = d.get_mut(k.as_bytes()).and_then(Object::as_dict_mut) { a.set(chave, v); },
+                None => d.set(chave, v),
+            }
+        }
+        self.soltar_sumario_do_catalogo();
+        if let Some(raiz) = self.raiz_do_sumario() {
+            for (i, f) in self.filhos_do_sumario(raiz).into_iter().enumerate() {
+                if let Ok(d) = self.documento.get_dictionary_mut(f) { d.set("FPJuntar", i as i64); }
+            }
+        }
+    }
+
+    /// Depois de juntar: os marcadores com `/FPJuntar` (do PDF que entrou) vão para o fim do
+    /// primeiro nível deste sumário, na ordem que tinham.
+    pub(crate) fn pendurar_marcadores_juntados(&mut self) {
+        let mut vindos: Vec<(i64, lopdf::ObjectId)> = self.documento.objects.iter()
+            .filter_map(|(&id, o)| Some((o.as_dict().ok()?.get(b"FPJuntar").ok()?.as_i64().ok()?, id))).collect();
+        if vindos.is_empty() { return; }
+        vindos.sort();
+        for &(_, id) in &vindos { if let Ok(d) = self.documento.get_dictionary_mut(id) { d.remove(b"FPJuntar"); } }
+        self.soltar_sumario_do_catalogo();
+        let raiz = match self.raiz_do_sumario() {
+            Some(r) => r,
+            None => {
+                let r = self.documento.add_object(dictionary! { "Type" => "Outlines" });
+                let Ok(c) = self.documento.catalog_mut() else { return };
+                c.set("Outlines", r);
+                r
+            }
+        };
+        for (_, id) in vindos {
+            let ultimo = self.filhos_do_sumario(raiz).last().copied();
+            self.ligar_no_sumario(id, raiz, ultimo);
+        }
+        self.recontar_sumario();
+    }
+
     /// O pai e os irmãos de antes e de depois do nó, tirados do percurso First → Next (o que
     /// a tela mostra), não do /Parent e do /Prev do arquivo: há geradores que não os gravam,
     /// e confiar neles apagava marcadores ao excluir ou mover.
