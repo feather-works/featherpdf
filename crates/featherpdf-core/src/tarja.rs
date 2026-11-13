@@ -38,17 +38,17 @@ impl Padrao {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Achado { pub pagina: u32, pub texto: String, pub caixa: [f32; 4], pub tipo: Option<Padrao> }
 
-/// O centro de `c` cai dentro de `r`.
-fn centro_dentro(c: [f32; 4], r: [f32; 4]) -> bool {
-    let (x, y) = ((c[0] + c[2]) / 2.0, (c[1] + c[3]) / 2.0);
-    x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3]
-}
-
 fn tirar_texto_alt(d: &mut Dictionary) { for k in [&b"ActualText"[..], b"Alt", b"E"] { d.remove(k); } }
 
 fn cruza(a: [f32; 4], b: [f32; 4]) -> bool { a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3] }
 
-fn contem(r: [f32; 4], c: [f32; 4]) -> bool { c[0] >= r[0] && c[1] >= r[1] && c[2] <= r[2] && c[3] <= r[3] }
+/// Quanto de `c` (de 0 a 1) a caixa `r` cobre. Caixa sem área conta como coberta se cruza.
+fn coberto(c: [f32; 4], r: [f32; 4]) -> f32 {
+    let (l, a) = ((c[2].min(r[2]) - c[0].max(r[0])).max(0.0), (c[3].min(r[3]) - c[1].max(r[1])).max(0.0));
+    let area = (c[2] - c[0]) * (c[3] - c[1]);
+    if area <= 0.0 { return if cruza(c, r) { 1.0 } else { 0.0 }; }
+    l * a / area
+}
 
 /// Tamanho do trecho que casa com a máscara em `i` (`#` é algarismo).
 fn casa(t: &[char], i: usize, mascara: &str) -> Option<usize> {
@@ -181,10 +181,10 @@ impl DocumentoPdf {
         achados
     }
 
-    /// Aplica as tarjas (página, caixa): some com as letras cujo centro cai
-    /// na caixa, pinta de preto os pixels das imagens debaixo (ou tira a
+    /// Aplica as tarjas (página, caixa): some com as letras que a caixa cobre
+    /// (10% ou mais), pinta de preto os pixels das imagens debaixo (ou tira a
     /// imagem, quando não sabe decodificar), tira grupos e anotações que
-    /// tocam a caixa e desenhos inteiros dentro dela. `rotulo` vai em branco
+    /// tocam a caixa e desenhos com um quarto ou mais debaixo dela. `rotulo` vai em branco
     /// sobre a tarja. Devolve quantas letras saíram.
     pub fn tarjar(&mut self, marcas: &[(u32, [f32; 4])], rotulo: &str, apagar: ApagarPixels<'_>) -> Result<usize, String> {
         let mut por_pagina: BTreeMap<u32, Vec<[f32; 4]>> = BTreeMap::new();
@@ -200,21 +200,31 @@ impl DocumentoPdf {
             let id = self.id_pagina(pagina)?;
             let mut a = self.analisar_com(pagina, true)?;
             for (&i, itens) in &a.letras {
-                let some = |c: &[f32; 4]| caixas.iter().any(|r| centro_dentro(*c, *r));
+                // Letra meio coberta também sai: escondida no preto, continuaria copiável. Uma lasca
+                // (menos de 10%) é a caixa da letra vizinha encostando, que fica à vista.
+                let some = |c: &[f32; 4]| caixas.iter().any(|r| coberto(*c, *r) >= 0.1);
                 if !itens.iter().any(|it| matches!(it, ItemTj::Glifo { caixa, .. } if some(caixa))) { continue; }
                 let mut arr = Vec::new();
                 let mut atual: Vec<u8> = Vec::new();
                 let soltar = |atual: &mut Vec<u8>, arr: &mut Vec<Object>| if !atual.is_empty() {
                     arr.push(Object::String(std::mem::take(atual), lopdf::StringFormat::Hexadecimal));
                 };
+                // As letras que saem seguidas viram um avanço só: um número por letra contaria as
+                // letras e a largura de cada uma, o que basta para adivinhar o nome numa lista.
+                let mut vao: Option<f32> = None;
+                let fechar = |vao: &mut Option<f32>, arr: &mut Vec<Object>| if let Some(v) = vao.take() { arr.push(Object::Real(v)); };
                 for it in itens {
                     match it {
-                        ItemTj::Glifo { bytes, caixa, k, .. } if some(caixa) => { soltar(&mut atual, &mut arr); arr.push(Object::Real(*k)); letras += 1; }
-                        ItemTj::Glifo { bytes, .. } => atual.extend_from_slice(bytes),
-                        ItemTj::Recuo(o) => { soltar(&mut atual, &mut arr); arr.push(o.clone()); }
+                        ItemTj::Glifo { caixa, k, .. } if some(caixa) => { soltar(&mut atual, &mut arr); *vao.get_or_insert(0.0) += *k; letras += 1; }
+                        ItemTj::Glifo { bytes, .. } => { fechar(&mut vao, &mut arr); atual.extend_from_slice(bytes) }
+                        ItemTj::Recuo(o) => match (vao.as_mut(), o.as_float()) {
+                            (Some(v), Ok(n)) => *v += n,
+                            _ => { soltar(&mut atual, &mut arr); fechar(&mut vao, &mut arr); arr.push(o.clone()); }
+                        },
                     }
                 }
                 soltar(&mut atual, &mut arr);
+                fechar(&mut vao, &mut arr);
                 a.ops[i] = Operation::new("TJ", vec![Object::Array(arr)]);
             }
             let (_, xobjetos) = self.recursos(id);
@@ -236,7 +246,8 @@ impl DocumentoPdf {
                     },
                     // shortcut: o grupo (Form XObject) sai inteiro, mesmo o pedaço fora da caixa; ler o conteúdo dele quando houver carimbo grande tarjado.
                     TipoObjeto::Grupo => { remover.extend(lugar.insercao..lugar.fim); sem_uso.extend(nome); }
-                    TipoObjeto::Desenho if toca.iter().any(|c| contem(*c, o.caixa)) => remover.extend(lugar.insercao..lugar.fim),
+                    // shortcut: desenho com um quarto ou mais debaixo da caixa sai inteiro (texto em curvas, assinatura desenhada); um traço longo que só passa por ela (borda de tabela) fica, e um caminho único com a linha toda em curvas também; cortar o caminho pela caixa se aparecer PDF assim.
+                    TipoObjeto::Desenho if toca.iter().any(|c| coberto(o.caixa, *c) >= 0.25) => remover.extend(lugar.insercao..lugar.fim),
                     _ => {}
                 }
             }
@@ -285,7 +296,8 @@ impl DocumentoPdf {
             // PDF com tags (Word): o elemento da estrutura desta página guarda o texto em /ActualText e /Alt.
             for &e in por_pg.get(&id).map(Vec::as_slice).unwrap_or_default() { if let Ok(d) = self.documento.get_dictionary_mut(e) { tirar_texto_alt(d); } }
             // A miniatura da página mostra o que foi tarjado.
-            if let Ok(p) = self.documento.get_dictionary_mut(id) { p.remove(b"Thumb"); }
+            // PieceInfo: o original editável do Illustrator e de outros editores, com o texto tarjado.
+            if let Ok(p) = self.documento.get_dictionary_mut(id) { for k in [&b"Thumb"[..], b"PieceInfo", b"LastModified"] { p.remove(k); } }
             // O conteúdo antigo fica entre q/Q: o preto sai no espaço da página.
             a.ops.insert(0, Operation::new("q", vec![]));
             a.ops.push(Operation::new("Q", vec![]));
@@ -517,6 +529,13 @@ mod testes {
         pdf.criar_campo(1, [100.0, 300.0, 250.0, 320.0], &crate::CampoNovo::Texto, "Fica").unwrap();
         let campo = pdf.campos().into_iter().find(|c| c.nome == "Senha").unwrap();
         pdf.preencher(&campo, "SEGREDO123").unwrap();
+        // O mesmo valor na cópia em XML (formulário XFA do LiveCycle).
+        let af = match pdf.documento.catalog().unwrap().get(b"AcroForm").unwrap() { Object::Reference(r) => Some(*r), _ => None };
+        let xfa = Object::string_literal("<senha>SEGREDO123</senha>");
+        match af {
+            Some(r) => pdf.documento.get_dictionary_mut(r).unwrap().set("XFA", xfa),
+            None => pdf.documento.catalog_mut().unwrap().get_mut(b"AcroForm").unwrap().as_dict_mut().unwrap().set("XFA", xfa),
+        }
         pdf.tarjar(&[(1, [90.0, 390.0, 260.0, 430.0])], "", &|_, _| None).unwrap();
         assert_eq!(pdf.campos().iter().map(|c| c.nome.as_str()).collect::<Vec<_>>(), ["Fica"]);
         assert!(!pdf.documento.objects.values().any(tem), "o valor tarjado ficou no arquivo");
@@ -550,6 +569,7 @@ mod testes {
         let pagina = doc.get_dictionary_mut(id).unwrap();
         pagina.set("Annots", lista);
         pagina.set("Thumb", miniatura);
+        pagina.set("PieceInfo", dictionary! { "Illustrator" => dictionary! { "Private" => Object::string_literal("SEGREDO do editor") } });
         pagina.get_mut(b"Resources").unwrap().as_dict_mut().unwrap()
             .set("Properties", dictionary! { "MC0" => dictionary! { "ActualText" => Object::string_literal("SEGREDO alternativo") } });
         pdf.tarjar(&[(1, [60.0, 690.0, 200.0, 720.0])], "", &|_, _| None).unwrap();
@@ -570,5 +590,23 @@ mod testes {
         // A posição de "fim" não muda: o recuo ocupa o lugar das letras.
         let fim = |p: &DocumentoPdf| p.objetos(1).unwrap()[0].caixa[2];
         assert!((fim(&pdf) - fim(&pdf_com("BT /F1 12 Tf 72 700 Td (CPF 123.456.789-09 fim) Tj ET"))).abs() < 0.5);
+        // As 14 letras apagadas viram um avanço só (um número por letra contaria as letras).
+        let id = pdf.id_pagina(1).unwrap();
+        let ops = pdf.documento.get_and_decode_page_content(id).unwrap().operations;
+        let tj = ops.iter().find(|o| o.operator == "TJ").unwrap();
+        let numeros = tj.operands[0].as_array().unwrap().iter().filter(|o| o.as_float().is_ok()).count();
+        assert_eq!(numeros, 1, "{:?}", tj.operands);
+    }
+
+    #[test]
+    fn tarja_tira_letra_coberta_pela_metade() {
+        let mut pdf = pdf_com("BT /F1 12 Tf 72 700 Td (CPF 123.456.789-09) Tj ET");
+        let nove = pdf.achar_para_tarja("09", &[])[0].caixa;
+        // Cobre o "0" e só 45% do "9": o 9 fica meio escondido no preto, então sai do arquivo.
+        let meio = nove[0] + (nove[2] - nove[0]) * (0.5 + 0.45 * 0.5);
+        pdf.tarjar(&[(1, [nove[0], nove[1], meio, nove[3]])], "", &|_, _| None).unwrap();
+        let texto = pdf.texto_pagina(1).unwrap();
+        assert!(!texto.ends_with('9'), "o 9 meio coberto continuou copiável: {texto}");
+        assert!(texto.contains("123.456.78"), "o resto fica: {texto}");
     }
 }

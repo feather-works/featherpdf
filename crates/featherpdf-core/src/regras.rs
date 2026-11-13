@@ -202,6 +202,9 @@ impl Calculo {
 
     /// Confere a fórmula sem contar.
     pub fn conferir(&self) -> Result<(), String> {
+        // A chave vai num comentário /* … */ do JavaScript gravado: um nome de campo com "*/"
+        // (vindo do PDF de outra pessoa) fecharia o comentário e o resto viraria código no Acrobat.
+        if self.chave().contains("*/") { return Err("Nome de campo com \"*/\" não entra em cálculo: renomeie o campo.".into()); }
         if let Calculo::Formula(f) = self {
             let p = pecas(f)?;
             let mut i = 0;
@@ -436,6 +439,8 @@ mod testes {
         assert_eq!(k.resultado(&v).unwrap(), 25.0);
         assert_eq!(k.entradas(), vec!["Qtd", "Valor unitário"]);
         assert!(Calculo::Formula("a + (b".into()).conferir().is_err());
+        let injecao = "a */ app.launchURL(\"https://x\"); /*".to_string();
+        assert!(Calculo::Simples(OpCalculo::TODAS[0], vec![injecao, "b".into()]).conferir().is_err(), "nome com */ fecharia o comentário do JS");
     }
 
     #[test]

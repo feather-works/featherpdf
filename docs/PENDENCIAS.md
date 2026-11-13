@@ -5,10 +5,11 @@
 Lido no código, com o caso concreto. ✅ = corrigido (com teste). Ordem: o que perde arquivo ou vaza dado primeiro.
 
 Precisa corrigir:
-1. Tarja: letra só sai com o centro dentro da caixa (`tarja.rs:203`) e desenho só inteiro dentro
-   (`tarja.rs:239`): metade de um dígito coberto continua copiável. Marca à mão: usar `cruza`.
-2. Tarja não tira `/XFA` (cópia em XML do formulário), `/PieceInfo` (original do Illustrator) nem
+✅ 1. Tarja: letra só sai com o centro dentro da caixa (`tarja.rs:203`) e desenho só inteiro dentro
+   (`tarja.rs:239`): metade de um dígito coberto continua copiável. Feito: letra sai com 10% coberta; desenho com 25% (traço longo que só passa fica).
+✅ 2. Tarja não tira `/XFA` (cópia em XML do formulário), `/PieceInfo` (original do Illustrator) nem
    avisa dos marcadores (`tarja.rs:288`, `formularios.rs:123-134`). O Limpar e sanitizar já tira.
+   Feito: XFA e PieceInfo saem; o painel da tarja avisa quando o PDF tem marcadores.
 ✅ 3. Ctrl+Z depois de "Salvar como" volta a origem antiga e o Ctrl+S grava por cima do original
    (`main.rs:816`, `voltar`): guardar a origem antes da troca e reaplicar com `gravado_em`.
 ✅ 4. Mesmo arquivo em duas abas: o segundo Ctrl+S apaga o que o primeiro salvou (`main.rs:1111`,
@@ -24,7 +25,7 @@ Precisa corrigir:
 Deveria corrigir:
 9. A tela monta as camadas (links, medidas, busca, campos) de todas as páginas a cada quadro
    (`tela.rs:833`); os links percorrem a árvore de páginas 2× por página. Só as perto da tela.
-10. Tarja grava a largura de cada letra apagada (`tarja.rs:212`): somar as seguidas num número só.
+✅ 10. Tarja grava a largura de cada letra apagada (`tarja.rs:212`): somar as seguidas num número só.
 11. "Achar CPF, CNPJ…" só lê o conteúdo da página (`tarja.rs:157-159`): ler valor de campo e nota.
 12. Sanitizar não vê anotação escrita direto em `/Annots` (`sanitizar.rs:216-239`).
 13. Cartão da assinatura verde mesmo com mudança depois dela (`assinar.rs:291`): âmbar se `!cobre_tudo`.
@@ -41,7 +42,7 @@ Bom ter:
 20. IP da assinatura vem por HTTP puro de api.ipify.org (`io lib.rs:906-909`); tirar, deixar MAC e nome.
 
 Segunda leitura (scripts, páginas, OCR), também conferida no código:
-21. Nome de campo vindo do PDF entra sem escape no comentário `/* … */` do JavaScript que o app grava
+✅ 21. Nome de campo vindo do PDF entra sem escape no comentário `/* … */` do JavaScript que o app grava
     no cálculo (`regras.rs:232`, `:322`): campo chamado `a */ app.launchURL(…); /*` injeta código que
     o Acrobat roda. Recusar ou escapar `*/` em `chave()`.
 22. Script: o limite de 20 milhões de voltas é por chamada de função no Boa, não pela execução toda;

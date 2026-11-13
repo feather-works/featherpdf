@@ -131,7 +131,11 @@ impl DocumentoPdf {
             Some(r) => self.documento.get_dictionary_mut(r).ok(),
             None => self.documento.catalog_mut().ok().and_then(|c| c.get_mut(b"AcroForm").ok()).and_then(|o| o.as_dict_mut().ok()),
         };
-        if let Some(af) = af { af.set("Fields", ficam); }
+        if let Some(af) = af {
+            af.set("Fields", ficam);
+            // O XFA guarda os valores de novo, em XML: campo que saiu (tarja, página apagada) sairia só daqui.
+            if !fora.is_empty() { af.remove(b"XFA"); }
+        }
     }
 
     /// O /DA do widget, ou o padrão do /AcroForm.

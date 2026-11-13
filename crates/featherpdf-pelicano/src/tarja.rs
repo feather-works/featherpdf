@@ -187,8 +187,12 @@ impl App {
                     .on_press_maybe((!t.marcas.is_empty()).then_some(Msg::Tarja(Tj::Limpar)))].align_y(Align::Center),
             text_input("nada (preto liso)", &t.rotulo).on_input(|s| Msg::Tarja(Tj::Rotulo(s))).padding([5, 8]).size(13),
             checkbox("Também tirar metadados e anexos", t.metadados).on_toggle(|v| Msg::Tarja(Tj::Metadados(v))).size(15).text_size(13),
-            container(text("Aplicar apaga o texto e a imagem debaixo da tarja — não é um retângulo preto por cima. \
-                O arquivo sai como cópia \u{201c}— tarjado.pdf\u{201d}; o aberto fica como está.").size(12))
+            container(text(format!("Aplicar apaga o texto e a imagem debaixo da tarja — não é um retângulo preto por cima. \
+                O arquivo sai como cópia \u{201c}— tarjado.pdf\u{201d}; o aberto fica como está.{}",
+                // Título de marcador (gerado dos títulos do Word) não passa pela tarja.
+                if self.aberto.as_ref().is_some_and(|a| !a.pdf.marcadores().is_empty()) {
+                    " Este PDF tem marcadores: os títulos deles não são tarjados, confira no painel Marcadores."
+                } else { "" })).size(12))
                 .padding([8, 10]).style(|_| Style {
                     background: Some(Background::Color(Color::rgb8(0xfb, 0xf3, 0xdc))),
                     text_color: Some(Color::rgb8(0x6b, 0x4e, 0x05)), border: Border { radius: [6.0; 4], ..Default::default() }, ..Default::default()
