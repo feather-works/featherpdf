@@ -34,7 +34,12 @@ pub enum Rr {
 
 /// O texto lido da última área: página, linhas (caixa em fração da página vista) e o giro da leitura.
 #[derive(Default)]
-pub struct Regiao { pub lida: Option<(u32, Vec<(String, [f32; 4])>, u32)>, pub lendo: bool }
+pub struct Regiao {
+    pub lida: Option<(u32, Vec<(String, [f32; 4])>, u32)>,
+    pub lendo: bool,
+    /// A leitura já virou texto no PDF: um segundo clique somaria outra camada igual (Ctrl+F acharia em dobro).
+    pub pesquisavel: bool,
+}
 
 impl App {
     pub fn regiao(&self) -> Option<Uso> { match self.ferramenta { Ferramenta::Regiao(u) => Some(u), _ => None } }
@@ -104,6 +109,7 @@ impl App {
                     Ok((v, giro)) => {
                         self.status = format!("{} linha(s) lidas na página {pagina}{}.", v.len(), if giro == 0 { "" } else { " (texto deitado)" });
                         self.regiao.lida = Some((pagina, v, giro));
+                        self.regiao.pesquisavel = false;
                         self.painel = Some(Painel::Regiao);
                     }
                     Err(e) => self.status = e,
@@ -140,11 +146,13 @@ impl App {
                 Ok((l, a)) => format!("Área copiada como imagem ({l} × {a} pixels): cole com Ctrl+V."),
                 Err(e) => e,
             },
-            Rr::Pesquisavel => if let Some((pagina, v, giro)) = self.regiao.lida.clone() {
-                return self.editar(move |pdf| {
+            Rr::Pesquisavel => if let Some((pagina, v, giro)) = self.regiao.lida.clone().filter(|_| !self.regiao.pesquisavel) {
+                let tarefa = self.editar(move |pdf| {
                     let n = pdf.inserir_camada_ocr_girada(pagina, &v, giro)?;
                     Ok(format!("{n} linha(s) da área agora podem ser buscadas e copiadas no PDF (Ctrl+Z desfaz)."))
                 });
+                self.regiao.pesquisavel = self.ultima_edicao_ok;
+                return tarefa;
             },
         }
         Task::none()
@@ -163,7 +171,8 @@ impl App {
             row![
                 button(text("Copiar").size(12)).padding([4, 10]).style(tema::estilo_botao_pequeno(false)).on_press(Msg::Regiao(Rr::Copiar)),
                 Space::with_width(Length::FILL),
-                button(text("Tornar pesquisável").size(12)).padding([4, 10]).style(tema::estilo_botao_pequeno(false)).on_press(Msg::Regiao(Rr::Pesquisavel)),
+                button(text(if self.regiao.pesquisavel { "Já pesquisável" } else { "Tornar pesquisável" }).size(12)).padding([4, 10]).style(tema::estilo_botao_pequeno(false))
+                    .on_press_maybe((!self.regiao.pesquisavel).then_some(Msg::Regiao(Rr::Pesquisavel))),
             ],
             text("Tornar pesquisável põe o texto lido, invisível, por cima da área: a busca e o copiar passam a achar.").size(11.5).color(muted),
         ].spacing(10);

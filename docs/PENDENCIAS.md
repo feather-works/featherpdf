@@ -58,7 +58,7 @@ Segunda leitura (scripts, páginas, OCR), também conferida no código:
 ✅ 24. OCR de novo duplica a camada de texto: `sem_texto` só é calculado ao abrir a janela e não é
     esquecido depois do Aplicar (`ocr.rs:214`, `:239`); "Todas", o fluxo em lote e o
     "Pesquisável" da região fazem o mesmo. Ctrl+F acha cada palavra duas vezes.
-    Feito: OCR da janela e do lote trocam a camada (`trocar_camada_ocr`); o da região ainda soma.
+    Feito: OCR da janela e do lote trocam a camada (`trocar_camada_ocr`); na região, o "Tornar pesquisável" vale uma vez por leitura (volta a valer no Ctrl+Z).
 ✅ 25. OCR "Aplicar" (com "Limpar o fundo") roda na thread da janela (`ocr.rs:328-389`).
 ✅ 26. Juntar/inserir PDF descarta o sumário do outro e resolve os destinos com nome dele pelos nomes
     deste (`paginas.rs:213-214`): sumário some e links de LaTeX pulam para a seção errada.

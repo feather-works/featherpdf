@@ -834,6 +834,8 @@ impl App {
         // O passo guardado traz o `modificado` de quando foi guardado (talvez antes de salvar).
         a.pdf.marcar_modificado();
         self.ocr.cancelar();
+        // O Ctrl+Z pode ter tirado a camada da área lida: o "Tornar pesquisável" volta a valer.
+        self.regiao.pesquisavel = false;
         self.objetos.clear();
         self.selecao_texto = None;
         self.form.campos = None;
@@ -2226,6 +2228,17 @@ mod testes {
         abrir_de(&mut app, &c);
         assert_eq!(app.guias.len(), 2, "não abre aba nova");
         assert_eq!(app.aberto.as_ref().unwrap().pdf.origem(), Some(c.as_path()), "vai para a aba que já tinha o arquivo");
+    }
+
+    #[test]
+    fn area_pesquisavel_duas_vezes_grava_uma_camada() {
+        let mut app = com_a4();
+        app.regiao.lida = Some((1, vec![("Certidão".into(), [0.1, 0.1, 0.4, 0.13])], 0));
+        let _ = app.update(Msg::Regiao(regiao::Rr::Pesquisavel));
+        let _ = app.update(Msg::Regiao(regiao::Rr::Pesquisavel));
+        assert_eq!(app.historico.len(), 1, "o segundo clique não soma outra camada");
+        let _ = app.update(Msg::Desfazer);
+        assert!(!app.regiao.pesquisavel, "depois do Ctrl+Z dá para tornar pesquisável de novo");
     }
 
     #[test]
