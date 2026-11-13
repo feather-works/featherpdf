@@ -2015,6 +2015,7 @@ static GERACAO: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new
 
 fn main() -> Result<(), Error> {
     alocador::configurar();
+    if std::env::args_os().nth(1).is_some_and(|a| a == scripts::ARG_SCRIPT) { std::process::exit(scripts::processo_do_script()); }
     // Já aberto: o PDF vira aba lá, e este processo nem abre janela.
     if std::env::args_os().nth(1).is_some_and(|c| instancia::mandar_para_aberta(std::path::Path::new(&c))) { return Ok(()); }
     instancia::escutar();

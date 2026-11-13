@@ -125,7 +125,7 @@ pub fn modelo() -> &'static Catalogo {
                         t("Automatize tarefas com JavaScript."),
                         m("Converter → Script abre o editor ao lado da página."),
                         m("pdf.pages(), pdf.text(p), pdf.find(termo), pdf.addText(p, x, y, texto, tamanho), pdf.rotate(páginas, graus), pdf.deletePages(páginas), pdf.fields(), pdf.setField(nome, valor) e log(…)."),
-                        m("O script não acessa arquivos nem a rede. Ctrl+Z desfaz o que ele fez."),
+                        m("O script não acessa arquivos nem a rede, e roda à parte: passou de 2 minutos ou de memória, ele é parado e o documento não muda. Ctrl+Z desfaz o que ele fez."),
                         Linha::Exemplo("for (let p = 1; p <= pdf.pages(); p++) {\n  pdf.addText(p, 500, 30, 'Pág. ' + p, 9);\n}".into()),
                     ]),
                     topico("versoes", "Versões e comparar", vec![

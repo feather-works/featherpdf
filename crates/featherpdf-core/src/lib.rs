@@ -148,6 +148,15 @@ impl DocumentoPdf {
             else { format!("Cifrado com {cifra}; não deixa {}.", negadas.join(", ")) })
     }
 
+    /// O conteúdo passa a ser o de `novo` (um script rodado à parte devolve o documento relido dos
+    /// bytes); o arquivo de origem e a senha continuam os deste.
+    pub fn trocar_conteudo(&mut self, novo: DocumentoPdf) {
+        let senha = self.documento.encryption_state.take();
+        self.documento = novo.documento;
+        self.documento.encryption_state = senha;
+        self.modificado = true;
+    }
+
     /// A cópia salva sai sem senha nem restrições (quem abriu com a senha pode).
     pub fn tirar_senha(&mut self) {
         if self.documento.encryption_state.take().is_some() { self.modificado = true; }

@@ -47,10 +47,12 @@ Segunda leitura (scripts, páginas, OCR), também conferida no código:
 ✅ 21. Nome de campo vindo do PDF entra sem escape no comentário `/* … */` do JavaScript que o app grava
     no cálculo (`regras.rs:232`, `:322`): campo chamado `a */ app.launchURL(…); /*` injeta código que
     o Acrobat roda. Recusar ou escapar `*/` em `chave()`.
-22. Script: o limite de 20 milhões de voltas é por chamada de função no Boa, não pela execução toda;
+✅ 22. Script: o limite de 20 milhões de voltas é por chamada de função no Boa, não pela execução toda;
     laço que chama função ou regex catastrófica prende um núcleo para sempre e o Rodar fica
     desligado (`scripts.rs:99-109`). Sem limite de memória: `new Array(2**30)` derruba o app e
     perde as abas não salvas. Saída: rodar num processo filho com prazo e teto de memória.
+    Feito: processo à parte (`--rodar-script`), prazo de 120 s; memória: oom_score_adj 1000 no
+    Linux (o sistema derruba o script, não o app). Sem botão Parar ainda.
 ✅ 23. Caixa da página é o CropBox cru, sem recortar pela MediaBox (`paginas.rs:279`); o Hayro desenha
     a interseção. CropBox maior que a MediaBox desloca a camada do OCR, a numeração e as camadas.
 ✅ 24. OCR de novo duplica a camada de texto: `sem_texto` só é calculado ao abrir a janela e não é
