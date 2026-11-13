@@ -41,7 +41,7 @@ Deveria corrigir:
 Bom ter:
 ✅ 19. `mailto:` vai inteiro ao programa de e-mail (`navegar.rs:391-406`); `?attach=` anexa arquivo.
 20. IP da assinatura vem por HTTP puro de api.ipify.org (`io lib.rs:906-909`); tirar, deixar MAC e nome.
-    Não feito: "Incluir dados do computador (IP público…)" é recurso pedido; decisão do usuário.
+    Decidido (13/11/2026): fica como está, a pedido do usuário (recurso dele; o IP só é buscado se a pessoa marcar).
 
 Segunda leitura (scripts, páginas, OCR), também conferida no código:
 ✅ 21. Nome de campo vindo do PDF entra sem escape no comentário `/* … */` do JavaScript que o app grava
