@@ -19,7 +19,7 @@ use pelicano::column;
 use crate::{App, Msg, Painel};
 
 #[derive(Debug, Clone)]
-pub enum Sc { Abrir, Editar, Rodar, Pronto(u64, Result<(Option<DocumentoPdf>, Vec<String>), String>) }
+pub enum Sc { Abrir, Editar, Rodar, Parar, Pronto(u64, Result<(Option<DocumentoPdf>, Vec<String>), String>) }
 
 pub struct Scripts {
     pub codigo: Content,
@@ -27,12 +27,14 @@ pub struct Scripts {
     /// Sobe a cada mudança no documento: o resultado de um script de antes dela é descartado.
     pub rodada: u64,
     pub rodando: bool,
+    /// O botão Parar liga; o processo do script é encerrado na próxima olhada (50 ms).
+    parar: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 const EXEMPLO: &str = "// Numera o rodapé de cada página e lista os campos do formulário.\nfor (let p = 1; p <= pdf.pages(); p++) {\n  pdf.addText(p, 500, 30, 'Pág. ' + p, 9);\n}\nlog(pdf.fields());\n";
 
 impl Default for Scripts {
-    fn default() -> Self { Self { codigo: Content::with_text(EXEMPLO), saida: None, rodada: 0, rodando: false } }
+    fn default() -> Self { Self { codigo: Content::with_text(EXEMPLO), saida: None, rodada: 0, rodando: false, parar: Default::default() } }
 }
 
 /// O que um script pode fazer no PDF: só estas operações, todas sobre a cópia.
@@ -151,7 +153,7 @@ pub fn processo_do_script() -> i32 {
 }
 
 /// [`rodar`] no processo à parte, com prazo. Nos testes roda aqui mesmo (o executável é o dos testes).
-fn rodar_isolado(pdf: &DocumentoPdf, codigo: &str) -> Result<(Option<DocumentoPdf>, Vec<String>), String> {
+fn rodar_isolado(pdf: &DocumentoPdf, codigo: &str, parar: &std::sync::atomic::AtomicBool) -> Result<(Option<DocumentoPdf>, Vec<String>), String> {
     if cfg!(test) { return rodar(pdf.clone(), codigo); }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let mut filho = std::process::Command::new(exe).arg(ARG_SCRIPT)
@@ -169,6 +171,11 @@ fn rodar_isolado(pdf: &DocumentoPdf, codigo: &str) -> Result<(Option<DocumentoPd
     let estado = loop {
         match filho.try_wait() {
             Ok(Some(e)) => break e,
+            Ok(None) if parar.load(std::sync::atomic::Ordering::Relaxed) => {
+                let _ = filho.kill();
+                let _ = filho.wait();
+                return Err("Script parado. O documento não mudou.".into());
+            }
             Ok(None) if inicio.elapsed() > PRAZO => {
                 let _ = filho.kill();
                 let _ = filho.wait();
@@ -199,11 +206,14 @@ impl App {
                 // Em outro processo: um laço sem fim é parado no prazo, e memória demais derruba só ele.
                 let (pdf, codigo, rodada) = (a.pdf.clone(), self.scripts.codigo.text(), self.scripts.rodada);
                 self.scripts.rodando = true;
+                self.scripts.parar.store(false, std::sync::atomic::Ordering::Relaxed);
+                let parar = self.scripts.parar.clone();
                 self.status = "Rodando o script…".into();
                 return Task::perform(async move {
-                    tokio::task::spawn_blocking(move || rodar_isolado(&pdf, &codigo)).await.unwrap_or_else(|e| Err(e.to_string()))
+                    tokio::task::spawn_blocking(move || rodar_isolado(&pdf, &codigo, &parar)).await.unwrap_or_else(|e| Err(e.to_string()))
                 }, move |r| Msg::Scripts(Sc::Pronto(rodada, r)));
             }
+            Sc::Parar => self.scripts.parar.store(true, std::sync::atomic::Ordering::Relaxed),
             Sc::Pronto(rodada, r) => {
                 self.scripts.rodando = false;
                 if rodada != self.scripts.rodada {
@@ -228,8 +238,8 @@ impl App {
         let muted = tema::COR_TEXTO_MUTED();
         let mut corpo = column![
             text_editor(&self.scripts.codigo).on_change(Msg::Scripts(Sc::Editar)).font(Font::MONO).size(12.5),
-            button(text(if self.scripts.rodando { "Rodando…" } else { "Rodar" }).size(13)).width(Length::FILL).padding([6, 10]).style(tema::estilo_botao_pequeno(true))
-                .on_press_maybe((!self.scripts.rodando).then_some(Msg::Scripts(Sc::Rodar))),
+            button(text(if self.scripts.rodando { "Parar" } else { "Rodar" }).size(13)).width(Length::FILL).padding([6, 10]).style(tema::estilo_botao_pequeno(true))
+                .on_press(Msg::Scripts(if self.scripts.rodando { Sc::Parar } else { Sc::Rodar })),
             text("pdf.pages(), pdf.text(p), pdf.find(termo), pdf.addText(p, x, y, texto, tamanho), pdf.rotate(páginas, graus), pdf.deletePages(páginas), pdf.fields(), pdf.setField(nome, valor), log(…). Sem acesso a arquivo nem rede.").size(11.5).color(muted),
         ].spacing(10);
         match &self.scripts.saida {

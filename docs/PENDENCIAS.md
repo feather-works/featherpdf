@@ -52,7 +52,7 @@ Segunda leitura (scripts, páginas, OCR), também conferida no código:
     desligado (`scripts.rs:99-109`). Sem limite de memória: `new Array(2**30)` derruba o app e
     perde as abas não salvas. Saída: rodar num processo filho com prazo e teto de memória.
     Feito: processo à parte (`--rodar-script`), prazo de 120 s; memória: oom_score_adj 1000 no
-    Linux (o sistema derruba o script, não o app). Sem botão Parar ainda.
+    Linux (o sistema derruba o script, não o app). Botão Parar no lugar do Rodar enquanto roda.
 ✅ 23. Caixa da página é o CropBox cru, sem recortar pela MediaBox (`paginas.rs:279`); o Hayro desenha
     a interseção. CropBox maior que a MediaBox desloca a camada do OCR, a numeração e as camadas.
 ✅ 24. OCR de novo duplica a camada de texto: `sem_texto` só é calculado ao abrir a janela e não é
@@ -70,7 +70,8 @@ Segunda leitura (scripts, páginas, OCR), também conferida no código:
 29. Dividir por tamanho copia o documento inteiro duas vezes a cada medida (`divisao.rs:62`).
     Metade feita: `extrair` não copia de novo (uma cópia por medida). Falta medir sem gravar.
 ✅ 30. Página em branco inserida não copia o /Rotate da vizinha (`paginas.rs:178-188`).
-Baixo risco: `FEATHERPDF_ROTEIRO_*`, `PELICANO_ROTEIRO` e `PELICANO_GRAVAR` (este roda o ffmpeg)
+Baixo risco, fica (13/11): servem aos testes com o mouse no app de verdade; quem as usa já controla o ambiente (LD_PRELOAD faria mais).
+`FEATHERPDF_ROTEIRO_*`, `PELICANO_ROTEIRO` e `PELICANO_GRAVAR` (este roda o ffmpeg)
 valem também no executável de release; só quem já controla o ambiente usa.
 
 Verificado e sem problema: 450 PDFs estragados de propósito (bytes trocados, cortados, números
