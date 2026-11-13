@@ -41,99 +41,200 @@ pub fn linha_horizontal<'a>() -> Element<'a, Msg> {
     container(Space::with_height(1)).width(Length::FILL).style(tema::estilo_linha).into()
 }
 
-/// Ferramenta da faixa: ícone na cor dele, título e uma linha do que faz; sem moldura até o mouse passar.
-fn acao<'a>(icone: &str, cor: Color, titulo: &'a str, detalhe: &'a str, msg: Option<Msg>) -> Element<'a, Msg> {
-    button(row![
-        icones::icone_traco(icone, 20.).color(texto_escuro(cor)),
-        column![text(titulo).size(13), text(detalhe).size(11.5).color(tema::COR_TEXTO_MUTED()).no_wrap().ellipsis()].spacing(1),
-        Space::with_width(Length::FILL),
-    ].spacing(12).align_y(Align::Center))
-        .width(Length::FILL).padding([10, 12])
-        .style(move |_, status| Style {
-            background: matches!(status, Status::Hovered | Status::Pressed).then(|| Background::Color(tema::COR_HOVER())),
-            text_color: Some(tema::COR_TEXTO()),
-            border: Border { radius: [8.0; 4], ..Default::default() },
-            ..Default::default()
-        })
-        .on_press_maybe(msg).into()
+/// Quantos recentes ganham capa na página inicial (dois por linha de cartões a mais pesam pouco).
+const CAPAS: usize = 12;
+
+/// Página 1 do arquivo, com `altura` pixels, para a capa do recente. Rodar fora da janela.
+pub fn capa(caminho: &std::path::Path, paginas: u32, altura: f32) -> Result<featherpdf_io::PaginaRaster, String> {
+    let vis = match featherpdf_io::Visualizador::do_arquivo(caminho, paginas) {
+        Some(v) => v,
+        None => featherpdf_io::Visualizador::novo(std::fs::read(caminho).map_err(|e| e.to_string())?)?,
+    };
+    let (_, a) = vis.tamanhos().first().copied().ok_or("PDF sem páginas")?;
+    vis.desenhar(1, (altura / a).clamp(0.1, 4.0))
+}
+
+/// Botão de cor cheia (vermelho da marca, texto branco).
+fn estilo_principal(_: &Theme, status: Status) -> Style {
+    let sobre = matches!(status, Status::Hovered | Status::Pressed);
+    Style {
+        background: Some(Background::Color(if sobre { Color::rgb8(0xa9, 0x2c, 0x23) } else { VERMELHO })),
+        text_color: Some(Color::WHITE),
+        border: Border { radius: [8.0; 4], ..Default::default() },
+        ..Default::default()
+    }
+}
+
+/// Cartão neutro: painel com borda suave; o mouse em cima clareia.
+fn estilo_cartao(_: &Theme, status: Status) -> Style {
+    let sobre = matches!(status, Status::Hovered | Status::Pressed);
+    Style {
+        background: Some(Background::Color(if sobre { tema::COR_HOVER() } else { tema::COR_PAINEL() })),
+        text_color: Some(tema::COR_TEXTO()),
+        border: Border { color: tema::COR_BORDA_SUAVE(), width: 1.0, radius: [10.0; 4] },
+        ..Default::default()
+    }
+}
+
+fn tecla<'a>(t: &'a str) -> Element<'a, Msg> {
+    container(text(t).size(11).font(Font::MONO).color(tema::COR_TEXTO_MUTED())).padding([2, 6])
+        .style(|_| Style { border: Border { color: tema::COR_BORDA(), width: 1.0, radius: [5.0; 4] }, ..Default::default() }).into()
+}
+
+/// A capa desenhada ou, enquanto não chega (ou o arquivo não abre), uma folha com o ícone.
+fn folha<'a>(capa: Option<&Image>, l: f32, a: f32) -> Element<'a, Msg> {
+    let dentro: Element<'a, Msg> = match capa {
+        Some(img) => image(img.clone()).width(l).height(a).content_fit(ContentFit::Contain).into(),
+        None => container(icones::icone_traco("file-type-pdf", 26.).color(tema::COR_TEXTO_MUTED())).width(l).height(a).align_x(Align::Center).align_y(Align::Center).into(),
+    };
+    let tem = capa.is_some();
+    container(dentro).style(move |_| Style {
+        background: Some(Background::Color(if tem { Color::TRANSPARENT } else { tema::COR_FUNDO_JANELA() })),
+        border: Border { color: tema::COR_BORDA_SUAVE(), width: if tem { 0.0 } else { 1.0 }, radius: [3.0; 4] },
+        ..Default::default()
+    }).into()
 }
 
 impl App {
+    /// Pede as capas dos primeiros recentes que ainda não têm (ou que foram abertos de novo).
+    pub fn pedir_capas(&mut self) -> Task<Msg> {
+        let vivos: Vec<(std::path::PathBuf, u64)> = self.recentes.itens.iter().take(CAPAS).map(|r| (r.caminho.clone(), r.aberto_em)).collect();
+        self.capas.retain(|c, (q, _)| vivos.iter().any(|(v, w)| v == c && w == q));
+        let altura = 150.0 * self.escala_tela;
+        let mut tarefas = Vec::new();
+        for r in self.recentes.itens.iter().take(CAPAS) {
+            if !self.capas_pedidas.insert((r.caminho.clone(), r.aberto_em)) { continue; }
+            let (caminho, paginas, quando) = (r.caminho.clone(), r.paginas, r.aberto_em);
+            let destino = caminho.clone();
+            tarefas.push(Task::perform(async move {
+                let _vez = crate::DESENHOS.acquire().await;
+                tokio::task::spawn_blocking(move || { crate::alocador::prioridade_baixa(); capa(&caminho, paginas, altura) }).await
+                    .unwrap_or_else(|e| Err(e.to_string()))
+            }, move |r| Msg::Capa(destino.clone(), quando, r)));
+        }
+        Task::batch(tarefas)
+    }
+
     pub fn view_inicio(&self) -> Element<'_, Msg> {
         // A mesma barra das abas dos documentos: a pena, a aba "Início", o + e a engrenagem.
         let topo = crate::tela::barra_documento(self);
         let muted = tema::COR_TEXTO_MUTED();
         let negrito = Font::SEMIBOLD;
+        let agora = recentes::agora();
+        let capa_de = |c: &std::path::Path| self.capas.get(c).and_then(|(_, i)| i.as_ref());
 
-        // Cabeçalho como o do FeatherDocs: marca, frase e Abrir à direita (soltar arquivo vale na janela toda).
-        let cabecalho = row![
-            feather_ui::marca::icone_atual(36.),
-            column![
-                text("FeatherPDF").size(20).font(negrito),
-                text("PDFs que ficam na sua máquina. Solte um arquivo em qualquer lugar da janela para abrir.").size(12.5).color(muted),
-            ].spacing(1).width(Length::FILL),
-            button(row![icones::icone_traco("file-plus", 16.), text("PDF em branco").size(13)].spacing(7).align_y(Align::Center))
-                .padding([8, 14]).style(tema::estilo_botao_secundario).on_press(Msg::NovoA4),
-            button(row![icones::icone_traco("folder-open", 16.), text("Abrir…").size(13)].spacing(7).align_y(Align::Center))
-                .padding([8, 16]).style(tema::estilo_botao_secundario).on_press(Msg::Abrir),
-        ].spacing(12).align_y(Align::Center);
-
-        // As ferramentas que precisam de um PDF pedem o arquivo e abrem nele (Msg::AbrirPara).
-        let para = |m: Msg| Some(Msg::AbrirPara(Box::new(m)));
-        let acoes: [(&str, Color, &str, &str, Option<Msg>); 13] = [
-            ("copy-plus", VERMELHO, "Juntar arquivos", "PDFs e imagens", Some(Msg::Juntar(crate::juntar::Jt::Escolher(false)))),
-            ("cut", Color::rgb8(0xc2, 0x41, 0x5d), "Dividir", "Um PDF a cada N páginas", para(crate::tela::dividir())),
-            ("photo", Color::rgb8(0x23, 0x6a, 0xc7), "Imagens para PDF", "Uma por página", Some(Msg::Juntar(crate::juntar::Jt::Escolher(true)))),
-            ("file-export", Color::rgb8(0x2f, 0x7f, 0xb8), "Converter", "Word, Excel, imagens", para(Msg::Exp(crate::exportar::Ex::Abrir(crate::exportar::Formato::Word)))),
-            ("scan", Color::rgb8(0x1f, 0x8a, 0x5b), "OCR", "Scan vira texto pesquisável", para(Msg::Ocr(crate::ocr::Oc::Abrir))),
-            ("file-zip", Color::rgb8(0x7a, 0x5c, 0xc4), "Comprimir", "Arquivo menor para enviar", para(Msg::Prot(crate::proteger::Pr::AbrirComprimir))),
-            ("writing-sign", Color::rgb8(0x3d, 0x6f, 0x8f), "Assinar", "Com certificado digital", para(Msg::Assin(crate::assinar::As::Abrir))),
-            ("lock", Color::rgb8(0xb8, 0x86, 0x0b), "Senha", "Proteger e permissões", para(Msg::Prot(crate::proteger::Pr::AbrirSenha))),
-            ("list", Color::rgb8(0xb0, 0x7d, 0x0a), "Fluxos em lote", "Pasta inteira", Some(Msg::Fluxos(crate::fluxos::Fx::Abrir))),
-            ("eraser", Color::rgb8(0x8a, 0x92, 0x9c), "Tarja definitiva", "Apagar CPF e nomes", para(Msg::MudarAba(crate::Aba::Proteger))),
-            ("columns", Color::rgb8(0xc0, 0x60, 0x14), "Comparar", "Diferença entre versões", para(Msg::Comparar(crate::comparar::Cmp::Abrir))),
-            ("forms", Color::rgb8(0x1a, 0x7f, 0x86), "Formulário", "Preencher ou criar campos", para(Msg::MudarAba(crate::Aba::Formularios))),
-            ("file-export", Color::rgb8(0x5b, 0x6b, 0x7c), "Extrair páginas", "Escolha e salve à parte", para(Msg::MudarAba(crate::Aba::Paginas))),
-        ];
-        let mut grade = column![].spacing(2);
-        let mut linha = row![].spacing(6);
-        let mostrar = if self.inicio_mais { acoes.len() } else { 8 };
-        for (k, (icone, cor, titulo, detalhe, msg)) in acoes.into_iter().take(mostrar).enumerate() {
-            linha = linha.push(container(acao(icone, cor, titulo, detalhe, msg)).width(Length::Fill(1)));
-            if k % 4 == 3 { grade = grade.push(linha); linha = row![].spacing(6); }
-        }
-        // A última fileira incompleta fica com a largura das outras.
-        let sobra = mostrar % 4;
-        if sobra > 0 {
-            for _ in sobra..4 { linha = linha.push(Space::with_width(Length::Fill(1))); }
-            grade = grade.push(linha);
-        }
-        let ferramentas = container(column![
-            row![
-                text("Ferramentas").size(16).font(negrito),
-                Space::with_width(Length::FILL),
-                text("Pedem o PDF e abrem nele").size(12).color(muted),
-                button(row![text(if self.inicio_mais { "Ver menos" } else { "Ver todas" }).size(12.5), icones::icone_traco(if self.inicio_mais { "chevron-up" } else { "chevron-right" }, 14.).color(tema::COR_AZUL_ACENTO())].spacing(3).align_y(Align::Center))
-                    .style(|_, _| Style { text_color: Some(tema::COR_AZUL_ACENTO()), ..Default::default() }).padding([4, 8]).on_press(Msg::InicioMais),
-            ].spacing(12).align_y(Align::Center),
-            grade,
-        ].spacing(10))
-            .padding([14, 14]).width(Length::FILL)
+        // Continuar de onde parou: o recente mais novo, com a página onde a pessoa saiu.
+        let destaque: Element<'_, Msg> = match self.recentes.itens.first() {
+            Some(r) => {
+                let nome = r.caminho.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let pasta = cortar(&r.caminho.parent().map(encurtar_pasta).unwrap_or_default(), 40, true);
+                let pagina = r.pagina.clamp(1, r.paginas.max(1));
+                let feito = if r.paginas > 1 { (pagina - 1) as f32 / (r.paginas - 1) as f32 } else { 1.0 };
+                let barra = container(container(Space::new(Length::Fixed(320.0 * feito), 4.0))
+                    .style(|_| Style { background: Some(Background::Color(VERMELHO)), border: Border { radius: [2.0; 4], ..Default::default() }, ..Default::default() }))
+                    .width(320).height(4)
+                    .style(|_| Style { background: Some(Background::Color(tema::COR_BORDA())), border: Border { radius: [2.0; 4], ..Default::default() }, ..Default::default() });
+                let mut botoes = row![
+                    button(text(if pagina > 1 { "Continuar lendo" } else { "Abrir" }).size(13).font(negrito)).padding([9, 16]).style(estilo_principal)
+                        .on_press(Msg::AbrirCaminho(r.caminho.clone())),
+                ].spacing(8);
+                if pagina > 1 {
+                    botoes = botoes.push(button(text("Abrir na página 1").size(13)).padding([9, 14]).style(tema::estilo_botao_secundario)
+                        .on_press(Msg::AbrirDoComeco(r.caminho.clone())));
+                }
+                row![
+                    folha(capa_de(&r.caminho), 112., 148.),
+                    column![
+                        text("CONTINUAR DE ONDE PAROU").size(11).font(negrito).color(muted),
+                        text(nome).size(20).font(negrito).no_wrap().ellipsis(),
+                        text(format!("{pasta} · página {pagina} de {} · aberto {}", r.paginas, recentes::quando(r.aberto_em, agora))).size(12.5).color(muted).no_wrap().ellipsis(),
+                        Space::with_height(6),
+                        barra,
+                        Space::with_height(Length::FILL),
+                        botoes,
+                    ].spacing(4).width(Length::FILL).height(148),
+                ].spacing(22).align_y(Align::Center).into()
+            }
+            None => row![
+                container(icones::icone_traco("folder-open", 30.).color(vermelho_texto())).width(64).height(64).align_x(Align::Center).align_y(Align::Center)
+                    .style(|_| Style { background: Some(Background::Color(fundo_vermelho())), border: Border { radius: [14.0; 4], ..Default::default() }, ..Default::default() }),
+                column![
+                    text("Abra um PDF para começar").size(20).font(negrito),
+                    text("Solte um arquivo em qualquer lugar da janela, ou use Abrir. Imagens viram PDF de uma página.").size(12.5).color(muted),
+                    Space::with_height(8),
+                    button(text("Abrir PDF…").size(13).font(negrito)).padding([9, 16]).style(estilo_principal).on_press(Msg::Abrir),
+                ].spacing(4).width(Length::FILL),
+            ].spacing(22).align_y(Align::Center).height(148).into(),
+        };
+        let destaque = container(destaque).padding(20).width(Length::Fill(3))
             .style(|_| Style {
-                background: Some(Background::Color(tema::COR_PAINEL_FAIXA())),
-                border: Border { color: tema::COR_BORDA_SUAVE(), width: 1.0, radius: [10.0; 4] },
+                background: Some(Background::Color(tema::COR_PAINEL())),
+                border: Border { color: tema::COR_BORDA_SUAVE(), width: 1.0, radius: [14.0; 4] },
                 ..Default::default()
             });
 
+        let atalho = |icone: &'static str, rotulo: &'static str, t: &'static str, msg: Msg| -> Element<'_, Msg> {
+            button(row![icones::icone_traco(icone, 18.).color(vermelho_texto()), text(rotulo).size(13), Space::with_width(Length::FILL), tecla(t)]
+                .spacing(12).align_y(Align::Center))
+                .width(Length::FILL).height(54).padding([0, 14]).style(estilo_cartao).on_press(msg).into()
+        };
+        let atalhos = column![
+            atalho("folder-open", "Abrir PDF…", "Ctrl+O", Msg::Abrir),
+            atalho("file-plus", "PDF em branco", "Ctrl+N", Msg::NovoA4),
+            atalho("copy-plus", "Juntar arquivos", "Ctrl+J", Msg::Juntar(crate::juntar::Jt::Escolher(false))),
+        ].spacing(8).width(Length::Fill(1));
+
+        // As ferramentas que precisam de um PDF pedem o arquivo e abrem nele (Msg::AbrirPara).
+        let para = |m: Msg| Some(Msg::AbrirPara(Box::new(m)));
+        let acoes: [(&str, &str, Option<Msg>); 12] = [
+            ("cut", "Dividir", para(crate::tela::dividir())),
+            ("photo", "Imagens para PDF", Some(Msg::Juntar(crate::juntar::Jt::Escolher(true)))),
+            ("file-export", "Converter", para(Msg::Exp(crate::exportar::Ex::Abrir(crate::exportar::Formato::Word)))),
+            ("scan", "OCR", para(Msg::Ocr(crate::ocr::Oc::Abrir))),
+            ("file-zip", "Comprimir", para(Msg::Prot(crate::proteger::Pr::AbrirComprimir))),
+            ("writing-sign", "Assinar", para(Msg::Assin(crate::assinar::As::Abrir))),
+            ("lock", "Senha", para(Msg::Prot(crate::proteger::Pr::AbrirSenha))),
+            ("file-export", "Extrair páginas", para(Msg::MudarAba(crate::Aba::Paginas))),
+            ("list", "Fluxos em lote", Some(Msg::Fluxos(crate::fluxos::Fx::Abrir))),
+            ("eraser", "Tarja definitiva", para(Msg::MudarAba(crate::Aba::Proteger))),
+            ("columns", "Comparar", para(Msg::Comparar(crate::comparar::Cmp::Abrir))),
+            ("forms", "Formulário", para(Msg::MudarAba(crate::Aba::Formularios))),
+        ];
+        let por_linha = 8;
+        let mostrar = if self.inicio_mais { acoes.len() } else { por_linha };
+        let mut grade = column![].spacing(8);
+        let mut linha = row![].spacing(8);
+        for (k, (icone, titulo, msg)) in acoes.into_iter().take(mostrar).enumerate() {
+            let miolo = container(column![icones::icone_traco(icone, 22.).color(muted), text(titulo).size(12.5).no_wrap()].spacing(8).align_x(Align::Center))
+                .width(Length::FILL).height(Length::FILL).align_x(Align::Center).align_y(Align::Center);
+            linha = linha.push(button(miolo).width(Length::Fill(1)).height(84).padding(4).style(estilo_cartao).on_press_maybe(msg));
+            if k % por_linha == por_linha - 1 { grade = grade.push(linha); linha = row![].spacing(8); }
+        }
+        let sobra = mostrar % por_linha;
+        if sobra > 0 {
+            for _ in sobra..por_linha { linha = linha.push(Space::with_width(Length::Fill(1))); }
+            grade = grade.push(linha);
+        }
+        let ferramentas = column![
+            row![
+                text("Ferramentas").size(15).font(negrito),
+                text("Pedem o PDF e abrem nele").size(12).color(muted),
+                Space::with_width(Length::FILL),
+                button(text(if self.inicio_mais { "Menos ferramentas" } else { "Todas as ferramentas" }).size(12.5).color(vermelho_texto()))
+                    .style(|_, _| Style::default()).padding([4, 4]).on_press(Msg::InicioMais),
+            ].spacing(12).align_y(Align::Center),
+            grade,
+        ].spacing(10);
+
         let titulo_recentes = row![
-            text("Recentes").size(16).font(negrito),
+            text("Recentes").size(15).font(negrito),
             Space::with_width(Length::FILL),
             container(row![
                 icones::icone_traco("search", 15.).color(muted),
                 text_input("Buscar nos recentes", &self.busca_recentes).on_input(Msg::BuscaRecentes).size(13).padding([5, 4])
                     .style(|tema_, estado| { let mut e = pelicano::input_default(tema_, estado); e.background = Some(Background::Color(tema::COR_PAINEL())); e.border = Border::default(); e }),
             ].spacing(6).align_y(Align::Center))
-                .padding([1, 10]).width(280)
+                .padding([1, 10]).width(260)
                 .style(|_| Style {
                     background: Some(Background::Color(tema::COR_PAINEL())),
                     border: Border { color: tema::COR_BORDA(), width: 1.0, radius: [8.0; 4] },
@@ -142,15 +243,15 @@ impl App {
         ].align_y(Align::Center);
 
         let corpo = column![
-            cabecalho,
+            row![destaque, atalhos].spacing(16),
             ferramentas,
-            column![titulo_recentes, self.tabela_recentes()].spacing(10),
+            column![titulo_recentes, self.cartoes_recentes()].spacing(12),
             self.status_inicio(),
-        ].spacing(18);
+        ].spacing(28);
 
         column![
             topo,
-            scrollable(container(container(corpo).max_width(1180.0)).width(Length::FILL).align_x(Align::Center).padding([24, 44])).height(Length::FILL),
+            scrollable(container(container(corpo).max_width(1120.0)).width(Length::FILL).align_x(Align::Center).padding([32, 40])).height(Length::FILL),
         ].into()
     }
 
@@ -159,54 +260,46 @@ impl App {
         text(self.status.clone()).size(12).color(tema::COR_TEXTO_MUTED()).into()
     }
 
-    /// Recentes em tabela sem moldura, como no FeatherDocs: etiqueta PDF, nome, pasta, páginas e quando.
-    fn tabela_recentes(&self) -> Element<'_, Msg> {
+    /// Recentes em cartões com a capa (página 1), seis por linha; a busca mostra todos os que batem.
+    fn cartoes_recentes(&self) -> Element<'_, Msg> {
         let muted = tema::COR_TEXTO_MUTED();
-        let rotulo = |s: &'static str| text(s).size(11).color(muted);
-        let mut linhas = column![
-            container(row![
-                Space::with_width(Length::Fixed(44.0)),
-                container(rotulo("Nome")).width(Length::Fill(5)),
-                container(rotulo("Pasta")).width(Length::Fill(4)),
-                container(rotulo("Páginas")).width(Length::Fixed(70.0)).align_x(Align::End),
-                container(rotulo("Aberto")).width(Length::Fixed(100.0)).align_x(Align::End),
-            ].spacing(10)).padding([0, 10]),
-            linha_horizontal(),
-        ].spacing(4);
         let busca = self.busca_recentes.to_lowercase();
         let agora = recentes::agora();
-        let mut quantos = 0;
-        for r in self.recentes.itens.iter().filter(|r| busca.is_empty()
-            || r.caminho.to_string_lossy().to_lowercase().contains(&busca))
-        {
-            quantos += 1;
-            let nome = r.caminho.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            let pasta = cortar(&r.caminho.parent().map(encurtar_pasta).unwrap_or_default(), 50, true);
-            let etiqueta = container(text("PDF").size(9.5).font(Font::SEMIBOLD).color(Color::WHITE)).padding([1, 5])
-                .style(|_| Style { background: Some(Background::Color(Color { a: if tema::escuro() { 0.85 } else { 1.0 }, ..VERMELHO })), border: Border { radius: [3.0; 4], ..Default::default() }, ..Default::default() });
-            let linha = row![
-                container(etiqueta).width(Length::Fixed(44.0)).align_x(Align::Center),
-                container(text(nome).size(13).no_wrap().ellipsis()).width(Length::Fill(5)),
-                container(text(pasta).size(12.5).color(muted).no_wrap().ellipsis()).width(Length::Fill(4)),
-                container(text(r.paginas.to_string()).size(12.5).color(muted)).width(Length::Fixed(70.0)).align_x(Align::End),
-                container(text(recentes::quando(r.aberto_em, agora)).size(12.5).color(muted)).width(Length::Fixed(100.0)).align_x(Align::End),
-            ].spacing(10).align_y(Align::Center);
-            linhas = linhas.push(
-                button(linha).padding([8, 10]).width(Length::FILL)
+        let achados: Vec<_> = self.recentes.itens.iter()
+            .filter(|r| busca.is_empty() || r.caminho.to_string_lossy().to_lowercase().contains(&busca))
+            .take(if busca.is_empty() { CAPAS } else { usize::MAX })
+            .collect();
+        if achados.is_empty() {
+            return text(if self.recentes.itens.is_empty() { "Os PDFs que você abrir aparecem aqui." } else { "Nenhum recente com esse nome." })
+                .size(13).color(muted).into();
+        }
+        let por_linha = 6;
+        let mut grade = column![].spacing(14);
+        for fila in achados.chunks(por_linha) {
+            let mut linha = row![].spacing(14);
+            for r in fila {
+                let nome = r.caminho.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let capa = self.capas.get(&r.caminho).and_then(|(_, i)| i.as_ref());
+                let moldura = container(folha(capa, 96., 128.)).width(Length::FILL).height(150).align_x(Align::Center).align_y(Align::Center)
+                    .style(|_| Style { background: Some(Background::Color(tema::COR_PAINEL())), border: Border { radius: [8.0; 4], ..Default::default() }, ..Default::default() });
+                let cartao = column![
+                    moldura,
+                    text(nome).size(13).no_wrap().ellipsis(),
+                    text(format!("{} pág. · {}", r.paginas, recentes::quando(r.aberto_em, agora))).size(12).color(muted),
+                ].spacing(6);
+                linha = linha.push(button(cartao).width(Length::Fill(1)).padding(8)
                     .style(|_, status| Style {
-                        background: matches!(status, Status::Hovered).then(|| Background::Color(tema::COR_HOVER())),
+                        background: matches!(status, Status::Hovered | Status::Pressed).then(|| Background::Color(tema::COR_HOVER())),
                         text_color: Some(tema::COR_TEXTO()),
-                        border: Border { radius: [7.0; 4], ..Default::default() },
+                        border: Border { radius: [12.0; 4], ..Default::default() },
                         ..Default::default()
                     })
                     .on_press(Msg::AbrirCaminho(r.caminho.clone())));
+            }
+            for _ in fila.len()..por_linha { linha = linha.push(Space::with_width(Length::Fill(1))); }
+            grade = grade.push(linha);
         }
-        if quantos == 0 {
-            linhas = linhas.push(container(text(if self.recentes.itens.is_empty() {
-                "Os PDFs que você abrir aparecem aqui."
-            } else { "Nenhum recente com esse nome." }).size(13).color(muted)).padding([14, 10]));
-        }
-        linhas.into()
+        grade.into()
     }
 }
 

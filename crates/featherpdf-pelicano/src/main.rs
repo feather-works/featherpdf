@@ -175,6 +175,10 @@ pub enum Msg {
     IrInicio,
     BuscaRecentes(String),
     InicioMais,
+    /// Capa (página 1) de um recente, desenhada fora da janela: caminho, quando foi aberto, imagem.
+    Capa(PathBuf, u64, Result<featherpdf_io::PaginaRaster, String>),
+    /// Abre um recente do começo, esquecendo onde a pessoa tinha parado.
+    AbrirDoComeco(PathBuf),
     // Abas de documento
     Guia(usize),
     FecharGuia(usize),
@@ -396,6 +400,9 @@ pub struct App {
     pub busca_recentes: String,
     /// Início mostrando todas as ações rápidas, não só as 4 primeiras.
     pub inicio_mais: bool,
+    /// Capas dos recentes da página inicial, pela data de abertura (abrir de novo desenha outra).
+    pub capas: HashMap<PathBuf, (u64, Option<Image>)>,
+    capas_pedidas: HashSet<(PathBuf, u64)>,
     pub busca: busca::EstadoBusca,
     pub ins: inserir::Insercoes,
     pub medidas: medir::Medidas,
@@ -535,6 +542,8 @@ impl App {
             foco_pesquisa: 0,
             busca_recentes: String::new(),
             inicio_mais: false,
+            capas: HashMap::new(),
+            capas_pedidas: HashSet::new(),
             busca: busca::EstadoBusca::default(),
             ins: inserir::Insercoes::default(),
             medidas: medir::Medidas::default(),
@@ -598,6 +607,7 @@ impl App {
         if let Some(caminho) = std::env::args_os().nth(1).map(PathBuf::from) {
             tarefas.push(Task::done(Msg::AbrirCaminho(caminho)));
         }
+        tarefas.push(app.pedir_capas());
         (app, Task::batch(tarefas))
     }
 
@@ -1310,6 +1320,8 @@ impl App {
         self.monitor.profundidade -= 1;
         let tarefa = if self.monitor.profundidade > 0 { tarefa }
             else { Task::batch([tarefa, self.observar(&status_antes, trabalho_antes, inicio.elapsed(), &nome)]) };
+        // Na página inicial, as capas dos recentes que ainda não foram desenhadas.
+        let tarefa = if self.aberto.is_none() && self.monitor.profundidade == 0 { Task::batch([tarefa, self.pedir_capas()]) } else { tarefa };
         self.atualizar_texto();
         self.reler_campos();
         // Uma edição esvazia os objetos lidos: com a busca aberta, os achados são refeitos.
@@ -1504,6 +1516,14 @@ impl App {
             },
             Msg::BuscaRecentes(t) => self.busca_recentes = t,
             Msg::InicioMais => self.inicio_mais = !self.inicio_mais,
+            Msg::Capa(caminho, quando, r) => {
+                let img = r.ok().and_then(|r| Image::from_rgba(r.largura, r.altura, r.rgba));
+                self.capas.insert(caminho, (quando, img));
+            }
+            Msg::AbrirDoComeco(caminho) => {
+                self.recentes.lembrar(&caminho, 1);
+                return self.update_interno(Msg::AbrirCaminho(caminho));
+            }
 
             Msg::ZoomQuadro => return self.quadro_de_zoom(),
             Msg::FecharResposta(r) => return self.responder_fechar(r),
@@ -1886,6 +1906,7 @@ impl App {
             else if ctrl && shift && c("s") { Msg::SalvarComo }
             else if ctrl && c("s") { Msg::Salvar }
             else if ctrl && c("n") { Msg::NovoA4 }
+            else if ctrl && c("j") { Msg::Juntar(juntar::Jt::Escolher(false)) }
             else if ctrl && c("d") && self.aberto.is_some() { Msg::Prop(propriedades::Pp::Abrir) }
             else if ctrl && c("k") { Msg::Pesquisar }
             else if ctrl && (c("=") || c("+")) { Msg::ZoomMais }
@@ -2258,6 +2279,18 @@ mod testes {
     }
 
     #[test]
+    fn capa_do_recente_e_a_pagina_um_na_altura_pedida() {
+        let pasta = std::env::temp_dir().join(format!("featherpdf-capa-{}", std::process::id()));
+        std::fs::create_dir_all(&pasta).unwrap();
+        let arquivo = pasta.join("a.pdf");
+        std::fs::write(&arquivo, featherpdf_io::criar_a4().unwrap().serializar().unwrap()).unwrap();
+        let r = inicio::capa(&arquivo, 1, 150.0).unwrap();
+        assert!((149..=151).contains(&r.altura) && r.largura < r.altura, "{}x{}", r.largura, r.altura);
+        assert!(inicio::capa(&pasta.join("nao-existe.pdf"), 1, 150.0).is_err());
+        let _ = std::fs::remove_dir_all(&pasta);
+    }
+
+    #[test]
     fn apresentacao_entra_passa_pagina_e_volta_como_estava() {
         let mut app = com_a4();
         let _ = app.update(Msg::Pag(organizar::Pag::InserirBranco));
@@ -2371,6 +2404,19 @@ mod testes {
         if std::env::var_os("FEATHERPDF_CAPTURA_ESCURO").is_some() { tema::definir_tema(true, ACENTO_PDF); app.tema_escuro = true; }
         else { tema::definir_tema(false, ACENTO_PDF); app.tema_escuro = false; } // sem isso vale o tema salvo do usuário
         if std::env::var_os("FEATHERPDF_CAPTURA_PAGINA_ESCURA").is_some() { let _ = app.update(Msg::ModoEscuro); }
+        // `FEATHERPDF_CAPTURA_RECENTES=pasta`: a página inicial com os PDFs dessa pasta como recentes (e as capas).
+        if let Some(pasta) = std::env::var_os("FEATHERPDF_CAPTURA_RECENTES") {
+            let mut arquivos: Vec<PathBuf> = std::fs::read_dir(pasta).unwrap().flatten().map(|e| e.path())
+                .filter(|p| p.extension().is_some_and(|e| e == "pdf")).collect();
+            arquivos.sort();
+            let agora = recentes::agora();
+            for (i, c) in arquivos.into_iter().take(12).enumerate() {
+                let paginas = featherpdf_io::abrir_com_senha(&c, None).map(|p| p.total_paginas()).unwrap_or(1);
+                let quando = agora - i as u64 * 90_000;
+                app.recentes.itens.push(recentes::Recente { caminho: c.clone(), paginas, aberto_em: quando, pagina: if i == 0 { paginas.div_ceil(2) } else { 1 } });
+                if let Ok(r) = inicio::capa(&c, paginas, 150.0) { let _ = app.update(Msg::Capa(c, quando, Ok(r))); }
+            }
+        }
         // `FEATHERPDF_CAPTURA_APRESENTAR=1`: em apresentação (a janela não cresce aqui; encaixa no viewport).
         if std::env::var_os("FEATHERPDF_CAPTURA_APRESENTAR").is_some() { app.viewport = Some((0.0, 1672.0, 941.0)); let _ = app.update(Msg::Apresentar); let _ = app.update(Msg::AjustarPagina); }
         for pagina in 1..=app.total_paginas().min(4) as u32 {

@@ -181,6 +181,7 @@ pub fn modelo() -> &'static Catalogo {
                     topico("teclas-arquivos", "Arquivos e abas", vec![
                         t("Novo, abrir, salvar, imprimir e trocar de aba."),
                         a("Novo PDF A4", "Ctrl+N"),
+                        a("Juntar arquivos", "Ctrl+J"),
                         a("Abrir PDF", "Ctrl+O"),
                         a("Salvar", "Ctrl+S"),
                         a("Salvar como", "Ctrl+Shift+S"),
