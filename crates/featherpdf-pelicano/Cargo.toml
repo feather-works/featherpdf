@@ -18,7 +18,7 @@ featherpdf-ocr = { path = "../featherpdf-ocr" }
 pelicano = "0.1.34"
 # Branch `featherpdf-v0.3.11` do feather-ui: o v0.3.11 (agora com o pelicano 0.1.29 do crates.io) mais a marca FeatherPDF e o F12;
 # trocar por uma tag quando a marca entrar no main.
-feather-ui = { git = "https://github.com/feather-works/feather-ui.git", rev = "07f5cfd" }
+feather-ui = { git = "https://github.com/feather-works/feather-ui.git", rev = "bd36153" }
 feather-draw = { git = "https://github.com/feather-works/feather-draw", tag = "v0.1.1" }
 feather-shapes = { git = "https://github.com/feather-works/feather-shapes", tag = "v0.1.2" }
 rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "tokio"] }

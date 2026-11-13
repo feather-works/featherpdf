@@ -2417,6 +2417,7 @@ mod testes {
             None => com_a4(),
         };
         app.viewport = Some((0.0, 1000.0, 640.0));
+        app.faixa_aberta = true; // a faixa recolhida da configuração do usuário não vale para a foto
         // `FEATHERPDF_CAPTURA_ESCURO=1`: tema escuro; `FEATHERPDF_CAPTURA_PAGINA_ESCURA=1`: página escura.
         if std::env::var_os("FEATHERPDF_CAPTURA_ESCURO").is_some() { tema::definir_tema(true, ACENTO_PDF); app.tema_escuro = true; }
         else { tema::definir_tema(false, ACENTO_PDF); app.tema_escuro = false; } // sem isso vale o tema salvo do usuário
