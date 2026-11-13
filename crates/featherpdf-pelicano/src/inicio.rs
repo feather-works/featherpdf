@@ -9,6 +9,8 @@ use crate::compat::*;
 use crate::{recentes, App, Msg};
 
 pub const VERMELHO: Color = Color { r: 0xc5 as f32 / 255.0, g: 0x35 as f32 / 255.0, b: 0x2b as f32 / 255.0, a: 1.0 };
+/// Verde de "deu certo" (assinatura íntegra, impressão, fluxo concluído).
+pub const VERDE: Color = Color { r: 0x28 as f32 / 255.0, g: 0x78 as f32 / 255.0, b: 0x46 as f32 / 255.0, a: 1.0 };
 
 /// Texto vermelho: no escuro, um vermelho claro (o escuro some sobre o fundo vermelho translúcido).
 pub fn vermelho_texto() -> Color {

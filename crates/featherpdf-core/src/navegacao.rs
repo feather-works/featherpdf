@@ -59,6 +59,33 @@ impl DocumentoPdf {
         }).collect()
     }
 
+    /// Marcadores sem filhos que levam a uma das páginas `saem` (excluídas): ficariam na lista
+    /// sem levar a lugar nenhum.
+    pub(crate) fn tirar_marcadores_de(&mut self, saem: &std::collections::HashSet<lopdf::ObjectId>) {
+        let doc = &self.documento;
+        let alvo = |id: lopdf::ObjectId| -> Option<lopdf::ObjectId> {
+            let d = doc.get_dictionary(id).ok()?;
+            let destino = d.get(b"Dest").ok().or_else(|| d.get(b"A").ok().and_then(|a| resolver(doc, a)).and_then(|a| a.as_dict().ok())
+                .filter(|a| a.get(b"S").and_then(Object::as_name).ok() == Some(b"GoTo")).and_then(|a| a.get(b"D").ok()))?;
+            let mut atual = resolver(doc, destino)?;
+            for _ in 0..4 {
+                match atual {
+                    Object::Array(v) => return v.first()?.as_reference().ok(),
+                    Object::Dictionary(d) => atual = d.get(b"D").ok().and_then(|x| resolver(doc, x))?,
+                    Object::Name(n) | Object::String(n, _) => atual = self.destino_com_nome(n)?,
+                    _ => return None,
+                }
+            }
+            None
+        };
+        let mortos: Vec<lopdf::ObjectId> = self.itens_do_sumario().into_iter().map(|(id, _)| id)
+            .filter(|&id| self.filhos_do_sumario(id).is_empty() && alvo(id).is_some_and(|p| saem.contains(&p))).collect();
+        if mortos.is_empty() { return; }
+        self.soltar_sumario_do_catalogo();
+        for id in mortos { let _ = self.desligar_do_sumario(id); }
+        self.recontar_sumario();
+    }
+
     /// Raiz do sumário (/Outlines do catálogo), quando é uma referência.
     fn raiz_do_sumario(&self) -> Option<lopdf::ObjectId> {
         self.documento.catalog().ok()?.get(b"Outlines").ok()?.as_reference().ok()

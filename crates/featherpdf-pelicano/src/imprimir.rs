@@ -413,7 +413,7 @@ impl App {
     }
 }
 
-const VERDE: Color = Color::rgb(0x28 as f32 / 255.0, 0x78 as f32 / 255.0, 0x46 as f32 / 255.0);
+use crate::inicio::VERDE;
 const NEGRITO: Font = Font::SEMIBOLD;
 
 impl std::fmt::Display for Lados {

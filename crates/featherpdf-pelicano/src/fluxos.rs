@@ -16,10 +16,10 @@ use crate::compat::mouse::Cursor;
 use crate::compat::canvas::{self, Frame, Geometry, Path, Stroke};
 use crate::{App, Auxiliar, Msg};
 
-const VERMELHO: Color = Color::rgb(0.77, 0.21, 0.17);
+use crate::inicio::VERMELHO;
 /// Onde o bloco arrastado vai entrar (o destaque do tema do PDF é vermelho, igual ao "escolhido").
 const AZUL: Color = Color::rgb(0.10, 0.45, 0.91);
-const VERDE: Color = Color::rgb(0.157, 0.47, 0.275);
+use crate::inicio::VERDE;
 /// Cartão dos blocos no meio: largura, altura e o passo da grade de duas colunas.
 const CARTAO: (f32, f32) = (180.0, 62.0);
 const PASSO: (f32, f32) = (250.0, 130.0);

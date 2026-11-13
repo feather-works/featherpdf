@@ -129,6 +129,7 @@ impl DocumentoPdf {
         let ficam_anot = anotacoes(self, &mut ficam.iter());
         let fora: HashSet<ObjectId> = anotacoes(self, &mut saem.iter()).into_iter().filter(|a| !ficam_anot.contains(a)).collect();
         if !fora.is_empty() { self.tirar_campos(&fora); }
+        self.tirar_marcadores_de(&saem.iter().copied().collect());
         for id in saem.into_iter().chain(fora) { self.documento.objects.insert(id, Object::Null); }
     }
 
@@ -573,6 +574,17 @@ mod testes {
         pdf.girar_paginas(&[1], 90).unwrap();
         pdf.inserir_em_branco(2).unwrap();
         assert_eq!(pdf.tamanhos()[1], (842.0, 595.0), "a branca deita como o scan do lado");
+    }
+
+    #[test]
+    fn excluir_pagina_tira_o_marcador_dela() {
+        let mut pdf = pdf_teste();
+        pdf.inserir_em_branco(2).unwrap();
+        pdf.criar_marcador("Fica", 1, None).unwrap();
+        pdf.criar_marcador("Sai", 2, None).unwrap();
+        pdf.excluir_paginas(&[2]).unwrap();
+        let titulos: Vec<String> = pdf.marcadores().into_iter().map(|m| m.titulo).collect();
+        assert_eq!(titulos, ["Fica"]);
     }
 
     #[test]

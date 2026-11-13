@@ -86,7 +86,8 @@ impl App {
                         ..Default::default()
                     }));
                 }
-                c.push(text("Uma versão antiga mostra o documento como era antes das mudanças seguintes — útil para ver o que mudou depois de uma assinatura.").size(11.5).color(muted))
+                c.push(text("Uma versão antiga mostra o documento como era antes das mudanças seguintes — útil para ver o que mudou depois de uma assinatura. \
+                    Salvar por cima (Ctrl+S) grava o arquivo inteiro de novo e as versões antigas saem dele: guarde uma cópia antes, se precisar delas.").size(11.5).color(muted))
             }
         };
         scrollable(corpo.spacing(8).padding([0, 4])).height(Length::FILL).into()

@@ -763,8 +763,10 @@ fn miniaturas(app: &App) -> Element<'_, Msg> {
         let n = i as u32 + 1;
         let largura = 150.0_f32.min(150.0 * l / a);
         let altura = largura * a / l;
-        let figura: Element<'_, Msg> = match app.desenhadas.get(&n) {
-            Some(d) if d.trecho.is_none() => image(d.imagem.clone()).width(largura).height(altura).into(),
+        // A miniatura (pedida em volta da página atual) ou, enquanto não chega, o desenho da mesa.
+        let figura: Element<'_, Msg> = match (app.org.miniaturas.get(&n), app.desenhadas.get(&n)) {
+            (Some(m), _) => image(m.clone()).width(largura).height(altura).into(),
+            (None, Some(d)) if d.trecho.is_none() => image(d.imagem.clone()).width(largura).height(altura).into(),
             _ => Space::new(largura, altura).into(),
         };
         let ativa = n == app.pagina;

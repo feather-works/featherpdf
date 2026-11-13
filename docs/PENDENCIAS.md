@@ -81,9 +81,9 @@ atributos herdados, ids de objeto, OCR sem internet e com página girada.
 Item 7: com o laço confirmado, basta um monitor 4K a 100% (área de ~7000×3900 > 20 MP).
 Item 8: não dá para rodar aqui; conferir no Windows.
 
-Menores: painel lateral de miniaturas em branco fora da aba Páginas (`tela.rs:762-769`);
+✅ Menores: painel lateral de miniaturas em branco fora da aba Páginas (`tela.rs:762-769`);
 VERMELHO e VERDE repetidos em vários arquivos; marcadores de páginas apagadas ficam sem destino;
-o painel Versões não avisa que o Ctrl+S tira as versões guardadas.
+o painel Versões não avisa que o Ctrl+S tira as versões guardadas. Feitos os quatro.
 
 ## Modo escuro (13/11/2026)
 

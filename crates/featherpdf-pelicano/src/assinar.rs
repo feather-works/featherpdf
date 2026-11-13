@@ -54,7 +54,7 @@ pub enum As {
     UsarCertificado(bool),
 }
 
-const VERDE: Color = Color::rgb(0x28 as f32 / 255.0, 0x78 as f32 / 255.0, 0x46 as f32 / 255.0);
+use crate::inicio::VERDE;
 const AMBAR: Color = Color::rgb(0xb0 as f32 / 255.0, 0x7d as f32 / 255.0, 0x0b as f32 / 255.0);
 
 impl App {

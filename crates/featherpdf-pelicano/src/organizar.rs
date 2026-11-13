@@ -169,15 +169,21 @@ impl App {
 
     /// Pede as miniaturas das linhas à vista e de uma linha de cada lado.
     pub fn pedir_miniaturas(&mut self) -> Task<Msg> {
-        if self.aba != Aba::Paginas { return Task::none(); }
+        let painel = self.painel == Some(crate::Painel::Miniaturas);
+        if self.aba != Aba::Paginas && !painel { return Task::none(); }
         let Some(aberto) = &self.aberto else { return Task::none() };
         let total = aberto.tamanhos.len() as u32;
-        let (topo, largura, altura) = self.org.vista.unwrap_or((0.0, 1000.0, 900.0));
-        let por_linha = colunas(largura) as u32;
-        let linha_alt = CEL_A + VAO;
-        let primeira = ((topo - MARGEM) / linha_alt).floor().max(1.0) as u32 - 1;
-        let ultima = ((topo + altura) / linha_alt).ceil() as u32 + 1;
-        let (inicio, fim) = (primeira * por_linha + 1, ((ultima + 1) * por_linha).min(total));
+        let (inicio, fim) = if self.aba == Aba::Paginas {
+            let (topo, largura, altura) = self.org.vista.unwrap_or((0.0, 1000.0, 900.0));
+            let por_linha = colunas(largura) as u32;
+            let linha_alt = CEL_A + VAO;
+            let primeira = ((topo - MARGEM) / linha_alt).floor().max(1.0) as u32 - 1;
+            let ultima = ((topo + altura) / linha_alt).ceil() as u32 + 1;
+            (primeira * por_linha + 1, ((ultima + 1) * por_linha).min(total))
+        } else {
+            // Painel lateral: as páginas em volta da que está na tela (o painel acompanha a leitura).
+            (self.pagina.saturating_sub(15).max(1), (self.pagina + 15).min(total))
+        };
         // Guarda só as miniaturas perto da vista: num PDF de milhares de páginas elas somariam GBs.
         self.org.miniaturas.retain(|&p, _| p + 200 >= inicio && p <= fim + 200);
         let mut tarefas = Vec::new();

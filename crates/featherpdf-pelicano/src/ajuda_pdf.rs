@@ -130,7 +130,7 @@ pub fn modelo() -> &'static Catalogo {
                     ]),
                     topico("versoes", "Versões e comparar", vec![
                         t("Versões guardadas no arquivo e diferenças."),
-                        m("Converter → Versões lista as atualizações guardadas dentro do arquivo (comum em PDFs assinados)."),
+                        m("Converter → Versões lista as atualizações guardadas dentro do arquivo (comum em PDFs assinados). Salvar por cima grava o arquivo inteiro e as versões antigas saem dele."),
                         m("Comentar → Comparar mostra o que mudou entre o aberto e outro PDF."),
                     ]),
                     topico("exibir", "Exibir e navegar", vec![

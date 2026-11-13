@@ -1535,7 +1535,7 @@ impl App {
                 self.soltar_longe();
                 // No meio do zoom, desenho novo chegaria num zoom que já passou e trocaria a imagem esticada.
                 if self.zoom_animado.is_some() || self.zoom_esperando { return Task::none(); }
-                return self.pedir_visiveis();
+                return Task::batch([self.pedir_visiveis(), self.pedir_miniaturas()]);
             }
             Msg::IrPagina(p) => if (1..=self.total_paginas()).contains(&p) {
                 self.pagina = p;

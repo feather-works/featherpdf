@@ -13,7 +13,7 @@ use crate::edicao::na_tela;
 use crate::proteger::Pr;
 use crate::{App, Ferramenta, Msg, Painel};
 
-const VERMELHO: Color = Color::rgb(0.77, 0.21, 0.17);
+use crate::inicio::VERMELHO;
 
 #[derive(Debug, Clone)]
 pub struct Marca { pub pagina: u32, pub caixa: [f32; 4], texto: String, origem: String, ativa: bool }
