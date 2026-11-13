@@ -251,6 +251,8 @@ pub enum Msg {
     AlternarFaixa,
     /// Modo leitura: só a barra de título e as páginas.
     Leitura,
+    /// Apresentação: tela cheia, uma página por vez em fundo preto (F5; Esc sai).
+    Apresentar,
     AlternarFerramentas,
     FiltroFerramentas(String),
     BuscaComandos(String),
@@ -383,6 +385,8 @@ pub struct App {
     pub aba: Aba,
     pub faixa_aberta: bool,
     pub leitura: bool,
+    /// Em apresentação: o zoom e a disposição de antes, para voltar ao sair.
+    pub apresentacao: Option<(f32, Disposicao)>,
     pub ferramentas_abertas: bool,
     pub painel: Option<Painel>,
     pub ferramenta: Ferramenta,
@@ -522,6 +526,7 @@ impl App {
             aba: Aba::Inicio,
             faixa_aberta: config.faixa,
             leitura: false,
+            apresentacao: None,
             ferramentas_abertas: config.ferramentas,
             painel: None,
             ferramenta: Ferramenta::Selecionar,
@@ -1531,7 +1536,12 @@ impl App {
                 }
             }
             Msg::Rolou(vp) => {
+                let mudou = self.viewport.is_none_or(|v| (v.1, v.2) != (vp.bounds.width, vp.bounds.height));
                 self.viewport = Some((vp.offset.y, vp.bounds.width, vp.bounds.height));
+                if mudou && self.apresentacao.is_some() {
+                    let p = self.pagina;
+                    return Task::batch([self.update_interno(Msg::AjustarPagina), self.update_interno(Msg::IrPagina(p))]);
+                }
                 self.rolagem_x = vp.offset.x;
                 self.pagina = self.pagina_no_meio();
                 self.soltar_longe();
@@ -1624,6 +1634,25 @@ impl App {
             }
             Msg::AlternarFaixa => { self.faixa_aberta = !self.faixa_aberta; self.config.faixa = self.faixa_aberta; self.config.gravar(); }
             Msg::Leitura => self.leitura = !self.leitura,
+            Msg::Apresentar => {
+                if self.aberto.is_none() { return Task::none(); }
+                // shortcut: alterna a tela cheia; quem já estava em F11 sai dela ao começar.
+                let tela = Task::window(WindowCmd::ToggleFullscreen);
+                return match self.apresentacao.take() {
+                    Some((zoom, disposicao)) => {
+                        self.leitura = false;
+                        self.disposicao = disposicao;
+                        Task::batch([tela, self.mudar_zoom(zoom)])
+                    }
+                    None => {
+                        self.apresentacao = Some((self.zoom, self.disposicao));
+                        self.leitura = true;
+                        self.disposicao = Disposicao::UmaPagina;
+                        // O encaixe na tela vem no Rolou, quando a janela já cresceu.
+                        tela
+                    }
+                };
+            }
             Msg::AlternarFerramentas => { self.ferramentas_abertas = !self.ferramentas_abertas; self.config.ferramentas = self.ferramentas_abertas; self.config.gravar(); }
             Msg::FiltroFerramentas(t) => { self.filtro_ferramentas = t; self.ferramentas_abertas = true; }
             Msg::BuscaComandos(t) => self.busca_comandos = t,
@@ -1803,6 +1832,7 @@ impl App {
         use NamedKey as N;
         if n(N::Escape) {
             return if self.menu || self.suspenso.is_some() { self.update(Msg::Escape) }
+            else if self.apresentacao.is_some() { self.update(Msg::Apresentar) }
             else if self.leitura { self.update(Msg::Leitura) }
             else if self.protecao.is_some() { self.update(Msg::Prot(proteger::Pr::Fechar)) }
             else if self.assinatura.as_ref().is_some_and(|s| s.marcando()) { self.update(Msg::Assin(assinar::As::Marcar(false))) }
@@ -1820,6 +1850,14 @@ impl App {
             else if self.escolhidos.is_some() || self.edicao.is_some() { self.update(Msg::Obj(edicao::Obj::Cancelar)) }
             else if self.ferramenta != Ferramenta::Selecionar { self.update(Msg::Ferramenta(Ferramenta::Selecionar)) }
             else { Task::none() };
+        }
+        if self.apresentacao.is_some() {
+            let msg = if n(N::ArrowRight) || n(N::ArrowDown) || n(N::Space) || n(N::PageDown) || n(N::Enter) { Msg::Proxima }
+                else if n(N::ArrowLeft) || n(N::ArrowUp) || n(N::PageUp) || n(N::Backspace) { Msg::Anterior }
+                else if n(N::Home) { Msg::IrPagina(1) }
+                else if n(N::End) { Msg::IrPagina(self.total_paginas()) }
+                else { return Task::none() };
+            return self.update(msg);
         }
         if self.medidas.atual.is_some() {
             if n(N::Enter) { return self.update(Msg::Medir(medir::Med::Terminar)); }
@@ -1856,6 +1894,7 @@ impl App {
             else if ctrl && c("w") { Msg::IrInicio }
             else if ctrl && n(N::Tab) { Msg::ProximaGuia }
             else if n(N::F11) { Msg::TelaCheia }
+            else if n(N::F5) && self.aberto.is_some() { Msg::Apresentar }
             else { return Task::none() };
         self.update(msg)
     }
@@ -2219,6 +2258,22 @@ mod testes {
     }
 
     #[test]
+    fn apresentacao_entra_passa_pagina_e_volta_como_estava() {
+        let mut app = com_a4();
+        let _ = app.update(Msg::Pag(organizar::Pag::InserirBranco));
+        app.disposicao = Disposicao::DuasPaginas;
+        let zoom = app.zoom;
+        let _ = app.update(Msg::Apresentar);
+        assert!(app.leitura && app.disposicao == Disposicao::UmaPagina);
+        let _ = app.update(Msg::IrPagina(1));
+        let _ = app.update(Msg::Proxima);
+        assert_eq!(app.pagina, 2);
+        let _ = app.update(Msg::Apresentar);
+        assert!(app.apresentacao.is_none() && !app.leitura);
+        assert_eq!((app.zoom, app.disposicao), (zoom, Disposicao::DuasPaginas));
+    }
+
+    #[test]
     fn mesmo_arquivo_nao_abre_em_duas_abas() {
         let (mut app, _) = App::novo();
         let c = temporario("duas-abas");
@@ -2314,7 +2369,10 @@ mod testes {
         app.viewport = Some((0.0, 1000.0, 640.0));
         // `FEATHERPDF_CAPTURA_ESCURO=1`: tema escuro; `FEATHERPDF_CAPTURA_PAGINA_ESCURA=1`: página escura.
         if std::env::var_os("FEATHERPDF_CAPTURA_ESCURO").is_some() { tema::definir_tema(true, ACENTO_PDF); app.tema_escuro = true; }
+        else { tema::definir_tema(false, ACENTO_PDF); app.tema_escuro = false; } // sem isso vale o tema salvo do usuário
         if std::env::var_os("FEATHERPDF_CAPTURA_PAGINA_ESCURA").is_some() { let _ = app.update(Msg::ModoEscuro); }
+        // `FEATHERPDF_CAPTURA_APRESENTAR=1`: em apresentação (a janela não cresce aqui; encaixa no viewport).
+        if std::env::var_os("FEATHERPDF_CAPTURA_APRESENTAR").is_some() { app.viewport = Some((0.0, 1672.0, 941.0)); let _ = app.update(Msg::Apresentar); let _ = app.update(Msg::AjustarPagina); }
         for pagina in 1..=app.total_paginas().min(4) as u32 {
             let mut resultado = app.aberto.as_ref().unwrap().vis.desenhar(pagina, 1.0);
             if app.modo_escuro {

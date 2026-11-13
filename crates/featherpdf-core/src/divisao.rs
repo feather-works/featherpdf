@@ -57,6 +57,8 @@ impl DocumentoPdf {
 
     /// Partes que cabem em `limite` bytes cada (uma página maior que o limite fica sozinha).
     /// Busca a maior parte que cabe dobrando e depois por bisseção: poucas gravações por parte.
+    /// shortcut: cada medida grava a parte de verdade (~2·log2(páginas) gravações por parte);
+    /// estimar sem gravar erraria a compressão. Trocar se PDF de milhares de páginas ficar lento.
     pub fn partes_por_tamanho(&self, limite: usize) -> Result<Vec<Parte>, String> {
         let total = self.total_paginas();
         let tamanho = |a: u32, b: u32| self.extrair(&(a..=b).collect::<Vec<_>>()).map(|v| v.len());

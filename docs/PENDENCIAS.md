@@ -67,8 +67,9 @@ Segunda leitura (scripts, páginas, OCR), também conferida no código:
     Feito: a nova leva o nome da anterior ("6", "6", "7").
 ✅ 28. Dividir colunas corta página com /Rotate 90 em faixas de cima e de baixo (`paginas.rs:417-440`).
     Feito: página deitada fica inteira (e o aviso diz).
-29. Dividir por tamanho copia o documento inteiro duas vezes a cada medida (`divisao.rs:62`).
-    Metade feita: `extrair` não copia de novo (uma cópia por medida). Falta medir sem gravar.
+✅ 29. Dividir por tamanho copia o documento inteiro duas vezes a cada medida (`divisao.rs:62`).
+    Feito: `extrair` não copia de novo (uma cópia por medida). Medir sem gravar fica de fora
+    (13/11): a estimativa erraria a compressão; a busca já faz poucas medidas por parte.
 ✅ 30. Página em branco inserida não copia o /Rotate da vizinha (`paginas.rs:178-188`).
 Baixo risco, fica (13/11): servem aos testes com o mouse no app de verdade; quem as usa já controla o ambiente (LD_PRELOAD faria mais).
 `FEATHERPDF_ROTEIRO_*`, `PELICANO_ROTEIRO` e `PELICANO_GRAVAR` (este roda o ffmpeg)

@@ -57,7 +57,9 @@ fn divisoria<'a>(altura: f32) -> Element<'a, Msg> {
 
 pub fn janela(app: &App) -> Element<'_, Msg> {
     if app.aberto.is_none() { return app.view_inicio(); }
-    let corpo: Element<'_, Msg> = if app.leitura {
+    let corpo: Element<'_, Msg> = if app.apresentacao.is_some() {
+        mesa(app)
+    } else if app.leitura {
         let sair = button(text("Sair da leitura (Esc)").size(12)).padding([5u16, 12]).style(estilo_botao_secundario).on_press(Msg::Leitura);
         column![barra_documento(app), stack![mesa(app), container(sair).width(Length::FILL).align_x(Align::End).padding(12u16)]].into()
     } else {
@@ -644,6 +646,7 @@ fn faixa_exibir(app: &App) -> Vec<Element<'_, Msg>> {
             grande("layout-sidebar", None, "Uma página", Some(Msg::Disposicao(Disposicao::UmaPagina)), app.disposicao == Disposicao::UmaPagina),
             grande("book-2", None, "Duas páginas", Some(Msg::Disposicao(Disposicao::DuasPaginas)), app.disposicao == Disposicao::DuasPaginas),
             grande("eye", None, "Leitura", Some(Msg::Leitura), false),
+            grande("player-play", None, "Apresentar (F5)", Some(Msg::Apresentar), false),
             grande("palette", None, "Página escura", Some(Msg::ModoEscuro), app.modo_escuro),
         ].spacing(4), "Disposição"),
         grupo(row![
@@ -792,8 +795,10 @@ fn mesa(app: &App) -> Element<'_, Msg> {
             paginas.into()
         }
     };
+    let apresentando = app.apresentacao.is_some();
     container(conteudo).width(Length::FILL).height(Length::FILL).clip(true)
-        .style(|_| Style::default().background(COR_MESA()).border(Border::rounded(RAIO))).into()
+        .style(move |_| if apresentando { Style::default().background(Color::BLACK) }
+            else { Style::default().background(COR_MESA()).border(Border::rounded(RAIO)) }).into()
 }
 
 /// As páginas da mesa, no arranjo de `App::posicoes` (vão em volta, linhas centradas).
