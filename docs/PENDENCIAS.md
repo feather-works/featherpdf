@@ -27,8 +27,8 @@ Deveria corrigir:
 ✅ 9. A tela monta as camadas (links, medidas, busca, campos) de todas as páginas a cada quadro
    (`tela.rs:833`); os links percorrem a árvore de páginas 2× por página. Só as perto da tela.
 ✅ 10. Tarja grava a largura de cada letra apagada (`tarja.rs:212`): somar as seguidas num número só.
-11. "Achar CPF, CNPJ…" só lê o conteúdo da página (`tarja.rs:157-159`): ler valor de campo e nota.
-12. Sanitizar não vê anotação escrita direto em `/Annots` (`sanitizar.rs:216-239`).
+✅ 11. "Achar CPF, CNPJ…" só lê o conteúdo da página (`tarja.rs:157-159`): ler valor de campo e nota.
+✅ 12. Sanitizar não vê anotação escrita direto em `/Annots` (`sanitizar.rs:216-239`).
 ✅ 13. Cartão da assinatura verde mesmo com mudança depois dela (`assinar.rs:291`): âmbar se `!cobre_tudo`.
 ✅ 14. Miniaturas da aba Páginas ficam brancas depois do zoom (`organizar.rs:260-261`): usar `geracao_fundos`.
 ✅ 15. Página apagada continua na tela até o desenho novo chegar (`main.rs:762`, `tela.rs:809`):
@@ -36,7 +36,7 @@ Deveria corrigir:
 ✅ 16. `objetos` só cresce e é lido na thread da janela ao rolar com Selecionar (`edicao.rs:359`):
     soltar em `soltar_longe`.
 ✅ 17. Com a busca aberta, cada edição relê todas as páginas na thread da janela (`main.rs:1277-1281`).
-18. Juntar PDFs com campos de mesmo nome cria campos raiz repetidos (`paginas.rs:218-224`): `nome_livre`.
+✅ 18. Juntar PDFs com campos de mesmo nome cria campos raiz repetidos (`paginas.rs:218-224`): `nome_livre`.
 
 Bom ter:
 ✅ 19. `mailto:` vai inteiro ao programa de e-mail (`navegar.rs:391-406`); `?attach=` anexa arquivo.

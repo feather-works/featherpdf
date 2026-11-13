@@ -150,6 +150,22 @@ fn achar_nomes(t: &[char]) -> Vec<(usize, usize)> {
     achados
 }
 
+/// Onde `busca` (sem diferenciar maiúscula) e os `padroes` aparecem em `t`: (início, fim, padrão).
+fn trechos(t: &[char], busca: &str, padroes: &[Padrao]) -> Vec<(usize, usize, Option<Padrao>)> {
+    let mut v = Vec::new();
+    if !busca.trim().is_empty() {
+        let n = busca.chars().count();
+        v.extend(achar_sem_caixa(&t.iter().collect::<String>(), busca).into_iter().map(|i| (i, i + n, None)));
+    }
+    for &p in padroes { v.extend(achar_padrao(t, p).into_iter().map(|(i, f)| (i, f, Some(p)))); }
+    v
+}
+
+fn retangulo(o: &Object) -> Option<[f32; 4]> {
+    let v: Vec<f32> = o.as_array().ok()?.iter().filter_map(|x| x.as_float().ok()).collect();
+    (v.len() == 4).then(|| [v[0].min(v[2]), v[1].min(v[3]), v[0].max(v[2]), v[1].max(v[3])])
+}
+
 impl DocumentoPdf {
     /// Trechos com `busca` (sem diferenciar maiúscula) e com os `padroes`, em todas as páginas.
     pub fn achar_para_tarja(&self, busca: &str, padroes: &[Padrao]) -> Vec<Achado> {
@@ -166,17 +182,25 @@ impl DocumentoPdf {
                         ItemTj::Recuo(_) => {}
                     }
                 }
-                let mut trechos: Vec<(usize, usize, Option<Padrao>)> = Vec::new();
-                if !busca.trim().is_empty() {
-                    let n = busca.chars().count();
-                    trechos.extend(achar_sem_caixa(&t.iter().collect::<String>(), busca).into_iter().map(|i| (i, i + n, None)));
-                }
-                for &p in padroes { trechos.extend(achar_padrao(&t, p).into_iter().map(|(i, f)| (i, f, Some(p)))); }
-                for (i, f, tipo) in trechos {
+                for (i, f, tipo) in trechos(&t, busca, padroes) {
                     let Some(caixa) = caixas[i..f].iter().flatten().fold(None, |acc, c| Some(unir(acc, *c))) else { continue };
                     achados.push(Achado { pagina, texto: t[i..f].iter().collect(), caixa, tipo });
                 }
             }
+            // O texto de comentários (nota, caixa de texto) não está no conteúdo da página: a caixa é a da anotação.
+            let Ok(id) = self.id_pagina(pagina) else { continue };
+            for o in self.lista_anotacoes(id) {
+                let d = match &o { Object::Reference(r) => self.documento.get_dictionary(*r).ok(), Object::Dictionary(d) => Some(d), _ => None };
+                let Some(d) = d else { continue };
+                let (Some(texto), Some(caixa)) = (d.get(b"Contents").ok().and_then(|c| lopdf::decode_text_string(c).ok()), d.get(b"Rect").ok().and_then(retangulo)) else { continue };
+                let t: Vec<char> = texto.chars().collect();
+                for (i, f, tipo) in trechos(&t, busca, padroes) { achados.push(Achado { pagina, texto: t[i..f].iter().collect(), caixa, tipo }); }
+            }
+        }
+        // Valor digitado em campo também não está no conteúdo: a caixa é a do campo.
+        for c in self.campos() {
+            let t: Vec<char> = c.valor.chars().collect();
+            for (i, f, tipo) in trechos(&t, busca, padroes) { achados.push(Achado { pagina: c.pagina, texto: t[i..f].iter().collect(), caixa: c.caixa, tipo }); }
         }
         achados
     }
@@ -529,6 +553,10 @@ mod testes {
         pdf.criar_campo(1, [100.0, 300.0, 250.0, 320.0], &crate::CampoNovo::Texto, "Fica").unwrap();
         let campo = pdf.campos().into_iter().find(|c| c.nome == "Senha").unwrap();
         pdf.preencher(&campo, "SEGREDO123").unwrap();
+        // "Achar" vê o valor do campo (não está no conteúdo da página), com a caixa do campo.
+        let achados = pdf.achar_para_tarja("segredo", &[]);
+        assert_eq!(achados.len(), 1);
+        assert_eq!((achados[0].pagina, achados[0].caixa), (1, [100.0, 400.0, 250.0, 420.0]));
         // O mesmo valor na cópia em XML (formulário XFA do LiveCycle).
         let af = match pdf.documento.catalog().unwrap().get(b"AcroForm").unwrap() { Object::Reference(r) => Some(*r), _ => None };
         let xfa = Object::string_literal("<senha>SEGREDO123</senha>");

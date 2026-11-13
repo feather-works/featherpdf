@@ -222,6 +222,17 @@ impl DocumentoPdf {
             let af = self.garantir_acroform()?;
             let d = self.documento.get_dictionary(af).map_err(erro)?;
             let mut todos = d.get(b"Fields").ok().and_then(|o| self.resolver_array(o)).unwrap_or_default();
+            // Dois formulários iguais (o "Nome" de cada pessoa): campo raiz com nome repetido é proibido
+            // e o leitor trataria os dois como um só. O que chega ganha "Nome 2", "Nome 3"…
+            let nome = |doc: &lopdf::Document, o: &Object| o.as_reference().ok().and_then(|r| doc.get_dictionary(r).ok())
+                .and_then(|d| d.get(b"T").ok()).and_then(|t| lopdf::decode_text_string(t).ok());
+            let mut usados: std::collections::HashSet<String> = todos.iter().filter_map(|o| nome(&self.documento, o)).collect();
+            for c in &campos {
+                let (Some(t), Ok(r)) = (nome(&self.documento, c), c.as_reference()) else { continue };
+                let livre = if usados.contains(&t) { (2..).map(|n| format!("{t} {n}")).find(|n| !usados.contains(n)).unwrap_or_default() } else { t };
+                if let Ok(d) = self.documento.get_dictionary_mut(r) { d.set("T", lopdf::text_string(&livre)); }
+                usados.insert(livre);
+            }
             todos.extend(campos);
             self.documento.get_dictionary_mut(af).map_err(erro)?.set("Fields", todos);
         }
@@ -746,6 +757,13 @@ mod testes {
         let campos = a.campos();
         assert_eq!(campos.len(), 1);
         assert_eq!(campos[0].pagina, 2);
+        // O mesmo formulário de duas pessoas: o "Nome" de quem chega vira "Nome 2".
+        let mut c = pdf_teste();
+        c.criar_campo(1, [100.0, 700.0, 250.0, 720.0], &crate::CampoNovo::Texto, "Nome").unwrap();
+        a.inserir_pdf(c, 3).unwrap();
+        let mut nomes: Vec<String> = a.campos().into_iter().map(|c| c.nome).collect();
+        nomes.sort();
+        assert_eq!(nomes, ["Nome", "Nome 2"]);
     }
 
     #[test]

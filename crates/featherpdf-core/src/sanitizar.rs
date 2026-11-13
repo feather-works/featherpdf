@@ -219,7 +219,16 @@ impl DocumentoPdf {
                 !(link && op.links_externos && d.get(b"A").ok().and_then(|a| self.dicionario(a)).is_some_and(|a| acao_perigosa(a, false, true)))
             });
             links += antes - lista.len();
-            if antes != lista.len() { if let Ok(p) = self.documento.get_dictionary_mut(id) { p.set("Annots", lista); } }
+            // Anotação escrita direto na lista (sem objeto próprio) vira objeto: a passada abaixo só
+            // visita objetos, e o /AA com JavaScript dela ficava.
+            let mut mudou = antes != lista.len();
+            for o in lista.iter_mut() {
+                if let Object::Dictionary(d) = o {
+                    *o = Object::Reference(self.documento.add_object(std::mem::replace(d, Dictionary::new())));
+                    mudou = true;
+                }
+            }
+            if mudou { if let Ok(p) = self.documento.get_dictionary_mut(id) { p.set("Annots", lista); } }
         }
         // Uma passada em todos os dicionários (catálogo, páginas, anotações, campos, marcadores):
         // ação perigosa em /A, /OpenAction, /Next (seguindo a cadeia) ou /AA sai.
@@ -379,10 +388,14 @@ mod testes {
         // Rendition com /JS e formulário XFA.
         pdf.documento.get_dictionary_mut(id).unwrap().set("AA", dictionary! { "O" => dictionary! { "S" => "Rendition", "OP" => 4, "JS" => Object::string_literal("RENDJS()") } });
         pdf.documento.catalog_mut().unwrap().set("AcroForm", dictionary! { "Fields" => Vec::<Object>::new(), "XFA" => Object::string_literal("<script>XFAJS()</script>") });
+        // Anotação escrita direto em /Annots, sem objeto próprio.
+        pdf.documento.get_dictionary_mut(id).unwrap().set("Annots", vec![Object::Dictionary(dictionary! { "Type" => "Annot", "Subtype" => "Widget",
+            "Rect" => vec![0.into(), 0.into(), 10.into(), 10.into()],
+            "AA" => dictionary! { "K" => dictionary! { "S" => "JavaScript", "JS" => Object::string_literal("ANOTJS()") } } })]);
         let op = OpcoesLimpeza { javascript: true, ..OpcoesLimpeza::default() };
         pdf.sanitizar(op).unwrap();
         let bytes = pdf.serializar().unwrap();
-        for js in [&b"CADEIAJS"[..], b"RENDJS", b"XFAJS"] { assert!(!no_arquivo(&bytes, js), "{}", String::from_utf8_lossy(js)); }
+        for js in [&b"CADEIAJS"[..], b"RENDJS", b"XFAJS", b"ANOTJS"] { assert!(!no_arquivo(&bytes, js), "{}", String::from_utf8_lossy(js)); }
         // Rendition sem /JS, só na cadeia, também conta.
         let d = dictionary! { "S" => "Rendition", "JS" => Object::string_literal("x") };
         assert!(acao_perigosa(&d, true, false));

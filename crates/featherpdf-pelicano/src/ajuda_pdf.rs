@@ -89,7 +89,7 @@ pub fn modelo() -> &'static Catalogo {
                     ]),
                     topico("tarja", "Tarja definitiva", vec![
                         t("Apague de verdade CPF, nomes e sigilos."),
-                        m("Marcar área: arraste sobre o que quer apagar. Buscar e tarjar acha um texto; Padrões acha CPF, CNPJ, e-mail, telefone, CEP e nomes."),
+                        m("Marcar área: arraste sobre o que quer apagar. Buscar e tarjar acha um texto; Padrões acha CPF, CNPJ, e-mail, telefone, CEP e nomes, também no valor dos campos e no texto dos comentários."),
                         m("Aplicar apaga o texto, as imagens e os comentários embaixo da tarja, não só cobre com preto. Letra meio coberta também sai, e o formulário XFA do campo tarjado sai junto."),
                         m("O resultado sai numa cópia “— tarjado.pdf”; o arquivo aberto não muda."),
                         m("Se o PDF era assinado, as assinaturas não valem na cópia tarjada."),
