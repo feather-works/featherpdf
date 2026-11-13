@@ -180,13 +180,16 @@ impl DocumentoPdf {
     }
 
     /// Depois de mudar a ordem das páginas: cada página continua com o nome que tinha (`rotulos`,
-    /// na ordem de `antes`); página nova leva o número da posição. Sequência decimal vira um trecho só.
+    /// na ordem de `antes`); página nova (cópia, colada, em branco) leva o nome da anterior: o número
+    /// da posição dava "11" entre "6" e "7" num livro com i–iv. Sequência decimal vira um trecho só.
     pub(crate) fn remapear_rotulos(&mut self, antes: &[lopdf::ObjectId], rotulos: &[String]) -> Result<(), String> {
         let nome: std::collections::HashMap<lopdf::ObjectId, &String> = antes.iter().copied().zip(rotulos).collect();
         let mut nums = Vec::new();
         let mut anterior: Option<u32> = None;
+        let mut ultimo: Option<String> = None;
         for (i, id) in self.ids_paginas().iter().enumerate() {
-            let r = nome.get(id).map_or_else(|| (i + 1).to_string(), |s| s.to_string());
+            let r = nome.get(id).map(|s| s.to_string()).or_else(|| ultimo.clone()).unwrap_or_else(|| (i + 1).to_string());
+            ultimo = Some(r.clone());
             let n = r.parse::<u32>().ok().filter(|&n| n > 0 && !r.starts_with('0') && !r.starts_with('+'));
             if n.is_some() && anterior.and_then(|a| a.checked_add(1)) == n { anterior = n; continue; }
             let mut d = Dictionary::new();
@@ -266,12 +269,14 @@ mod testes {
         pdf.numerar_logico(2, 2, EstiloRotulo::LetraMaiuscula, "", 5).unwrap();
         assert_eq!(pdf.rotulos_paginas(), ["i", "E", "A-1", "A-2"]);
         assert_eq!(pdf.rotulo_da_pagina(3).as_deref(), Some("A-1"));
-        // Excluir e inserir: cada página leva o nome que tinha; a nova, o número da posição.
+        // Excluir e inserir: cada página leva o nome que tinha; a nova, o da anterior ("1" no começo).
         let mut outro = pdf.clone();
         outro.excluir_paginas(&[2]).unwrap();
         assert_eq!(outro.rotulos_paginas(), ["i", "A-1", "A-2"]);
         outro.inserir_em_branco(1).unwrap();
         assert_eq!(outro.rotulos_paginas(), ["1", "i", "A-1", "A-2"]);
+        outro.inserir_em_branco(4).unwrap();
+        assert_eq!(outro.rotulos_paginas(), ["1", "i", "A-1", "A-1", "A-2"], "não vira \"4\" entre A-1 e A-2");
         assert!(pdf.numerar_logico(3, 9, EstiloRotulo::Decimal, "", 1).is_err());
         assert!(pdf.tirar_numeracao_logica().unwrap());
         assert_eq!(pdf.rotulos_paginas(), ["1", "2", "3", "4"]);

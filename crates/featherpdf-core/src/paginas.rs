@@ -437,7 +437,9 @@ impl DocumentoPdf {
         paginas.sort_unstable();
         // De trás para a frente, para as cópias não mudarem o número das próximas.
         for &p in paginas.iter().rev() {
-            let ([x0, y0, x1, y1], _) = self.geometria(p)?;
+            let ([x0, y0, x1, y1], giro) = self.geometria(p)?;
+            // shortcut: página deitada (/Rotate 90, comum em scan) fica como está: as colunas que se veem correm no y do PDF e o corte em x faria faixas; cortar em y se pedirem.
+            if giro % 180 != 0 { continue; }
             let objetos = self.objetos(p)?;
             let mut cortes = vec![x0];
             for i in 1..colunas {
@@ -582,6 +584,11 @@ mod testes {
         assert_eq!(duas.total_paginas(), 2);
         let corte = duas.geometria(1).unwrap().0[2];
         assert!(corte > 100.0 && corte < 350.0, "{corte}");
+        // Página deitada não é cortada em faixas.
+        let mut deitada = crate::objetos::testes::pdf_com("BT /F1 10 Tf 50 700 Td (esquerda) Tj ET BT /F1 10 Tf 350 700 Td (direita) Tj ET");
+        deitada.girar_paginas(&[1], 90).unwrap();
+        assert_eq!(deitada.dividir_colunas(&[1], 2).unwrap(), 0);
+        assert_eq!(deitada.total_paginas(), 1);
     }
 
     /// PDF de 4 páginas com larguras 101..104, para reconhecer cada uma pela largura.

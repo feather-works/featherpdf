@@ -383,8 +383,8 @@ impl App {
                 let paginas: Vec<u32> = if todas { (1..=total).collect() } else { self.alvo() };
                 self.fechar_dialogo();
                 return self.editar(move |pdf| match pdf.dividir_colunas(&paginas, colunas)? {
-                    0 => Err("Nenhuma página dividida: em todas, uma figura atravessa o corte.".into()),
-                    n => Ok(format!("{n} página(s) viraram {colunas} cada (as com figura larga ficaram inteiras).")),
+                    0 => Err("Nenhuma página dividida: em todas, uma figura atravessa o corte ou a página está deitada.".into()),
+                    n => Ok(format!("{n} página(s) viraram {colunas} cada (as com figura larga e as deitadas ficaram inteiras).")),
                 });
             },
             Pag::Mudar(d) => if self.org.dialogo.is_some() { self.org.dialogo = Some(d) },
