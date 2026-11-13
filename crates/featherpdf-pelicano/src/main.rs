@@ -882,6 +882,19 @@ impl App {
         self.fundos_pedidos.retain(|p| perto.contains(p));
     }
 
+    /// Página escura: retângulos (em pixels do desenho) das fotos, gráficos e carimbos, que ficam
+    /// com as cores de verdade. Página girada fica sem nenhum (tudo escurece).
+    fn fotos_da_pagina(&self, pagina: u32, escala: f32, trecho: Option<[u32; 4]>) -> Vec<[u32; 4]> {
+        self.objetos.get(&pagina).filter(|o| o.giro == 0).map(|o| {
+            let (dx, dy) = trecho.map_or((0.0, 0.0), |t| (t[0] as f32, t[1] as f32));
+            o.lista.iter().filter(|x| matches!(x.tipo, featherpdf_core::TipoObjeto::Imagem { .. } | featherpdf_core::TipoObjeto::Grupo)).map(|x| {
+                let x0 = ((x.caixa[0] - o.caixa[0]) * escala - dx).max(0.0);
+                let y0 = ((o.caixa[3] - x.caixa[3]) * escala - dy).max(0.0);
+                [x0 as u32, y0 as u32, ((x.caixa[2] - x.caixa[0]) * escala).ceil() as u32, ((x.caixa[3] - x.caixa[1]) * escala).ceil() as u32]
+            }).collect()
+        }).unwrap_or_default()
+    }
+
     /// Pede as páginas na tela e uma de cada lado; as outras ficam como papel em branco.
     /// Página grande demais para um desenho só (zoom alto) é pedida só no trecho à vista.
     fn pedir_visiveis(&mut self) -> Task<Msg> {
@@ -934,15 +947,7 @@ impl App {
             let vis = aberto.vis.clone();
             let geracao = self.geracao;
             self.inicio_render.insert(pagina, Instant::now());
-            // Modo escuro: fotos, gráficos e carimbos (imagens e grupos) ficam com as cores de verdade.
-            let fotos: Option<Vec<[u32; 4]>> = self.modo_escuro.then(|| self.objetos.get(&pagina).filter(|o| o.giro == 0).map(|o| {
-                let (dx, dy) = trecho.map_or((0.0, 0.0), |t| (t[0] as f32, t[1] as f32));
-                o.lista.iter().filter(|x| matches!(x.tipo, featherpdf_core::TipoObjeto::Imagem { .. } | featherpdf_core::TipoObjeto::Grupo)).map(|x| {
-                    let x0 = ((x.caixa[0] - o.caixa[0]) * escala - dx).max(0.0);
-                    let y0 = ((o.caixa[3] - x.caixa[3]) * escala - dy).max(0.0);
-                    [x0 as u32, y0 as u32, ((x.caixa[2] - x.caixa[0]) * escala).ceil() as u32, ((x.caixa[3] - x.caixa[1]) * escala).ceil() as u32]
-                }).collect()
-            }).unwrap_or_default());
+            let fotos = self.modo_escuro.then(|| self.fotos_da_pagina(pagina, escala, trecho));
             tarefas.push(Task::perform(async move {
                 let _vez = DESENHOS.acquire().await;
                 // Zoom ou rolagem mudaram enquanto esperava a vez: o resultado iria para o lixo.
@@ -2215,8 +2220,16 @@ mod testes {
             None => com_a4(),
         };
         app.viewport = Some((0.0, 1000.0, 640.0));
+        // `FEATHERPDF_CAPTURA_ESCURO=1`: tema escuro; `FEATHERPDF_CAPTURA_PAGINA_ESCURA=1`: página escura.
+        if std::env::var_os("FEATHERPDF_CAPTURA_ESCURO").is_some() { tema::definir_tema(true, ACENTO_PDF); app.tema_escuro = true; }
+        if std::env::var_os("FEATHERPDF_CAPTURA_PAGINA_ESCURA").is_some() { let _ = app.update(Msg::ModoEscuro); }
         for pagina in 1..=app.total_paginas().min(4) as u32 {
-            let resultado = app.aberto.as_ref().unwrap().vis.desenhar(pagina, 1.0);
+            let mut resultado = app.aberto.as_ref().unwrap().vis.desenhar(pagina, 1.0);
+            if app.modo_escuro {
+                app.ler_objetos_sempre(&[pagina]);
+                let fotos = app.fotos_da_pagina(pagina, 1.0, None);
+                if let Ok(r) = &mut resultado { featherpdf_core::escurecer(&mut r.rgba, r.largura, &fotos); }
+            }
             let geracao = app.geracao;
             let _ = app.update(Msg::Desenhada { geracao, pagina, escala: 1.0, trecho: None, resultado });
         }

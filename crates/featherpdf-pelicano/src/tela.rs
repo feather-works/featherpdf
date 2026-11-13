@@ -326,7 +326,10 @@ fn faixa(app: &App) -> Element<'_, Msg> {
         Aba::Exibir => faixa_exibir(app),
     };
     let linha = grupos.into_iter().fold(row![].height(Length::FILL), |r, g| r.push(g));
-    container(scrollable(linha).direction(Direction::Horizontal)).height(ALTURA_FAIXA).width(Length::FILL).padding([0u16, 8]).clip(true).style(cartao).into()
+    // Rolagem só de reserva (janela estreita): fina e discreta, sem a barra clara no tema escuro.
+    let mut rolagem = scrollable(linha).direction(Direction::Horizontal).scrollbar_width(3.0);
+    if escuro() { rolagem = rolagem.scrollbar_color(Color::rgb8(0x45, 0x48, 0x4e)); }
+    container(rolagem).height(ALTURA_FAIXA).width(Length::FILL).padding([0u16, 8]).clip(true).style(cartao).into()
 }
 
 /// Clicar de novo na ferramenta ativa volta a Selecionar.

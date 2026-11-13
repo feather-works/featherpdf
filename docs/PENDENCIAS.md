@@ -1,5 +1,13 @@
 # Pendências do FeatherPDF
 
+## Modo escuro (13/11/2026)
+
+Corrigido: imagem quase toda branca (logotipo em fundo branco, página escaneada) escurece junto
+na Página escura (antes ficava um bloco branco, e o PDF escaneado não escurecia nada); a barra de
+rolagem da faixa ficou fina e escura no tema escuro. Limite: foto de produto em fundo branco também
+escurece (mais da metade branca); página girada escurece tudo, fotos incluídas. Sem conferir no
+app aberto, só pela captura (`FEATHERPDF_CAPTURA_ESCURO`, `FEATHERPDF_CAPTURA_PAGINA_ESCURA`).
+
 ## Auditoria de 11/11/2026
 
 Corrigido neste dia:
