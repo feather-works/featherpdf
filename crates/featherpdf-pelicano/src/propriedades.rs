@@ -66,7 +66,9 @@ impl App {
         let arquivo = self.aberto.as_ref().and_then(|a| a.pdf.origem()).map(|c| {
             let bytes = std::fs::metadata(c).map(|m| m.len()).unwrap_or(0);
             let tamanho = if bytes >= 1 << 20 { format!("{:.1} MB", bytes as f64 / 1048576.0).replace('.', ",") } else { format!("{} KB", bytes.div_ceil(1024)) };
-            (c.display().to_string(), tamanho)
+            // Nome sem espaço ("cms_files_2058…") é uma palavra só e passava da borda da janela:
+            // o espaço invisível depois de _ e - deixa a linha quebrar ali.
+            (c.display().to_string().replace('_', "_\u{200B}").replace('-', "-\u{200B}"), tamanho)
         });
         let ler = |t: String| -> Element<'a, Msg> { text(if t.is_empty() { "—".into() } else { t }).size(13).into() };
         corpo = corpo.push(Space::new(0.0, 6.0));
