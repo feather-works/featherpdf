@@ -17,6 +17,17 @@ pub fn vermelho_texto() -> Color {
     if tema::escuro() { Color::rgb8(0xff, 0x8a, 0x80) } else { VERMELHO }
 }
 
+/// Fundo claro fixo (etiqueta, cartão de situação) no tema escuro: a mesma cor translúcida,
+/// em vez de um bloco claro no meio da janela escura.
+pub fn fundo_claro(c: Color) -> Color { if tema::escuro() { Color { a: 0.12, ..c } } else { c } }
+
+/// Texto escuro fixo (verde, vermelho, âmbar das situações) no tema escuro: a mesma cor, clareada.
+pub fn texto_escuro(c: Color) -> Color {
+    if !tema::escuro() { return c; }
+    let claro = |x: f32| x + (1.0 - x) * 0.55;
+    Color { r: claro(c.r), g: claro(c.g), b: claro(c.b), a: c.a }
+}
+
 /// Fundo rosado dos itens ativos (no escuro, o vermelho transparente).
 pub fn fundo_vermelho() -> Color {
     if tema::escuro() { Color { a: 0.22, ..VERMELHO } } else { Color::rgb8(0xf9, 0xeb, 0xea) }

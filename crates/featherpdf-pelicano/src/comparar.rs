@@ -140,6 +140,7 @@ impl App {
                     Mudanca::Saiu => (Color::rgb8(0x8f, 0x22, 0x19), Color::rgb8(0xfd, 0xec, 0xeb), "Saiu"),
                     _ => (Color::rgb8(0x1e, 0x5c, 0x35), Color::rgb8(0xe6, 0xf1, 0xea), "Entrou"),
                 };
+                let (cor, fundo) = (crate::inicio::texto_escuro(cor), crate::inicio::fundo_claro(fundo));
                 // Um pouco do texto igual em volta, para achar o lugar.
                 let antes = c.trechos[..i].iter().rev().find(|x| x.mudanca == Mudanca::Igual).map(|x| x.texto.split(' ').rev().take(4).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join(" ")).unwrap_or_default();
                 let pagina = t.pagina_nova.or_else(|| c.trechos[..i].iter().rev().find_map(|x| x.pagina_nova)).unwrap_or(1);

@@ -473,7 +473,7 @@ impl App {
                     .style(move |_, status| Style {
                         background: if marcado { Some(Background::Color(azul())) }
                             else if status == Status::Hovered { Some(Background::Color(Color { a: 0.15, ..azul() })) } else { None },
-                        text_color: Some(if marcado { Color::WHITE } else { Color::rgb8(0x20, 0x21, 0x24) }),
+                        text_color: Some(if marcado { Color::WHITE } else { feather_ui::tema::COR_TEXTO() }),
                         border: Border { color: azul(), width: if e_hoje && !marcado { 1.0 } else { 0.0 }, radius: [13.0; 4] },
                         ..Default::default()
                     }).into()
@@ -488,9 +488,11 @@ impl App {
             button(text("Fechar").size(12)).padding([4, 8]).style(botao_texto).on_press(Msg::Form(Fm::Calendario(i))),
         ];
         container(column![topo, grade, rodape].spacing(6)).width(238).padding(8)
+            // Cores do tema: com branco fixo, no escuro o mês (texto do tema, claro) sumia no fundo.
             .style(|_| Style {
-                background: Some(Background::Color(Color::WHITE)),
-                border: Border { color: Color::rgb8(0xd0, 0xd4, 0xda), width: 1.0, radius: [6.0; 4] },
+                background: Some(Background::Color(feather_ui::tema::COR_PAINEL())),
+                text_color: Some(feather_ui::tema::COR_TEXTO()),
+                border: Border { color: feather_ui::tema::COR_BORDA(), width: 1.0, radius: [6.0; 4] },
                 shadow: Some(Shadow { color: Color { a: 0.18, ..Color::BLACK }, offset: Point::new(0.0, 3.0), blur: 10.0 }),
                 ..Default::default()
             }).into()

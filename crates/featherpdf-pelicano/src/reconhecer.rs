@@ -83,6 +83,7 @@ impl App {
             } else {
                 ("Em branco", Color::rgb8(0x8f, 0x22, 0x19), Color::rgb8(0xfd, 0xec, 0xeb))
             };
+            let (cor, fundo) = (crate::inicio::texto_escuro(cor), crate::inicio::fundo_claro(fundo));
             let tipo = if l.digital.is_some() { "assinatura digital" } else { "à mão" };
             corpo = corpo.push(button(column![
                 row![text(rotulo).size(11).color(cor), Space::with_width(Length::FILL), text(format!("p. {}", l.pagina)).size(11).color(muted)],

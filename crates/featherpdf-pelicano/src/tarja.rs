@@ -194,8 +194,8 @@ impl App {
                     " Este PDF tem marcadores: os títulos deles não são tarjados, confira no painel Marcadores."
                 } else { "" })).size(12))
                 .padding([8, 10]).style(|_| Style {
-                    background: Some(Background::Color(Color::rgb8(0xfb, 0xf3, 0xdc))),
-                    text_color: Some(Color::rgb8(0x6b, 0x4e, 0x05)), border: Border { radius: [6.0; 4], ..Default::default() }, ..Default::default()
+                    background: Some(Background::Color(crate::inicio::fundo_claro(Color::rgb8(0xfb, 0xf3, 0xdc)))),
+                    text_color: Some(crate::inicio::texto_escuro(Color::rgb8(0x6b, 0x4e, 0x05))), border: Border { radius: [6.0; 4], ..Default::default() }, ..Default::default()
                 }),
             button(container(text(aplicar).size(13)).center_x(Length::FILL)).padding([8, 10]).width(Length::FILL)
                 .style(tema::estilo_botao_primario).on_press_maybe((ativas > 0).then_some(Msg::Tarja(Tj::Aplicar))),

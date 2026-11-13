@@ -523,7 +523,7 @@ impl App {
         }
         match &o.aviso {
             Some(Err(e)) => lateral = lateral.push(text(e).size(12).color(tema::COR_ERRO())),
-            Some(Ok(t)) if o.aplicado => lateral = lateral.push(text(t).size(12).color(Color::rgb8(0x28, 0x78, 0x46))),
+            Some(Ok(t)) if o.aplicado => lateral = lateral.push(text(t).size(12).color(crate::inicio::texto_escuro(Color::rgb8(0x28, 0x78, 0x46)))),
             _ => {}
         }
         lateral = lateral.push(Space::with_height(Length::FILL))

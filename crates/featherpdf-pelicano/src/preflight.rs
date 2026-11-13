@@ -19,11 +19,12 @@ impl Default for Preflight {
 }
 
 fn cores(n: N) -> (&'static str, Color, Color) {
-    match n {
+    let (nome, icone, texto) = match n {
         N::Ok => ("circle-check", Color::rgb8(0x28, 0x78, 0x46), Color::rgb8(0x1e, 0x5c, 0x35)),
         N::Aviso => ("alert-triangle", Color::rgb8(0xa3, 0x6a, 0x00), Color::rgb8(0x6b, 0x4e, 0x05)),
         N::Erro => ("alert-triangle", Color::rgb8(0xb3, 0x26, 0x1e), Color::rgb8(0x8f, 0x22, 0x19)),
-    }
+    };
+    (nome, crate::inicio::texto_escuro(icone), crate::inicio::texto_escuro(texto))
 }
 
 impl App {

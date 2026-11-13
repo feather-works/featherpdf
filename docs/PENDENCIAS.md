@@ -93,7 +93,11 @@ na Página escura (antes ficava um bloco branco, e o PDF escaneado não escureci
 rolagem da faixa ficou fina e escura no tema escuro; nome de arquivo comprido não empurra mais o
 "salvo" e o × para fora da aba (o nome é cortado com "…"); "Pesquisar comandos…" cabe inteiro; "Início" ativo da tela inicial (e o
 "Ver mais ferramentas", os chips da tarja) em vermelho claro no escuro, antes vermelho sobre vermelho;
-"Gráfico para dados" na Converter não cobre mais o nome do grupo. Limite: foto de produto em fundo branco também
+"Gráfico para dados" na Converter não cobre mais o nome do grupo.
+Etiquetas e cartões de situação (comparar, PDF/A, preflight, reconhecer assinatura, aviso da tarja,
+cartões dos fluxos, OCR aplicado) com fundo claro e texto escuro fixos: no escuro, fundo translúcido
+da mesma cor e texto clareado (`inicio::fundo_claro`/`texto_escuro`). O calendário dos campos de data
+tinha fundo branco fixo e o mês, na cor de texto do tema, sumia nele: passou às cores do tema. Limite: foto de produto em fundo branco também
 escurece (mais da metade branca); página girada escurece tudo, fotos incluídas. Sem conferir no
 app aberto, só pela captura (`FEATHERPDF_CAPTURA_ESCURO`, `FEATHERPDF_CAPTURA_PAGINA_ESCURA`).
 

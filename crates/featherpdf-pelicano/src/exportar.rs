@@ -413,10 +413,13 @@ impl App {
                 .push(paginas), if e.imagem == TipoImagem::Tiff { "Salvar como…" } else { "Escolher pasta…" }),
             Formato::PdfA => {
                 use featherpdf_core::SituacaoPdfa as S;
-                let cores = |s: S| match s {
-                    S::Ok => ("circle-check", Color::rgb8(0x28, 0x78, 0x46), Color::rgb8(0x1e, 0x5c, 0x35), Color::rgb8(0xe6, 0xf1, 0xea)),
-                    S::Corrige => ("refresh", Color::rgb8(0xa3, 0x6a, 0x00), Color::rgb8(0x6b, 0x4e, 0x05), Color::rgb8(0xfb, 0xf3, 0xdc)),
-                    S::Impede => ("alert-triangle", Color::rgb8(0xb3, 0x26, 0x1e), Color::rgb8(0x8f, 0x22, 0x19), Color::rgb8(0xfd, 0xec, 0xeb)),
+                let cores = |s: S| {
+                    let (n, c, escura, fundo) = match s {
+                        S::Ok => ("circle-check", Color::rgb8(0x28, 0x78, 0x46), Color::rgb8(0x1e, 0x5c, 0x35), Color::rgb8(0xe6, 0xf1, 0xea)),
+                        S::Corrige => ("refresh", Color::rgb8(0xa3, 0x6a, 0x00), Color::rgb8(0x6b, 0x4e, 0x05), Color::rgb8(0xfb, 0xf3, 0xdc)),
+                        S::Impede => ("alert-triangle", Color::rgb8(0xb3, 0x26, 0x1e), Color::rgb8(0x8f, 0x22, 0x19), Color::rgb8(0xfd, 0xec, 0xeb)),
+                    };
+                    (n, crate::inicio::texto_escuro(c), crate::inicio::texto_escuro(escura), crate::inicio::fundo_claro(fundo))
                 };
                 let icone = |s: S| { let (n, c, ..) = cores(s); icones::icone_traco(n, 18.).color(c) };
                 let conta = |s: S| e.pdfa.iter().filter(|i| i.situacao == s).count();
@@ -430,7 +433,7 @@ impl App {
                     let mut t = column![text(i.regra).size(13).font(negrito)].spacing(3);
                     if !i.detalhe.is_empty() { t = t.push(text(i.detalhe.clone()).size(13).color(escura)); }
                     itens = itens.push(container(row![icone(S::Impede), t].spacing(12)).width(Length::FILL).padding([12, 14])
-                        .style(|_| Style { background: Some(Background::Color(Color::rgb8(0xff, 0xfa, 0xf9))), ..Default::default() })).push(separador());
+                        .style(|_| Style { background: Some(Background::Color(crate::inicio::fundo_claro(Color::rgb8(0xff, 0xfa, 0xf9)))), ..Default::default() })).push(separador());
                 }
                 for i in e.pdfa.iter().filter(|i| i.situacao == S::Corrige) {
                     let (_, _, escura, _) = cores(S::Corrige);

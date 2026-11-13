@@ -219,7 +219,7 @@ impl Passo {
         }
     }
     fn cor_cabeca(&self) -> Color {
-        match self.grupo() { "Páginas" => Color::rgb8(0xe8, 0xf0, 0xfe), "Proteger" => Color::rgb8(0xfc, 0xe8, 0xe6), _ => Color::rgb8(0xfb, 0xf3, 0xdc) }
+        crate::inicio::fundo_claro(match self.grupo() { "Páginas" => Color::rgb8(0xe8, 0xf0, 0xfe), "Proteger" => Color::rgb8(0xfc, 0xe8, 0xe6), _ => Color::rgb8(0xfb, 0xf3, 0xdc) })
     }
 }
 
@@ -499,9 +499,9 @@ impl App {
             .style(|_| Style::default().background(tema::COR_PAINEL()));
 
         // Meio: os cartões ligados em duas colunas, sobre a mesa pontilhada.
-        let mut cartoes: Vec<(Sel, String, String, Option<&str>, Color)> = vec![(Sel::Entrada, "Entrada".into(), self.resumo_entrada(), None, Color::rgb8(0xf1, 0xf3, 0xf4))];
+        let mut cartoes: Vec<(Sel, String, String, Option<&str>, Color)> = vec![(Sel::Entrada, "Entrada".into(), self.resumo_entrada(), None, crate::inicio::fundo_claro(Color::rgb8(0xf1, 0xf3, 0xf4)))];
         for (i, p) in f.passos.iter().enumerate() { cartoes.push((Sel::Passo(i), p.nome().into(), p.resumo(), aviso_ordem(&f.passos, i), p.cor_cabeca())); }
-        cartoes.push((Sel::Saida, "Saída".into(), self.resumo_saida(), None, Color::rgb8(0xe6, 0xf1, 0xea)));
+        cartoes.push((Sel::Saida, "Saída".into(), self.resumo_saida(), None, crate::inicio::fundo_claro(Color::rgb8(0xe6, 0xf1, 0xea))));
         let linhas = cartoes.len().div_ceil(2) as f32;
         let altura = MARGEM.1 * 2.0 + (linhas - 1.0) * PASSO.1 + CARTAO.1;
         let mut pilha = Stack::new().width(Length::FILL).height(altura)
@@ -513,20 +513,20 @@ impl App {
             let mirado = alvo == Some(k);
             let escolhido = f.sel == sel && !mirado;
             let titulo = text(format!("{} · {cabeca}", k + 1)).size(12).font(negrito)
-                .color(if escolhido { VERMELHO } else if sel == Sel::Saida { Color::rgb8(0x1e, 0x5c, 0x35) } else { Color::rgb8(0x20, 0x21, 0x24) });
+                .color(if escolhido { crate::inicio::vermelho_texto() } else if sel == Sel::Saida { crate::inicio::texto_escuro(Color::rgb8(0x1e, 0x5c, 0x35)) } else { tema::COR_TEXTO() });
             let titulo: Element<'_, Msg> = match sel {
                 Sel::Passo(i) => row![titulo, Space::with_width(Length::FILL),
-                    button(text("×").size(14).color(Color::rgb8(0x5f, 0x63, 0x68))).padding([0, 4]).style(tema::estilo_botao_pequeno(false))
+                    button(text("×").size(14).color(tema::COR_TEXTO_MUTED())).padding([0, 4]).style(tema::estilo_botao_pequeno(false))
                         .on_press(Msg::Fluxos(Fx::Tirar(i)))].align_y(Align::Center).into(),
                 _ => titulo.into(),
             };
             let cabeca = container(titulo)
                 .width(Length::FILL).padding([6, 10])
-                .style(move |_| Style::default().background(if escolhido { Color::rgb8(0xf9, 0xeb, 0xea) } else { fundo }));
+                .style(move |_| Style::default().background(if escolhido { crate::inicio::fundo_vermelho() } else { fundo }));
             // Com aviso de ordem, a segunda linha do resumo dá lugar a ele, em âmbar.
             let corpo: Element<'_, Msg> = match aviso {
                 Some(a) => column![text(corpo.lines().next().unwrap_or_default().to_string()).size(12).color(muted),
-                    text(format!("⚠ {a}")).size(12).color(Color::rgb8(0xb0, 0x7d, 0x0b))].into(),
+                    text(format!("⚠ {a}")).size(12).color(crate::inicio::texto_escuro(Color::rgb8(0xb0, 0x7d, 0x0b)))].into(),
                 None => text(corpo).size(12).color(muted).into(),
             };
             let cartao = column![cabeca, container(corpo).padding([6, 10])];
@@ -728,7 +728,7 @@ impl App {
                     }
                     p => c = c.push(text(p.resumo().replace('\n', " · ")).size(12.5).color(muted)),
                 }
-                if let Some(a) = aviso_ordem(&f.passos, i) { c = c.push(text(format!("⚠ {a}")).size(12).color(Color::rgb8(0xb0, 0x7d, 0x0b))); }
+                if let Some(a) = aviso_ordem(&f.passos, i) { c = c.push(text(format!("⚠ {a}")).size(12).color(crate::inicio::texto_escuro(Color::rgb8(0xb0, 0x7d, 0x0b)))); }
                 let movel = |j: usize| f.passos.get(j).is_some_and(|x| x.ordem_final() == 0) && p_movel;
                 c = c.push(row![botao("↑", (i > 0 && movel(i - 1)).then_some(Msg::Fluxos(Fx::Mover(i, true)))),
                     botao("↓", movel(i + 1).then_some(Msg::Fluxos(Fx::Mover(i, false)))),
