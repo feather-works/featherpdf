@@ -87,6 +87,11 @@ pub fn janela(app: &App) -> Element<'_, Msg> {
         .into()
 }
 
+/// Nome comprido cortado com "…" no fim (o `ellipsis` sozinho empurrava o "salvo" e o × para fora da aba).
+fn encurtar(nome: &str, max: usize) -> String {
+    if nome.chars().count() <= max { nome.to_string() } else { nome.chars().take(max - 1).collect::<String>() + "…" }
+}
+
 /// Linha de cima: pena, abas dos documentos, "+" e os botões da janela; o resto arrasta.
 pub(crate) fn barra_documento(app: &App) -> Element<'_, Msg> {
     // shortcut: abas demais passam da largura da janela (cada uma encolhe só até o nome com "…"); rolar a faixa de abas se alguém abrir dezenas.
@@ -99,7 +104,7 @@ pub(crate) fn barra_documento(app: &App) -> Element<'_, Msg> {
             .on_press(Msg::FecharGuia(i));
         // Sem documento (página inicial): a aba é o "Início", sem × nem "salvo".
         let inicio = ativa && app.aberto.is_none();
-        let nome = if inicio { "Início".to_string() } else { app.nome_da_aba(i) };
+        let nome = if inicio { "Início".to_string() } else { encurtar(&app.nome_da_aba(i), if ativa { 34 } else { 24 }) };
         let mut conteudo = row![text(nome).size(13.5).font(if ativa { Font::SEMIBOLD } else { Font::DEFAULT }).no_wrap().ellipsis()]
             .spacing(8).align(Align::Center);
         if ativa && !inicio {
@@ -173,7 +178,7 @@ fn barra_abas(app: &App) -> Element<'_, Msg> {
             .style(|_, _| Style::default().text_color(COR_TEXTO())).placeholder_color(COR_TEXTO_MUTED()),
         text("Ctrl+K").size(11.5).color(COR_TEXTO_MUTED()).no_wrap(),
     ].spacing(8).align(Align::Center))
-        .padding([3u16, 12]).width(190.0)
+        .padding([3u16, 12]).width(236.0)
         .style(|_| Style::default().background(COR_PAINEL()).border(Border::rounded(8.0).color(COR_BORDA(), 1.0)));
     let b = |nome: &str, dica: &str, msg: Option<Msg>| botao_icone(icone(nome, 20.), dica, msg, false);
     container(row![
