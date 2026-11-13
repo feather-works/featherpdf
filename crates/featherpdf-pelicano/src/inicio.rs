@@ -10,6 +10,11 @@ use crate::{recentes, App, Msg};
 
 pub const VERMELHO: Color = Color { r: 0xc5 as f32 / 255.0, g: 0x35 as f32 / 255.0, b: 0x2b as f32 / 255.0, a: 1.0 };
 
+/// Texto vermelho: no escuro, um vermelho claro (o escuro some sobre o fundo vermelho translúcido).
+pub fn vermelho_texto() -> Color {
+    if tema::escuro() { Color::rgb8(0xff, 0x8a, 0x80) } else { VERMELHO }
+}
+
 /// Fundo rosado dos itens ativos (no escuro, o vermelho transparente).
 pub fn fundo_vermelho() -> Color {
     if tema::escuro() { Color { a: 0.22, ..VERMELHO } } else { Color::rgb8(0xf9, 0xeb, 0xea) }
@@ -38,7 +43,7 @@ fn item_lateral<'a>(rotulo: &'a str, ativo: bool, msg: Option<Msg>) -> Element<'
             background: if ativo { Some(Background::Color(fundo_vermelho())) }
                 else if matches!(status, Status::Hovered) { Some(Background::Color(tema::COR_HOVER())) }
                 else { None },
-            text_color: Some(if ativo { VERMELHO } else { tema::COR_TEXTO() }),
+            text_color: Some(if ativo { vermelho_texto() } else { tema::COR_TEXTO() }),
             border: Border { radius: [6.0; 4], ..Default::default() },
             ..Default::default()
         })
@@ -166,7 +171,7 @@ impl App {
             row![
                 text("As ferramentas que precisam de um PDF pedem o arquivo e abrem nele.").size(12).color(muted),
                 Space::with_width(Length::FILL),
-                button(text(if self.inicio_mais { "Ver menos" } else { "Ver mais ferramentas" }).size(13).color(VERMELHO))
+                button(text(if self.inicio_mais { "Ver menos" } else { "Ver mais ferramentas" }).size(13).color(vermelho_texto()))
                     .style(|_, _| Style::default()).padding([4, 8]).on_press(Msg::InicioMais),
             ].align_y(Align::Center),
             Space::with_height(6),

@@ -5,7 +5,9 @@
 Corrigido: imagem quase toda branca (logotipo em fundo branco, página escaneada) escurece junto
 na Página escura (antes ficava um bloco branco, e o PDF escaneado não escurecia nada); a barra de
 rolagem da faixa ficou fina e escura no tema escuro; nome de arquivo comprido não empurra mais o
-"salvo" e o × para fora da aba (o nome é cortado com "…"); "Pesquisar comandos…" cabe inteiro. Limite: foto de produto em fundo branco também
+"salvo" e o × para fora da aba (o nome é cortado com "…"); "Pesquisar comandos…" cabe inteiro; "Início" ativo da tela inicial (e o
+"Ver mais ferramentas", os chips da tarja) em vermelho claro no escuro, antes vermelho sobre vermelho;
+"Gráfico para dados" na Converter não cobre mais o nome do grupo. Limite: foto de produto em fundo branco também
 escurece (mais da metade branca); página girada escurece tudo, fotos incluídas. Sem conferir no
 app aberto, só pela captura (`FEATHERPDF_CAPTURA_ESCURO`, `FEATHERPDF_CAPTURA_PAGINA_ESCURA`).
 

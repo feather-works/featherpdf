@@ -2217,6 +2217,8 @@ mod testes {
                 let _ = app.update(Msg::Aberto(Ok((pdf, vis))));
                 app
             }
+            // `FEATHERPDF_CAPTURA_INICIO=1`: a tela inicial, sem documento.
+            None if std::env::var_os("FEATHERPDF_CAPTURA_INICIO").is_some() => App::novo().0,
             None => com_a4(),
         };
         app.viewport = Some((0.0, 1000.0, 640.0));

@@ -153,7 +153,7 @@ impl App {
         }
         let mut chips = row![].spacing(6);
         for (o, n) in origens {
-            chips = chips.push(container(text(format!("{o} · {n}")).size(12).color(VERMELHO)).padding([3, 9])
+            chips = chips.push(container(text(format!("{o} · {n}")).size(12).color(crate::inicio::vermelho_texto())).padding([3, 9])
                 .style(|_| Style { background: Some(Background::Color(Color { a: 0.10, ..VERMELHO })), border: Border { radius: [999.0; 4], ..Default::default() }, ..Default::default() }));
         }
         let mut lista = column![].spacing(0);

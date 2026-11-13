@@ -605,11 +605,12 @@ fn faixa_converter(app: &App) -> Vec<Element<'_, Msg>> {
                 pequeno("photo", None, "Imagens", Some(Msg::Exp(Ex::Abrir(Formato::Imagens))), false),
                 regiao("crop", "Copiar área", Uso::Imagem),
                 regiao("table", "Tabela do scan", Uso::Tabela),
-                regiao("chart-bar", "Gráfico para dados", Uso::Grafico),
             ],
             column![
                 pequeno("file-export", None, "Word, Excel, texto…", Some(Msg::Exp(Ex::Abrir(Formato::Word))), app.janelas.aberta(Auxiliar::Converter)),
                 pequeno("eye", None, "Ver texto", Some(Msg::AlternarPainel(Painel::Texto)), app.painel == Some(Painel::Texto)),
+                // Quarto item na primeira coluna passava da altura da faixa e cobria o nome do grupo.
+                regiao("chart-bar", "Gráfico para dados", Uso::Grafico),
             ],
         ].spacing(4), "Exportar"),
         grupo(row![
