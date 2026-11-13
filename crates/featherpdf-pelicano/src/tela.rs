@@ -799,6 +799,9 @@ fn paginas(app: &App, largura_visivel: f32) -> Element<'_, Msg> {
     let Some(aberto) = &app.aberto else { return Space::new(Length::FILL, Length::FILL).into() };
     let mut mais_larga: f32 = 0.0;
     let mut coluna = column![].spacing(VAO_PAGINAS).align(Align::Center).padding(VAO_PAGINAS);
+    // As camadas (links, medidas, busca, campos) só nas páginas perto da tela: montar todas a cada
+    // quadro percorria a árvore de páginas duas vezes por página (500 páginas: ~1000 voltas por quadro).
+    let perto: std::collections::HashSet<u32> = app.perto_da_tela().into_iter().map(|(p, _)| p).collect();
     for (numeros, _) in app.linhas() {
         let mut linha = row![].spacing(VAO_PAGINAS).align(Align::Start);
         let mut largura_linha = VAO_PAGINAS * (numeros.len() as f32 - 1.0);
@@ -830,7 +833,8 @@ fn paginas(app: &App, largura_visivel: f32) -> Element<'_, Msg> {
             let folha = container(conteudo).width(l).height(a).clip(true).style(|_| Style::default().background(Color::WHITE)
                 .border(Border::default().color(COR_BORDA_SUAVE(), 1.0))
                 .shadow(Shadow { color: Color { a: 0.12, ..Color::BLACK }, offset: Point::new(0.0, 1.0), blur: 6.0 }));
-            linha = linha.push(mouse_area(app.sobre_pagina(n, folha.into(), l, a))
+            let pagina = if perto.contains(&n) { app.sobre_pagina(n, folha.into(), l, a) } else { folha.into() };
+            linha = linha.push(mouse_area(pagina)
                 .on_right_press(Msg::Ctx(Ct::Abrir(Alvo::Pagina(n)))));
         }
         mais_larga = mais_larga.max(largura_linha);

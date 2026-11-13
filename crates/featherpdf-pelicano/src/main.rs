@@ -896,6 +896,9 @@ impl App {
         self.desenhadas.retain(|p, _| perto.contains(p));
         self.fundos.retain(|p, _| perto.contains(p));
         self.fundos_pedidos.retain(|p| perto.contains(p));
+        // A análise de cada página (letras e traços) é relida quando a página volta; com a busca
+        // aberta ela fica, porque os achados apontam para todas.
+        if !self.busca.aberta { self.objetos.retain(|p, _| perto.contains(p)); }
     }
 
     /// Página escura: retângulos (em pixels do desenho) das fotos, gráficos e carimbos, que ficam
@@ -1303,7 +1306,8 @@ impl App {
         self.atualizar_texto();
         self.reler_campos();
         // Uma edição esvazia os objetos lidos: com a busca aberta, os achados são refeitos.
-        if self.busca.aberta && self.aberto.is_some() && self.objetos.is_empty() {
+        // Sem termo não há achado a refazer: reler todas as páginas travava cada edição num PDF grande.
+        if self.busca.aberta && !self.busca.termo.trim().is_empty() && self.aberto.is_some() && self.objetos.is_empty() {
             let atual = self.busca.atual;
             let total = self.total_paginas();
             self.ler_objetos_sempre(&(1..=total).collect::<Vec<_>>());
