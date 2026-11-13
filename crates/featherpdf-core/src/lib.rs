@@ -171,6 +171,9 @@ impl DocumentoPdf {
     pub fn total_paginas(&self) -> u32 { self.ids_paginas().len() as u32 }
 
     /// Páginas em ordem, sem repetir: numa árvore com ciclo o lopdf lista a mesma página várias vezes.
+    /// As páginas em ordem, pelo objeto de cada uma: muda quando páginas saem, entram ou trocam de lugar.
+    pub fn ordem_paginas(&self) -> Vec<(u32, u16)> { self.ids_paginas() }
+
     pub(crate) fn ids_paginas(&self) -> Vec<lopdf::ObjectId> {
         let mut vistas = std::collections::HashSet::new();
         self.documento.get_pages().into_values().filter(|id| vistas.insert(*id)).collect()

@@ -179,6 +179,8 @@ impl DocumentoPdf {
         let caixa = self.documento.get_dictionary(vizinha).ok()
             .and_then(|d| d.get(b"MediaBox").ok().cloned())
             .unwrap_or_else(|| vec![0.into(), 0.into(), A4.0.into(), A4.1.into()].into());
+        // Scan deitado é guardado em pé com /Rotate 90: a página em branco deita junto.
+        let giro = self.documento.get_dictionary(vizinha).ok().and_then(|d| d.get(b"Rotate").ok().cloned());
         let conteudo = self.documento.add_object(Stream::new(Dictionary::new(), Vec::new()));
         let nova = self.documento.add_object(dictionary! {
             "Type" => "Page",
@@ -186,6 +188,7 @@ impl DocumentoPdf {
             "Resources" => Dictionary::new(),
             "Contents" => Object::Reference(conteudo),
         });
+        if let (Some(g), Ok(d)) = (giro, self.documento.get_dictionary_mut(nova)) { d.set("Rotate", g); }
         ids.insert(posicao as usize - 1, nova);
         self.definir_ordem(&ids)
     }
@@ -276,7 +279,16 @@ impl DocumentoPdf {
             let n: Vec<f32> = v.iter().filter_map(|x| x.as_float().ok()).collect();
             (n.len() == 4).then(|| (n[0].min(n[2]), n[1].min(n[3]), n[0].max(n[2]), n[1].max(n[3])))
         };
-        ler(b"CropBox").or_else(|| ler(b"MediaBox")).unwrap_or((0.0, 0.0, A4.0, A4.1))
+        // O CropBox vale recortado pela MediaBox (como o Hayro desenha): maior que ela, deslocava a
+        // camada do OCR, a numeração e as marcas na tela.
+        let midia = ler(b"MediaBox");
+        match (ler(b"CropBox"), midia) {
+            (Some(c), Some(m)) => {
+                let r = (c.0.max(m.0), c.1.max(m.1), c.2.min(m.2), c.3.min(m.3));
+                if r.0 < r.2 && r.1 < r.3 { r } else { m }
+            }
+            (c, m) => c.or(m).unwrap_or((0.0, 0.0, A4.0, A4.1)),
+        }
     }
 
     /// `chave` na página ou no nó mais próximo acima dela (Resources, MediaBox, CropBox, Rotate).
@@ -533,6 +545,17 @@ mod testes {
         pdf.girar_paginas(&[1], 90).unwrap();
         assert_eq!(pdf.tamanhos(), vec![(842.0, 595.0)]);
         assert!(pdf.peso_na_memoria() > 0);
+    }
+
+    #[test]
+    fn cropbox_maior_que_a_pagina_e_recortado_e_branca_deita_com_a_vizinha() {
+        let mut pdf = pdf_teste();
+        let id = pdf.id_pagina(1).unwrap();
+        pdf.documento.get_dictionary_mut(id).unwrap().set("CropBox", vec![0.into(), 0.into(), 700.into(), 900.into()]);
+        assert_eq!(pdf.tamanhos(), vec![(595.0, 842.0)], "o Hayro desenha a interseção com a MediaBox");
+        pdf.girar_paginas(&[1], 90).unwrap();
+        pdf.inserir_em_branco(2).unwrap();
+        assert_eq!(pdf.tamanhos()[1], (842.0, 595.0), "a branca deita como o scan do lado");
     }
 
     #[test]

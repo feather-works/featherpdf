@@ -440,6 +440,8 @@ pub struct App {
     pub texto_da_pagina: (u32, String),
     pub recentes: recentes::Recentes,
     pub tema_escuro: bool,
+    /// Ordem das páginas da última vista (`refazer_vista` joga fora desenhos de página que mudou de lugar).
+    ordem_vista: Vec<(u32, u16)>,
     pub config: configuracoes::Config,
     /// Página escura (modo escuro inteligente), separado do tema da janela.
     pub modo_escuro: bool,
@@ -571,6 +573,7 @@ impl App {
             texto_da_pagina: (0, String::new()),
             recentes: recentes::Recentes::carregar(),
             tema_escuro: escuro,
+            ordem_vista: Vec::new(),
             modo_escuro: false,
             config_secao: 0,
             janelas: Janelas::default(),
@@ -942,7 +945,8 @@ impl App {
                 let y1 = ((v.y + v.height - r.y) * f).ceil().clamp(0.0, pa) as u32;
                 [x0, y0, x1.saturating_sub(x0), y1.saturating_sub(y0)]
             };
-            let trecho = if pl * pa <= LIMITE_INTEIRA { None } else {
+            // Página estreita e comprida (faixa de 600×20000) passa do lado máximo mesmo com poucos pixels.
+            let trecho = if pl * pa <= LIMITE_INTEIRA && pl <= 8000.0 && pa <= 8000.0 { None } else {
                 let Some(pedido) = interseccao(r, folga) else { continue };
                 let Some(vista) = interseccao(r, tela) else { continue };
                 let precisa = em_pixels(vista);
@@ -953,6 +957,8 @@ impl App {
                 // O desenhador recusa mais de 8000 px de lado.
                 t[2] = t[2].min(8000);
                 t[3] = t[3].min(8000);
+                // Nem mais de 20 MP (monitor 4K com folga passa disso): fica só o que está na tela.
+                if t[2] as u64 * t[3] as u64 > 20_000_000 { t = [precisa[0], precisa[1], precisa[2].min(8000), precisa[3].min(8000)]; }
                 Some(t)
             };
             if trecho.is_none() && self.desenhadas.get(&pagina).is_some_and(|d| d.geracao == self.geracao && d.trecho.is_none()) { continue; }
@@ -1203,6 +1209,11 @@ impl App {
         // Gravar e reinterpretar o PDF leva segundos num arquivo grande: vai para outra thread e a
         // janela não para. Os tamanhos saem do documento na hora; quem desenhar, imprimir ou
         // exportar antes espera o desenhador novo (nunca usa o velho).
+        // Página apagada, movida ou de volta pelo Ctrl+Z: o desenho guardado pelo número seria de outra
+        // página e ficaria na tela até o novo chegar (a pessoa apertava Delete de novo).
+        let ordem = aberto.pdf.ordem_paginas();
+        if ordem != self.ordem_vista { self.desenhadas.clear(); self.ordem_vista = ordem; }
+        let Some(aberto) = &mut self.aberto else { return Task::none() };
         let pdf = aberto.pdf.clone();
         let (vis, pronto) = Visualizador::em_segundo_plano(&aberto.vis, move || pdf.serializar());
         aberto.tamanhos = aberto.pdf.tamanhos();
@@ -1506,11 +1517,12 @@ impl App {
                     Ok((imagem, largura, altura)) => {
                         self.desenhadas.insert(pagina, Desenho { imagem, largura, altura, geracao, escala, trecho });
                         alocador::devolver();
+                        // A tela pode ter rolado enquanto o trecho era desenhado.
+                        if trecho.is_some() { return self.pedir_visiveis(); }
                     }
+                    // Sem pedir de novo: o mesmo pedido falharia de novo, sem fim.
                     Err(e) => self.status = format!("Página {pagina}: {e}"),
                 }
-                // A tela pode ter rolado enquanto o trecho era desenhado.
-                if trecho.is_some() { return self.pedir_visiveis(); }
             }
             Msg::Rolou(vp) => {
                 self.viewport = Some((vp.offset.y, vp.bounds.width, vp.bounds.height));

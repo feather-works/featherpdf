@@ -429,6 +429,8 @@ impl Visualizador {
     // shortcut: outro programa truncando o arquivo enquanto está aberto derruba o app (SIGBUS); salvar
     // por cima com rename (como o FeatherPDF faz) é seguro. Copiar para a memória se isso aparecer.
     pub fn do_arquivo(caminho: &Path, paginas: u32) -> Option<Self> {
+        // shortcut: no Windows o arquivo mapeado não pode ser substituído pelo rename do Ctrl+S (dá erro ao salvar por cima); lá a vista lê da memória. Mapear de novo se o Windows ganhar a troca com o arquivo aberto.
+        if cfg!(windows) { return None; }
         let arquivo = std::fs::File::open(caminho).ok()?;
         // SAFETY: só leitura; o risco é o arquivo mudar de tamanho por fora (ver shortcut acima).
         let mapa = unsafe { memmap2::Mmap::map(&arquivo) }.ok()?;
@@ -969,6 +971,7 @@ mod testes {
     }
 
     #[test]
+    #[cfg(not(windows))]
     fn desenha_lendo_o_arquivo_do_disco() {
         let destino = std::env::temp_dir().join(format!("featherpdf-teste-mapa-{}.pdf", std::process::id()));
         std::fs::write(&destino, criar_a4().unwrap().serializar().unwrap()).unwrap();

@@ -853,7 +853,7 @@ fn processar(mut pdf: DocumentoPdf, passos: &[Passo], nome: &str) -> Result<(Vec
                     let linhas: Vec<(String, [f32; 4])> = linhas.iter().map(|l| (
                         l.palavras.iter().map(|p| p.texto.trim()).filter(|t| !t.is_empty()).collect::<Vec<_>>().join(" "), l.caixa,
                     )).filter(|(t, _)| !t.is_empty()).collect();
-                    if pdf.inserir_camada_ocr(n, &linhas)? > 0 { lidas += 1; }
+                    if pdf.trocar_camada_ocr(n, &linhas)? > 0 { lidas += 1; }
                 }
                 relato.push(format!("OCR em {lidas} página(s)"));
             }

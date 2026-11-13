@@ -389,6 +389,7 @@ impl App {
 fn abrir_site(url: &str) -> Result<(), String> {
     let minusculo = url.to_ascii_lowercase();
     if !["http://", "https://", "mailto:"].iter().any(|e| minusculo.starts_with(e)) { return Err("endereço não é de site".into()); }
+    let url = &so_assunto_e_texto(url);
     // O rundll32 recebe o endereço inteiro como um argumento (o `cmd /c start` quebraria no `&`).
     let mut comando = if cfg!(windows) {
         let mut c = std::process::Command::new("rundll32");
@@ -406,8 +407,25 @@ fn abrir_site(url: &str) -> Result<(), String> {
     comando.spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// `mailto:` só com assunto e texto: `?attach=/home/…/.ssh/id_rsa` (de um PDF de fora) anexaria um
+/// arquivo seu no rascunho dos programas de e-mail que aceitam `attach`. Outro endereço passa igual.
+fn so_assunto_e_texto(url: &str) -> String {
+    if !url.to_ascii_lowercase().starts_with("mailto:") { return url.to_string(); }
+    let Some((para, consulta)) = url.split_once('?') else { return url.to_string() };
+    let ficam: Vec<&str> = consulta.split('&')
+        .filter(|p| p.split('=').next().is_some_and(|k| k.eq_ignore_ascii_case("subject") || k.eq_ignore_ascii_case("body"))).collect();
+    if ficam.is_empty() { para.to_string() } else { format!("{para}?{}", ficam.join("&")) }
+}
+
 #[cfg(test)]
 mod testes_site {
+    #[test]
+    fn mailto_sem_anexo() {
+        use super::so_assunto_e_texto as f;
+        assert_eq!(f("mailto:a@b.com?subject=Oi&attach=/home/u/.ssh/id_rsa&body=x"), "mailto:a@b.com?subject=Oi&body=x");
+        assert_eq!(f("MAILTO:a@b.com?Attach=%2Fetc%2Fpasswd"), "MAILTO:a@b.com");
+        assert_eq!(f("https://x.com/?attach=1"), "https://x.com/?attach=1");
+    }
     #[test]
     fn site_recusa_o_que_nao_e_endereco() {
         assert!(super::abrir_site("file:///c:/windows/calc.exe").is_err());

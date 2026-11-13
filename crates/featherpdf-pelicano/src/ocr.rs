@@ -341,7 +341,7 @@ impl App {
                     let linhas: Vec<(String, [f32; 4])> = pag.linhas.iter().map(|l| (
                         l.palavras.iter().map(|p| p.texto.trim()).filter(|t| !t.is_empty()).collect::<Vec<_>>().join(" "), l.caixa,
                     )).filter(|(t, _)| !t.is_empty()).collect();
-                    let gravado = if self.ocr.trocar { a.pdf.trocar_por_texto(pag.pagina, &linhas) } else { a.pdf.inserir_camada_ocr(pag.pagina, &linhas) };
+                    let gravado = if self.ocr.trocar { a.pdf.trocar_por_texto(pag.pagina, &linhas) } else { a.pdf.trocar_camada_ocr(pag.pagina, &linhas) };
                     match gravado {
                         Ok(0) => {}
                         Ok(_) => n += 1,

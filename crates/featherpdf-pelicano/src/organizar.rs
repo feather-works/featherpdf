@@ -187,7 +187,7 @@ impl App {
             // Abaixo de 0,1 o Hayro recusa; a imagem é reduzida na tela.
             let escala = ((IMG_L / l).min(IMG_A / a) * self.escala_tela).clamp(0.1, 4.0);
             let vis = aberto.vis.clone();
-            let geracao = self.geracao;
+            let geracao = self.geracao_fundos; // só muda com o documento ou o giro: zoom não joga a miniatura fora
             tarefas.push(Task::perform(async move {
                 let _vez = crate::DESENHOS.acquire().await;
                 tokio::task::spawn_blocking(move || { crate::alocador::prioridade_baixa(); vis.desenhar(pagina, escala) }).await
@@ -257,7 +257,7 @@ impl App {
                 return self.pedir_miniaturas();
             }
             Pag::Miniatura { geracao, pagina, resultado } => {
-                if geracao != self.geracao { return Task::none(); }
+                if geracao != self.geracao_fundos { return Task::none(); }
                 self.org.pedidas.remove(&pagina);
                 match resultado {
                     Ok(r) => { self.org.miniaturas.insert(pagina, imagem_rgba(r.largura, r.altura, r.rgba)); }

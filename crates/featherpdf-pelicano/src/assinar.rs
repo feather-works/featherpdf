@@ -288,6 +288,8 @@ fn cartao(a: &AssinaturaLida) -> Element<'_, Msg> {
         (Some(p), _, _) => (format!("Não foi possível conferir: {p}"), AMBAR),
         (None, false, _) => ("O documento foi alterado depois da assinatura".to_string(), tema::COR_ERRO()),
         (None, true, false) => ("A assinatura não confere com o certificado".to_string(), tema::COR_ERRO()),
+        // Mudança depois da assinatura (atualização incremental) pode trocar o que aparece na tela: não fica verde.
+        (None, true, true) if !a.cobre_tudo => ("Há mudanças depois desta assinatura: o trecho assinado não mudou, o resto do arquivo sim".to_string(), AMBAR),
         (None, true, true) => ("Assinatura íntegra: o trecho assinado não mudou".to_string(), if a.autoassinado { AMBAR } else { VERDE }),
     };
     let mut detalhes = vec![];

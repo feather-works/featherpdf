@@ -166,6 +166,19 @@ impl DocumentoPdf {
         self.camada_de_texto(pagina, linhas, false, 0)
     }
 
+    /// [`inserir_camada_ocr`](Self::inserir_camada_ocr) no lugar da camada que um OCR anterior desta
+    /// página deixou: ler de novo não duplica o texto (o Ctrl+F achava cada palavra duas vezes).
+    pub fn trocar_camada_ocr(&mut self, pagina: u32, linhas: &[(String, [f32; 4])]) -> Result<usize, String> {
+        let id = self.id_pagina(pagina)?;
+        for s in self.documento.get_page_contents(id) {
+            let Ok(fluxo) = self.documento.get_object_mut(s).and_then(|o| o.as_stream_mut()) else { continue };
+            let bytes = fluxo.decompressed_content_with_limit(crate::TETO_FLUXO).unwrap_or_else(|_| fluxo.content.clone());
+            // O fim que `acrescentar` grava ("Q" e a camada) com o texto invisível (3 Tr) da camada: volta a só "Q".
+            if bytes.starts_with(b"Q\nq ") && bytes.windows(13).any(|w| w == b" BT 3 Tr 0 g\n") { fluxo.set_plain_content(b"Q\n".to_vec()); }
+        }
+        self.camada_de_texto(pagina, linhas, false, 0)
+    }
+
     /// [`inserir_camada_ocr`](Self::inserir_camada_ocr) para texto deitado na página: `giro` é quanto
     /// a imagem precisou girar no sentido horário para a leitura ficar em pé (90: o texto sobe de
     /// baixo para cima; 270: desce de cima para baixo). A camada sai na mesma direção do desenho.
@@ -396,6 +409,10 @@ mod testes {
         assert!(pdf.texto_pagina(1).unwrap().contains("Certid"));
         // Grego e russo vão pela fonte Unicode e voltam inteiros na extração.
         assert_eq!(pdf.inserir_camada_ocr(1, &[("Αθήνα Москва".into(), [0.1, 0.3, 0.6, 0.33])]).unwrap(), 1);
+        // Ler a página de novo troca a camada em vez de somar outra.
+        let mut de_novo = pdf.clone();
+        de_novo.trocar_camada_ocr(1, &[("Certidão negativa".into(), [0.1, 0.1, 0.6, 0.13])]).unwrap();
+        assert_eq!(de_novo.texto_pagina(1).unwrap().matches("Certid").count(), 1, "{}", de_novo.texto_pagina(1).unwrap());
         let pdf = DocumentoPdf::de_bytes(&pdf.serializar().unwrap(), None).unwrap();
         assert!(pdf.texto_pagina(1).unwrap().contains("Αθήνα Москва"), "{}", pdf.texto_pagina(1).unwrap());
         // Trocar por texto: a página perde o desenho antigo e fica só com o texto, visível.

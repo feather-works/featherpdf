@@ -18,9 +18,10 @@ Precisa corrigir:
    (`proteger.rs:152-157`): passar por `self.editar`.
 ✅ 6. "Salvar como" por cima do original assinado pula `original_sem_assinatura`
    (`main.rs:1394-1395`): conferir quando o destino é a própria origem.
-7. Desenho de trecho acima de 20 MP falha e é pedido de novo sem fim (`main.rs:1482-1485`,
+✅ 7. Desenho de trecho acima de 20 MP falha e é pedido de novo sem fim (`main.rs:1482-1485`,
    io `lib.rs:513`): limitar a área do trecho a 20 MP e pedir de novo só no `Ok`.
-8. Windows: salvar por cima do arquivo mapeado (`io lib.rs:431-436`) deve falhar; sem mapa no Windows.
+✅ 8. Windows: salvar por cima do arquivo mapeado (`io lib.rs:431-436`) deve falhar; sem mapa no Windows.
+   Feito sem rodar no Windows: lá a vista lê da memória (mais RAM em PDF grande).
 
 Deveria corrigir:
 9. A tela monta as camadas (links, medidas, busca, campos) de todas as páginas a cada quadro
@@ -28,9 +29,9 @@ Deveria corrigir:
 ✅ 10. Tarja grava a largura de cada letra apagada (`tarja.rs:212`): somar as seguidas num número só.
 11. "Achar CPF, CNPJ…" só lê o conteúdo da página (`tarja.rs:157-159`): ler valor de campo e nota.
 12. Sanitizar não vê anotação escrita direto em `/Annots` (`sanitizar.rs:216-239`).
-13. Cartão da assinatura verde mesmo com mudança depois dela (`assinar.rs:291`): âmbar se `!cobre_tudo`.
-14. Miniaturas da aba Páginas ficam brancas depois do zoom (`organizar.rs:260-261`): usar `geracao_fundos`.
-15. Página apagada continua na tela até o desenho novo chegar (`main.rs:762`, `tela.rs:809`):
+✅ 13. Cartão da assinatura verde mesmo com mudança depois dela (`assinar.rs:291`): âmbar se `!cobre_tudo`.
+✅ 14. Miniaturas da aba Páginas ficam brancas depois do zoom (`organizar.rs:260-261`): usar `geracao_fundos`.
+✅ 15. Página apagada continua na tela até o desenho novo chegar (`main.rs:762`, `tela.rs:809`):
     limpar `desenhadas` quando o número de páginas muda ou páginas mudam de lugar.
 16. `objetos` só cresce e é lido na thread da janela ao rolar com Selecionar (`edicao.rs:359`):
     soltar em `soltar_longe`.
@@ -38,8 +39,9 @@ Deveria corrigir:
 18. Juntar PDFs com campos de mesmo nome cria campos raiz repetidos (`paginas.rs:218-224`): `nome_livre`.
 
 Bom ter:
-19. `mailto:` vai inteiro ao programa de e-mail (`navegar.rs:391-406`); `?attach=` anexa arquivo.
+✅ 19. `mailto:` vai inteiro ao programa de e-mail (`navegar.rs:391-406`); `?attach=` anexa arquivo.
 20. IP da assinatura vem por HTTP puro de api.ipify.org (`io lib.rs:906-909`); tirar, deixar MAC e nome.
+    Não feito: "Incluir dados do computador (IP público…)" é recurso pedido; decisão do usuário.
 
 Segunda leitura (scripts, páginas, OCR), também conferida no código:
 ✅ 21. Nome de campo vindo do PDF entra sem escape no comentário `/* … */` do JavaScript que o app grava
@@ -49,11 +51,12 @@ Segunda leitura (scripts, páginas, OCR), também conferida no código:
     laço que chama função ou regex catastrófica prende um núcleo para sempre e o Rodar fica
     desligado (`scripts.rs:99-109`). Sem limite de memória: `new Array(2**30)` derruba o app e
     perde as abas não salvas. Saída: rodar num processo filho com prazo e teto de memória.
-23. Caixa da página é o CropBox cru, sem recortar pela MediaBox (`paginas.rs:279`); o Hayro desenha
+✅ 23. Caixa da página é o CropBox cru, sem recortar pela MediaBox (`paginas.rs:279`); o Hayro desenha
     a interseção. CropBox maior que a MediaBox desloca a camada do OCR, a numeração e as camadas.
-24. OCR de novo duplica a camada de texto: `sem_texto` só é calculado ao abrir a janela e não é
+✅ 24. OCR de novo duplica a camada de texto: `sem_texto` só é calculado ao abrir a janela e não é
     esquecido depois do Aplicar (`ocr.rs:214`, `:239`); "Todas", o fluxo em lote e o
     "Pesquisável" da região fazem o mesmo. Ctrl+F acha cada palavra duas vezes.
+    Feito: OCR da janela e do lote trocam a camada (`trocar_camada_ocr`); o da região ainda soma.
 25. OCR "Aplicar" (com "Limpar o fundo") roda na thread da janela (`ocr.rs:328-389`).
 26. Juntar/inserir PDF descarta o sumário do outro e resolve os destinos com nome dele pelos nomes
     deste (`paginas.rs:213-214`): sumário some e links de LaTeX pulam para a seção errada.
@@ -61,7 +64,7 @@ Segunda leitura (scripts, páginas, OCR), também conferida no código:
     rótulo ("11" entre "6" e "7") (`rotulos.rs:189`).
 28. Dividir colunas corta página com /Rotate 90 em faixas de cima e de baixo (`paginas.rs:417-440`).
 29. Dividir por tamanho copia o documento inteiro duas vezes a cada medida (`divisao.rs:62`).
-30. Página em branco inserida não copia o /Rotate da vizinha (`paginas.rs:178-188`).
+✅ 30. Página em branco inserida não copia o /Rotate da vizinha (`paginas.rs:178-188`).
 Baixo risco: `FEATHERPDF_ROTEIRO_*`, `PELICANO_ROTEIRO` e `PELICANO_GRAVAR` (este roda o ffmpeg)
 valem também no executável de release; só quem já controla o ambiente usa.
 
