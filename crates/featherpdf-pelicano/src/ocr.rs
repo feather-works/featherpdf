@@ -102,6 +102,10 @@ pub struct EstadoOcr {
     lendo_pasta: bool,
 }
 
+/// O documento com a camada, quantas páginas ganharam texto, imagens clareadas e campos criados.
+#[derive(Debug, Clone)]
+pub struct Aplicado { pdf: featherpdf_core::DocumentoPdf, n: usize, clareadas: usize, campos: Option<usize> }
+
 #[derive(Debug, Clone)]
 pub enum Oc {
     Abrir,
@@ -121,6 +125,8 @@ pub enum Oc {
     LerPasta,
     PastaLida(Result<String, String>),
     Aplicar,
+    /// O Aplicar feito numa cópia em outra thread: (documento, rodada, resultado).
+    Aplicado(u64, u64, Result<Aplicado, String>),
     /// Só redesenha o tempo decorrido.
     Tique,
 }
@@ -325,62 +331,36 @@ impl App {
                 self.ocr.lendo_pasta = false;
                 match r { Ok(t) => self.status = t, Err(e) => self.ocr.aviso = Some(Err(e)) }
             }
+            // Camada, fundo limpo e campos de 200 páginas escaneadas levam de segundos a minutos:
+            // tudo numa cópia em outra thread, e a janela não para.
             Oc::Aplicar => {
+                let Some(a) = &self.aberto else { return Task::none() };
+                let (pdf, id, rodada) = (a.pdf.clone(), a.id, self.ocr.rodada);
+                let (lidas, trocar, limpar, formulario) = (self.ocr.lidas.clone(), self.ocr.trocar, self.ocr.limpar, self.ocr.formulario);
+                self.status = "Gravando o texto reconhecido…".into();
+                return Task::perform(async move {
+                    tokio::task::spawn_blocking(move || aplicar(pdf, &lidas, trocar, limpar, formulario)).await
+                        .unwrap_or_else(|e| Err(format!("Falha ao aplicar o OCR: {e}")))
+                }, move |r| Msg::Ocr(Oc::Aplicado(id, rodada, r)));
+            }
+            Oc::Aplicado(id, rodada, r) => {
+                // Editou, desfez ou trocou de documento enquanto gravava: o resultado é de outro documento.
+                if Some(id) != self.id_aberto() || rodada != self.ocr.rodada {
+                    self.status = "O documento mudou enquanto o OCR era gravado: nada foi aplicado. Aplique de novo.".into();
+                    return Task::none();
+                }
+                let feito = match r {
+                    Ok(f) => f,
+                    Err(e) => { self.ocr.aviso = Some(Err(e)); return Task::none(); }
+                };
+                if feito.n == 0 { return Task::none(); }
                 let Some(a) = &mut self.aberto else { return Task::none() };
-                let antes = a.pdf.clone();
-                let mut n = 0;
-                for pag in &self.ocr.lidas {
-                    // Página que veio torta: o giro entra antes, e o texto lido já está nessa orientação.
-                    if pag.giro != 0 {
-                        if let Err(e) = a.pdf.girar_paginas(&[pag.pagina], pag.giro as i64) {
-                            a.pdf = antes;
-                            self.ocr.aviso = Some(Err(format!("Página {}: {e}", pag.pagina)));
-                            return Task::none();
-                        }
-                    }
-                    let linhas: Vec<(String, [f32; 4])> = pag.linhas.iter().map(|l| (
-                        l.palavras.iter().map(|p| p.texto.trim()).filter(|t| !t.is_empty()).collect::<Vec<_>>().join(" "), l.caixa,
-                    )).filter(|(t, _)| !t.is_empty()).collect();
-                    let gravado = if self.ocr.trocar { a.pdf.trocar_por_texto(pag.pagina, &linhas) } else { a.pdf.trocar_camada_ocr(pag.pagina, &linhas) };
-                    match gravado {
-                        Ok(0) => {}
-                        Ok(_) => n += 1,
-                        Err(e) => {
-                            a.pdf = antes;
-                            self.ocr.aviso = Some(Err(format!("Página {}: {e}", pag.pagina)));
-                            return Task::none();
-                        }
-                    }
-                }
-                if n == 0 { return Task::none(); }
-                let clareadas = if self.ocr.limpar && !self.ocr.trocar {
-                    let paginas: Vec<u32> = self.ocr.lidas.iter().map(|p| p.pagina).collect();
-                    a.pdf.limpar_fundo(&paginas, &featherpdf_io::clarear_fundo_jpeg)
-                } else { 0 };
-                if self.ocr.formulario {
-                    let mut campos = 0;
-                    for pag in &self.ocr.lidas {
-                        for (nome, valor, f) in pag.linhas.iter().flat_map(campos_da_linha) {
-                            // A geometria já é a da página endireitada (o giro entrou acima).
-                            let Ok((pagina_pt, giro_total)) = a.pdf.geometria(pag.pagina) else { continue };
-                            let caixa = em_pontos(f, pagina_pt, giro_total);
-                            let criado = a.pdf.criar_campo(pag.pagina, caixa, &featherpdf_core::CampoNovo::Texto, &nome);
-                            if let Ok(nome) = criado {
-                                campos += 1;
-                                if !valor.is_empty() {
-                                    if let Some(c) = a.pdf.campos().into_iter().find(|c| c.nome == nome && c.pagina == pag.pagina) {
-                                        let _ = a.pdf.preencher(&c, &valor);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    self.status = format!("{campos} campo(s) de formulário criados.");
-                }
+                let antes = std::mem::replace(&mut a.pdf, feito.pdf);
                 self.guardar_desfazer(antes);
                 self.ocr.aplicado = true;
-                let fundo = if clareadas > 0 { format!(" Fundo limpo em {clareadas} imagem(ns).") } else { String::new() };
-                self.status = format!("Texto reconhecido em {n} página(s) — já dá para selecionar, copiar e buscar (Ctrl+F).{fundo} Ctrl+Z desfaz.");
+                let fundo = if feito.clareadas > 0 { format!(" Fundo limpo em {} imagem(ns).", feito.clareadas) } else { String::new() };
+                let campos = feito.campos.map(|c| format!(" {c} campo(s) de formulário criados.")).unwrap_or_default();
+                self.status = format!("Texto reconhecido em {} página(s) — já dá para selecionar, copiar e buscar (Ctrl+F).{fundo}{campos} Ctrl+Z desfaz.", feito.n);
                 self.ocr.aviso = Some(Ok(self.status.clone()));
                 self.objetos.clear();
                 self.selecao_texto = None;
@@ -686,6 +666,45 @@ pub(crate) fn ler(vis: &Visualizador, pagina: u32, escala: f32) -> Lidas {
     Ok((linhas, 0))
 }
 
+/// O que o "Aplicar" faz no documento (fora da thread da janela): camada de texto (ou troca pelo
+/// texto), fundo clareado e campos de formulário.
+fn aplicar(mut pdf: featherpdf_core::DocumentoPdf, lidas: &[PaginaLida], trocar: bool, limpar: bool, formulario: bool) -> Result<Aplicado, String> {
+    let mut n = 0;
+    for pag in lidas {
+        // Página que veio torta: o giro entra antes, e o texto lido já está nessa orientação.
+        if pag.giro != 0 { pdf.girar_paginas(&[pag.pagina], pag.giro as i64).map_err(|e| format!("Página {}: {e}", pag.pagina))?; }
+        let linhas: Vec<(String, [f32; 4])> = pag.linhas.iter().map(|l| (
+            l.palavras.iter().map(|p| p.texto.trim()).filter(|t| !t.is_empty()).collect::<Vec<_>>().join(" "), l.caixa,
+        )).filter(|(t, _)| !t.is_empty()).collect();
+        let gravado = if trocar { pdf.trocar_por_texto(pag.pagina, &linhas) } else { pdf.trocar_camada_ocr(pag.pagina, &linhas) };
+        if gravado.map_err(|e| format!("Página {}: {e}", pag.pagina))? > 0 { n += 1; }
+    }
+    if n == 0 { return Ok(Aplicado { pdf, n, clareadas: 0, campos: None }); }
+    let clareadas = if limpar && !trocar {
+        let paginas: Vec<u32> = lidas.iter().map(|p| p.pagina).collect();
+        pdf.limpar_fundo(&paginas, &featherpdf_io::clarear_fundo_jpeg)
+    } else { 0 };
+    let mut campos = None;
+    if formulario {
+        let mut criados = 0;
+        for pag in lidas {
+            for (nome, valor, f) in pag.linhas.iter().flat_map(campos_da_linha) {
+                // A geometria já é a da página endireitada (o giro entrou acima).
+                let Ok((pagina_pt, giro_total)) = pdf.geometria(pag.pagina) else { continue };
+                let caixa = em_pontos(f, pagina_pt, giro_total);
+                if let Ok(nome) = pdf.criar_campo(pag.pagina, caixa, &featherpdf_core::CampoNovo::Texto, &nome) {
+                    criados += 1;
+                    if !valor.is_empty() {
+                        if let Some(c) = pdf.campos().into_iter().find(|c| c.nome == nome && c.pagina == pag.pagina) { let _ = pdf.preencher(&c, &valor); }
+                    }
+                }
+            }
+        }
+        campos = Some(criados);
+    }
+    Ok(Aplicado { pdf, n, clareadas, campos })
+}
+
 /// Caixa em fração da página vista (y para baixo) -> pontos do PDF, desfazendo o /Rotate.
 pub(crate) fn em_pontos(f: [f32; 4], [x0, y0, x1, y1]: [f32; 4], giro: i64) -> [f32; 4] {
     let (l, h) = if giro.rem_euclid(180) == 90 { (y1 - y0, x1 - x0) } else { (x1 - x0, y1 - y0) };
@@ -724,6 +743,17 @@ fn em_pe((l, h): (f32, f32), giro: u32) -> (f32, f32) { if giro % 180 == 90 { (h
 #[cfg(test)]
 mod testes {
     use super::corrigir_numero;
+
+    #[test]
+    fn aplicar_duas_vezes_nao_duplica_o_texto() {
+        use super::{aplicar, LinhaLida, PalavraLida, PaginaLida};
+        let palavra = PalavraLida { texto: "Certidão".into(), original: None, caixa: [0.1, 0.1, 0.4, 0.13], confianca: 0.9, revisada: false };
+        let lidas = [PaginaLida { pagina: 1, giro: 0, linhas: vec![LinhaLida { caixa: [0.1, 0.1, 0.4, 0.13], palavras: vec![palavra] }] }];
+        let uma = aplicar(featherpdf_io::criar_a4().unwrap(), &lidas, false, false, false).unwrap();
+        assert_eq!(uma.n, 1);
+        let duas = aplicar(uma.pdf, &lidas, false, false, false).unwrap();
+        assert_eq!(duas.pdf.texto_pagina(1).unwrap().matches("Certid").count(), 1);
+    }
 
     #[test]
     fn letra_depois_de_algarismo_vira_algarismo() {

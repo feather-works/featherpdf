@@ -242,7 +242,8 @@ impl DocumentoPdf {
     /// Um PDF novo só com as páginas escolhidas, na ordem do documento.
     /// Marcadores saem: apontariam para páginas que não estão no arquivo novo.
     pub fn extrair(&self, paginas: &[u32]) -> Result<Vec<u8>, String> {
-        self.so_paginas(paginas)?.serializar()
+        // A cópia de `so_paginas` já é descartável: copiar de novo dobrava o custo (Dividir por tamanho mede muitas vezes).
+        crate::serializar_documento(self.so_paginas(paginas)?.documento)
     }
 
     /// Como `extrair`, para gravar em arquivo: PDF com senha sai com a mesma senha.

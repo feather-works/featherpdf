@@ -194,15 +194,20 @@ impl DocumentoPdf {
 
     /// Serializa o documento alterado sem realizar IO ou converter paginas em imagem.
     pub fn serializar(&self) -> Result<Vec<u8>, String> {
-        let mut documento = self.documento.clone();
-        // Páginas excluídas e o catálogo de um PDF juntado ficam soltos até aqui.
-        podar(&mut documento);
-        let mut bytes = Vec::new();
-        documento.save_to(&mut bytes)
-            .map_err(|e| format!("Falha ao serializar PDF: {e}"))?;
-        Ok(bytes)
+        serializar_documento(self.documento.clone())
     }
+}
 
+/// [`DocumentoPdf::serializar`] de um documento que já é cópia (sem copiar de novo).
+pub(crate) fn serializar_documento(mut documento: Document) -> Result<Vec<u8>, String> {
+    // Páginas excluídas e o catálogo de um PDF juntado ficam soltos até aqui.
+    podar(&mut documento);
+    let mut bytes = Vec::new();
+    documento.save_to(&mut bytes).map_err(|e| format!("Falha ao serializar PDF: {e}"))?;
+    Ok(bytes)
+}
+
+impl DocumentoPdf {
     /// Gravação em segundo plano começou: daqui em diante só uma edição nova marca de novo
     /// (se a gravação falhar, quem chama usa `marcar_modificado`).
     pub fn comecar_a_salvar(&mut self) { self.modificado = false; }

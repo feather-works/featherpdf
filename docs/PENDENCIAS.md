@@ -57,7 +57,7 @@ Segunda leitura (scripts, páginas, OCR), também conferida no código:
     esquecido depois do Aplicar (`ocr.rs:214`, `:239`); "Todas", o fluxo em lote e o
     "Pesquisável" da região fazem o mesmo. Ctrl+F acha cada palavra duas vezes.
     Feito: OCR da janela e do lote trocam a camada (`trocar_camada_ocr`); o da região ainda soma.
-25. OCR "Aplicar" (com "Limpar o fundo") roda na thread da janela (`ocr.rs:328-389`).
+✅ 25. OCR "Aplicar" (com "Limpar o fundo") roda na thread da janela (`ocr.rs:328-389`).
 26. Juntar/inserir PDF descarta o sumário do outro e resolve os destinos com nome dele pelos nomes
     deste (`paginas.rs:213-214`): sumário some e links de LaTeX pulam para a seção errada.
 ✅ 27. Rótulo de página (i–iv, 1–100): página duplicada, colada ou inserida ganha a posição como
@@ -66,6 +66,7 @@ Segunda leitura (scripts, páginas, OCR), também conferida no código:
 ✅ 28. Dividir colunas corta página com /Rotate 90 em faixas de cima e de baixo (`paginas.rs:417-440`).
     Feito: página deitada fica inteira (e o aviso diz).
 29. Dividir por tamanho copia o documento inteiro duas vezes a cada medida (`divisao.rs:62`).
+    Metade feita: `extrair` não copia de novo (uma cópia por medida). Falta medir sem gravar.
 ✅ 30. Página em branco inserida não copia o /Rotate da vizinha (`paginas.rs:178-188`).
 Baixo risco: `FEATHERPDF_ROTEIRO_*`, `PELICANO_ROTEIRO` e `PELICANO_GRAVAR` (este roda o ffmpeg)
 valem também no executável de release; só quem já controla o ambiente usa.
