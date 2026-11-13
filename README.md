@@ -1,6 +1,6 @@
 # FeatherPDF
 
-**Produto FeatherOffice independente · versão 0.1.6**
+**Produto FeatherOffice independente · versão 0.1.7**
 
 ## Baixar
 
@@ -15,8 +15,9 @@
 
 Todas as versões e os `SHA256SUMS` ficam na [página de releases](https://github.com/feather-works/featherpdf/releases).
 
-### Na próxima versão (ainda sem release)
+### Novidades da 0.1.7
 
+- **Abre em computador com placa de vídeo antiga:** em placa sem Vulkan/OpenGL utilizável (Intel HD 4000, por exemplo) o FeatherPDF fechava ao iniciar; agora a janela abre desenhada pelo processador. Se a placa falhar com o app aberto, as janelas passam para o processador em vez de o app fechar.
 - **Sem internet:** o FeatherPDF não acessa mais a rede; o aviso de versão nova e o download de modelos de OCR saíram (o OCR latino embutido continua).
 - **Páginas:** copiar, recortar e colar páginas (também entre PDFs abertos) e numeração lógica (i, ii… no prefácio, A-1…).
 - **Marcadores e links:** criar, renomear, mover e excluir marcadores; painel Links da página para trocar ou apagar o destino de cada link.

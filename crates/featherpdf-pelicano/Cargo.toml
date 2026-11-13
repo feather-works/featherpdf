@@ -15,7 +15,7 @@ featherpdf-core = { path = "../featherpdf-core" }
 featherpdf-io = { path = "../featherpdf-io" }
 featherpdf-ocr = { path = "../featherpdf-ocr" }
 # pelicano do crates.io (a 0.1.29 trouxe Image::pixel: a edição lê a cor da letra sem guardar uma segunda cópia da página).
-pelicano = "0.1.30"
+pelicano = "0.1.34"
 # Branch `featherpdf-v0.3.11` do feather-ui: o v0.3.11 (agora com o pelicano 0.1.29 do crates.io) mais a marca FeatherPDF e o F12;
 # trocar por uma tag quando a marca entrar no main.
 feather-ui = { git = "https://github.com/feather-works/feather-ui.git", rev = "cb692b6" }

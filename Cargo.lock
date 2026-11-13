@@ -2004,7 +2004,7 @@ dependencies = [
 
 [[package]]
 name = "featherpdf-core"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "cms",
  "der",
@@ -2023,7 +2023,7 @@ dependencies = [
 
 [[package]]
 name = "featherpdf-io"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "feather-draw",
  "feather-io",
@@ -2043,7 +2043,7 @@ dependencies = [
 
 [[package]]
 name = "featherpdf-ocr"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "featherpdf-core",
  "featherpdf-io",
@@ -2053,7 +2053,7 @@ dependencies = [
 
 [[package]]
 name = "featherpdf-pelicano"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "ab_glyph",
  "arboard",
@@ -4067,9 +4067,9 @@ dependencies = [
 
 [[package]]
 name = "pelicano"
-version = "0.1.30"
+version = "0.1.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ba9228933ed4ddd4a506213628f2107c0e975d89851b336a626db416673db81"
+checksum = "f18d999e05c8fe33aa1b5cab966d5e0637b0e254b33803880617140c1c9a02c7"
 dependencies = [
  "accesskit",
  "accesskit_winit",
