@@ -21,7 +21,7 @@ pub enum Cp {
     Pedir(Copia),
     /// Id do documento (`Aberto::id`) que pediu, a cópia e o destino.
     Destino(u64, Copia, Option<PathBuf>),
-    Feita(Result<String, String>),
+    Feita(Result<(String, PathBuf), String>),
 }
 
 impl App {
@@ -47,11 +47,12 @@ impl App {
                     tokio::task::spawn_blocking(move || {
                         let bytes = match c { Copia::Web => pdf.linearizado()? };
                         featherpdf_io::gravar_pdf(&destino, &bytes)?;
-                        Ok(match c { Copia::Web => format!("Cópia para a web (abre a página 1 antes de baixar tudo) salva em {}", destino.display()) })
+                        Ok((match c { Copia::Web => format!("Cópia para a web (abre a página 1 antes de baixar tudo) salva em {}", destino.display()) }, destino))
                     }).await.unwrap_or_else(|e| Err(e.to_string()))
                 }, |r| Msg::Copia(Cp::Feita(r)));
             },
-            Cp::Feita(r) => self.status = r.unwrap_or_else(|e| e),
+            Cp::Feita(Ok((t, destino))) => self.avisar_salvo(t, destino),
+            Cp::Feita(Err(e)) => self.status = e,
         }
         Task::none()
     }

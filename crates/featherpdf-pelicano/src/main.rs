@@ -175,6 +175,9 @@ pub enum Msg {
     IrInicio,
     BuscaRecentes(String),
     InicioMais,
+    /// Cartão "Salvo": abre o arquivo (`false`) ou a pasta dele (`true`).
+    AbrirSalvo(bool),
+    FecharSalvo,
     /// Capa (página 1) de um recente, desenhada fora da janela: caminho, quando foi aberto, imagem.
     Capa(PathBuf, u64, Result<featherpdf_io::PaginaRaster, String>),
     /// Abre um recente do começo, esquecendo onde a pessoa tinha parado.
@@ -438,6 +441,8 @@ pub struct App {
     pub exportar: exportar::Exportar,
     pub validacao: Option<Result<Vec<featherpdf_core::assinatura::AssinaturaLida>, String>>,
     pub saida_pendente: Option<Vec<u8>>,
+    /// O último arquivo (ou pasta) gravado por uma ferramenta: o cartão "Salvo" no canto da janela.
+    pub salvo: Option<(String, PathBuf)>,
     pub tarjas: tarja::Tarjas,
     pub comentarios: comentar::Comentarios,
     pub form: formularios::Formulario,
@@ -575,6 +580,7 @@ impl App {
             exportar: exportar::Exportar::default(),
             validacao: None,
             saida_pendente: None,
+            salvo: None,
             tarjas: tarja::Tarjas::default(),
             comentarios: comentar::Comentarios::default(),
             form: formularios::Formulario::default(),
@@ -609,6 +615,12 @@ impl App {
         }
         tarefas.push(app.pedir_capas());
         (app, Task::batch(tarefas))
+    }
+
+    /// Mostra o cartão "Salvo" (com Abrir e Abrir pasta) e o texto no rodapé.
+    pub(crate) fn avisar_salvo(&mut self, texto: String, alvo: PathBuf) {
+        self.status = texto.clone();
+        self.salvo = Some((texto, alvo));
     }
 
     pub fn geracao_atual(&self) -> u64 { self.geracao }
@@ -1516,6 +1528,11 @@ impl App {
             },
             Msg::BuscaRecentes(t) => self.busca_recentes = t,
             Msg::InicioMais => self.inicio_mais = !self.inicio_mais,
+            Msg::AbrirSalvo(pasta) => if let Some((_, alvo)) = &self.salvo {
+                let alvo = if pasta && !alvo.is_dir() { alvo.parent().map(PathBuf::from).unwrap_or_else(|| alvo.clone()) } else { alvo.clone() };
+                if let Err(e) = exportar::abrir_no_sistema(&alvo) { self.status = format!("Não consegui abrir {}: {e}", alvo.display()); }
+            },
+            Msg::FecharSalvo => self.salvo = None,
             Msg::Capa(caminho, quando, r) => {
                 let img = r.ok().and_then(|r| Image::from_rgba(r.largura, r.altura, r.rgba));
                 self.capas.insert(caminho, (quando, img));

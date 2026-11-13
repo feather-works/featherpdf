@@ -47,10 +47,10 @@ impl App {
             Fd::ExportarPara(Some(destino)) => if let Some(a) = &self.aberto {
                 let xfdf = destino.extension().is_some_and(|e| e.eq_ignore_ascii_case("xfdf"));
                 let conteudo = if xfdf { a.pdf.formulario_xfdf(&self.nome_documento().unwrap_or_default()) } else { a.pdf.formulario_json() };
-                self.status = match featherpdf_io::gravar_atomico(&destino, conteudo.as_ref()) {
-                    Ok(()) => format!("Dados do formulário salvos em {}", destino.display()),
-                    Err(e) => format!("Não consegui gravar os dados: {e}"),
-                };
+                match featherpdf_io::gravar_atomico(&destino, conteudo.as_ref()) {
+                    Ok(()) => self.avisar_salvo(format!("Dados do formulário salvos em {}", destino.display()), destino),
+                    Err(e) => self.status = format!("Não consegui gravar os dados: {e}"),
+                }
             },
         }
         Task::none()

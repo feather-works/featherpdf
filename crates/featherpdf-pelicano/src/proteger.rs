@@ -248,14 +248,14 @@ impl App {
             }
             Pr::Destino(None) => self.saida_pendente = None,
             Pr::Destino(Some(destino)) => if let Some(bytes) = self.saida_pendente.take() {
-                self.status = match featherpdf_io::gravar_pdf(&destino, &bytes) {
+                match featherpdf_io::gravar_pdf(&destino, &bytes) {
                     Ok(()) => {
                         let antes = match &self.protecao { Some(Janela::Comprimir(c)) => format!("{} → ", tamanho(c.total)), _ => String::new() };
                         self.protecao = None;
-                        format!("{antes}{} · salvo em {}", tamanho(bytes.len() as u64), destino.display())
+                        self.avisar_salvo(format!("{antes}{} · salvo em {}", tamanho(bytes.len() as u64), destino.display()), destino);
                     }
-                    Err(e) => e,
-                };
+                    Err(e) => self.status = e,
+                }
             },
         }
         Task::none()

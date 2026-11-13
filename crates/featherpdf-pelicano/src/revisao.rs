@@ -91,10 +91,10 @@ impl App {
             Rv::ExportarPara(None) => {}
             Rv::ExportarPara(Some(destino)) => {
                 let csv = self.aberto.as_ref().map(|a| comentarios_csv(&a.pdf.anotacoes())).unwrap_or_default();
-                self.status = match featherpdf_io::gravar_atomico(&destino, csv.as_bytes()) {
-                    Ok(()) => format!("Comentários salvos em {}", destino.display()),
-                    Err(e) => format!("Não consegui gravar a lista: {e}"),
-                };
+                match featherpdf_io::gravar_atomico(&destino, csv.as_bytes()) {
+                    Ok(()) => self.avisar_salvo(format!("Comentários salvos em {}", destino.display()), destino),
+                    Err(e) => self.status = format!("Não consegui gravar a lista: {e}"),
+                }
             }
             Rv::ParaSheet => {
                 let csv = self.aberto.as_ref().map(|a| comentarios_csv(&a.pdf.anotacoes())).unwrap_or_default();

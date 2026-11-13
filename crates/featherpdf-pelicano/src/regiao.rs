@@ -133,10 +133,10 @@ impl App {
             Rr::Salvar(_, None) => {}
             Rr::Salvar(t, Some(destino)) => {
                 let linhas: usize = t.iter().map(|x| x.linhas.len()).sum();
-                self.status = match featherpdf_io::gravar_tabelas_xlsx(&t, false, &destino) {
-                    Ok(()) => format!("{} tabela(s), {linhas} linha(s), salvas em {} — abre no FeatherSheet.", t.len(), destino.display()),
-                    Err(e) => e,
-                };
+                match featherpdf_io::gravar_tabelas_xlsx(&t, false, &destino) {
+                    Ok(()) => self.avisar_salvo(format!("{} tabela(s), {linhas} linha(s), salvas em {} — abre no FeatherSheet.", t.len(), destino.display()), destino),
+                    Err(e) => self.status = e,
+                }
             }
             Rr::Copiar => if let Some((_, v, _)) = &self.regiao.lida {
                 self.status = "Texto da área copiado.".into();

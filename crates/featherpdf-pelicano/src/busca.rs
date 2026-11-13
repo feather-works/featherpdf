@@ -188,9 +188,9 @@ impl App {
                 }, move |d| Msg::Busca(Busca::Gravar(csv.clone(), d)));
             }
             Busca::Gravar(_, None) => {}
-            Busca::Gravar(csv, Some(destino)) => self.status = match featherpdf_io::gravar_atomico(&destino, csv.as_bytes()) {
-                Ok(()) => format!("{} achado(s) salvos em {}", self.busca.achados.len(), destino.display()),
-                Err(e) => format!("Não consegui salvar: {e}"),
+            Busca::Gravar(csv, Some(destino)) => match featherpdf_io::gravar_atomico(&destino, csv.as_bytes()) {
+                Ok(()) => self.avisar_salvo(format!("{} achado(s) salvos em {}", self.busca.achados.len(), destino.display()), destino),
+                Err(e) => self.status = format!("Não consegui salvar: {e}"),
             },
             Busca::Proximo | Busca::Anterior => {
                 let n = self.busca.achados.len();

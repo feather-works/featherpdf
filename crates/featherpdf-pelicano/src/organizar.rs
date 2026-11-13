@@ -89,7 +89,7 @@ pub enum Pag {
     AplicarPadrao,
     Dividir,
     DividirEm(Option<PathBuf>),
-    Divididos(Result<String, String>),
+    Divididos(Result<(String, PathBuf), String>),
     AplicarFrenteVerso,
     AplicarMargens,
     AplicarBates,
@@ -315,10 +315,10 @@ impl App {
             }
             Pag::ExtrairPara(Some(destino)) => if let Some(a) = &self.aberto {
                 let alvo = self.alvo();
-                self.status = match a.pdf.extrair_para_gravar(&alvo).and_then(|b| featherpdf_io::gravar_pdf(&destino, &b)) {
-                    Ok(()) => format!("{} página(s) salva(s) em {}", alvo.len(), destino.display()),
-                    Err(e) => e,
-                };
+                match a.pdf.extrair_para_gravar(&alvo).and_then(|b| featherpdf_io::gravar_pdf(&destino, &b)) {
+                    Ok(()) => self.avisar_salvo(format!("{} página(s) salva(s) em {}", alvo.len(), destino.display()), destino),
+                    Err(e) => self.status = e,
+                }
             },
             Pag::Copiar | Pag::Recortar => if let Some(a) = &self.aberto {
                 let alvo = self.alvo();
@@ -457,11 +457,12 @@ impl App {
                                 else { pasta.join(format!("{base} - {:02} {rotulo}.pdf", i + 1)) };
                             featherpdf_io::gravar_pdf(&destino, &pdf.extrair_para_gravar(&paginas)?)?;
                         }
-                        Ok(format!("{} arquivos salvos em {}", partes.len(), pasta.display()))
+                        Ok((format!("{} arquivos salvos em {}", partes.len(), pasta.display()), pasta))
                     }).await.unwrap_or_else(|e| Err(format!("Falha ao dividir: {e}")))
                 }, |r| Msg::Pag(Pag::Divididos(r)));
             }
-            Pag::Divididos(r) => self.status = r.unwrap_or_else(|e| e),
+            Pag::Divididos(Ok((t, pasta))) => self.avisar_salvo(t, pasta),
+            Pag::Divididos(Err(e)) => self.status = e,
         }
         Task::none()
     }

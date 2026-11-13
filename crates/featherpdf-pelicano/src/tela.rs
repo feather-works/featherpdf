@@ -84,9 +84,26 @@ pub fn janela(app: &App) -> Element<'_, Msg> {
     if app.menu { camadas = camadas.push(menu_arquivo(app)); }
     if !app.busca_comandos.trim().is_empty() { camadas = camadas.push(resultados_comandos(app)); }
     if let Some((qual, canto)) = app.suspenso { camadas = camadas.push(menu_suspenso(qual, canto)); }
+    if let Some((texto, alvo)) = &app.salvo { camadas = camadas.push(cartao_salvo(texto, alvo)); }
     container(camadas).width(Length::FILL).height(Length::FILL).clip(true)
         .style(|_| Style::default().background(COR_FUNDO_JANELA()).border(Border::default().color(COR_BORDA(), 1.0)).text_color(COR_TEXTO()))
         .into()
+}
+
+/// Cartão no canto de baixo depois de gravar um arquivo: o que foi salvo, Abrir e Abrir pasta.
+fn cartao_salvo<'a>(texto: &'a str, alvo: &std::path::Path) -> Element<'a, Msg> {
+    let mut botoes = row![].spacing(6);
+    if !alvo.is_dir() { botoes = botoes.push(button(text("Abrir").size(12.5)).padding([5u16, 12]).style(estilo_botao_pequeno(true)).on_press(Msg::AbrirSalvo(false))); }
+    botoes = botoes.push(button(text("Abrir pasta").size(12.5)).padding([5u16, 12]).style(estilo_botao_pequeno(false)).on_press(Msg::AbrirSalvo(true)));
+    let cartao = container(row![
+        icone_traco("circle-check", 22.).color(crate::inicio::texto_escuro(crate::inicio::VERDE)),
+        column![text("Salvo").size(13.5).font(Font::SEMIBOLD), text(texto).size(12).color(COR_TEXTO_MUTED()), botoes].spacing(4).width(Length::FILL),
+        botao_icone(icone("x", 14.), "Fechar", Some(Msg::FecharSalvo), false),
+    ].spacing(12))
+        .padding(14).width(380)
+        .style(|_| Style::default().background(COR_PAINEL()).border(Border::rounded(12.0).color(COR_BORDA(), 1.0)));
+    container(cartao).width(Length::FILL).height(Length::FILL).align_x(Align::End).align_y(Align::End)
+        .padding(Padding { top: 0.0, right: 24.0, bottom: 56.0, left: 0.0 }).into()
 }
 
 /// Nome comprido cortado com "…" no fim (o `ellipsis` sozinho empurrava o "salvo" e o × para fora da aba).

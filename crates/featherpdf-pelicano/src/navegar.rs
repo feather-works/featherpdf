@@ -219,10 +219,10 @@ impl App {
                 Err(e) => format!("Não consegui abrir {url}: {e}"),
             },
             Nv::Destino(_, i, Some(destino)) => if let Some(a) = &self.aberto {
-                self.status = match a.pdf.anexo(i).and_then(|(_, b)| featherpdf_io::gravar_atomico(&destino, &b)) {
-                    Ok(()) => format!("Anexo salvo em {}", destino.display()),
-                    Err(e) => format!("Não consegui salvar o anexo: {e}"),
-                };
+                match a.pdf.anexo(i).and_then(|(_, b)| featherpdf_io::gravar_atomico(&destino, &b)) {
+                    Ok(()) => self.avisar_salvo(format!("Anexo salvo em {}", destino.display()), destino),
+                    Err(e) => self.status = format!("Não consegui salvar o anexo: {e}"),
+                }
             },
         }
         Task::none()

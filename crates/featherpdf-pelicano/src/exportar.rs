@@ -67,6 +67,10 @@ pub enum Ex {
     /// Id do documento que pediu (`Aberto::id`) e o destino.
     Destino(u64, Option<PathBuf>),
     Pronto(Result<String, String>),
+    /// Depois de exportar: abre o arquivo salvo (`false`) ou a pasta dele (`true`).
+    AbrirSalvo(bool),
+    /// Sai da confirmação e volta às opções para exportar outra coisa.
+    Outro,
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +87,8 @@ pub struct Exportar {
     pdfa: Vec<featherpdf_core::ItemPdfa>,
     pub(crate) trabalhando: bool,
     resultado: Option<Result<String, String>>,
+    /// Onde a última exportação gravou (fora do arquivo de passagem para o FeatherSheet).
+    salvo_em: Option<PathBuf>,
     /// Tabelas sem juntar (como saíram de cada página) e o que a pessoa vê, já juntadas e tipadas.
     brutas: Option<Result<Vec<TabelaPdf>, String>>,
     tabelas: Vec<TabelaPdf>,
@@ -96,7 +102,7 @@ pub struct Exportar {
 
 impl Default for Exportar {
     fn default() -> Self {
-        Self { formato: Formato::Sheet, imagem: TipoImagem::Png, dpi: 150, so_atual: false, intervalo: None, html: false, markdown: false, odt: false, pdfa: vec![], trabalhando: false, resultado: None,
+        Self { formato: Formato::Sheet, imagem: TipoImagem::Png, dpi: 150, so_atual: false, intervalo: None, html: false, markdown: false, odt: false, pdfa: vec![], trabalhando: false, resultado: None, salvo_em: None,
             brutas: None, tabelas: vec![], escolhida: 0, modo: ModoPlanilha::PorTabela, juntar: true, ocr_tabelas: false, leitura: 0 }
     }
 }
@@ -222,6 +228,7 @@ impl App {
                 let no_sheet = crate::recentes::pasta_temporaria().is_ok_and(|p| destino.starts_with(p));
                 e.trabalhando = true;
                 e.resultado = None;
+                e.salvo_em = (!no_sheet).then(|| destino.clone());
                 return Task::perform(async move {
                     tokio::task::spawn_blocking(move || -> Result<String, String> {
                         let salvo = format!("Salvo em {}", destino.display());
@@ -322,6 +329,13 @@ impl App {
                 if let Ok(t) = &r { self.status = t.clone(); }
                 e.resultado = Some(r);
             }
+            Ex::AbrirSalvo(pasta) => {
+                let Some(alvo) = e.salvo_em.clone() else { return Task::none() };
+                // Imagens vão para uma pasta escolhida: ela já é o alvo.
+                let alvo = if pasta && alvo.is_file() { alvo.parent().map(PathBuf::from).unwrap_or(alvo) } else { alvo };
+                if let Err(err) = abrir_no_sistema(&alvo) { self.status = format!("Não consegui abrir {}: {err}", alvo.display()); }
+            }
+            Ex::Outro => { e.resultado = None; e.salvo_em = None; }
         }
         Task::none()
     }
@@ -463,7 +477,24 @@ impl App {
         };
         if !e.formato.planilha() && e.formato != Formato::PdfA { corpo = column![text(e.formato.nome()).size(18), corpo].spacing(14); }
         if e.trabalhando { corpo = corpo.push(text(if e.formato.planilha() && e.tabelas.is_empty() { "Procurando tabelas…" } else { "Exportando…" }).size(13).color(tema::COR_AZUL_ACENTO())); }
+        let concluido = matches!(e.resultado, Some(Ok(_))) && !e.trabalhando;
+        if let (true, Some(Ok(t))) = (concluido, &e.resultado) {
+            let mut botoes = row![].spacing(8);
+            if let Some(c) = &e.salvo_em {
+                if !c.is_dir() { botoes = botoes.push(dlg::botao_primario("Abrir arquivo", Some(Msg::Exp(Ex::AbrirSalvo(false))))); }
+                botoes = botoes.push(dlg::botao_secundario("Abrir pasta", Some(Msg::Exp(Ex::AbrirSalvo(true)))));
+            }
+            corpo = column![
+                Space::with_height(30),
+                feather_ui::icones::icone_traco("circle-check", 48.).color(crate::inicio::texto_escuro(crate::inicio::VERDE)),
+                text("Pronto!").size(22).font(Font::SEMIBOLD),
+                text(t.clone()).size(13).color(muted),
+                Space::with_height(8),
+                botoes,
+            ].spacing(8).align_x(Align::Center).width(Length::FILL);
+        }
         match &e.resultado {
+            Some(Ok(_)) if concluido => {}
             Some(Ok(t)) => corpo = corpo.push(dlg::aviso("circle-check", t.clone())),
             Some(Err(t)) => corpo = corpo.push(dlg::aviso("alert-triangle", t.clone())),
             None => {}
@@ -478,14 +509,20 @@ impl App {
             self.nome_documento().map_or("Nenhum PDF aberto".into(), |n| format!("{n} · {} páginas", self.total_paginas()))
         };
         let impede = e.formato == Formato::PdfA && e.pdfa.iter().any(|i| i.situacao == featherpdf_core::SituacaoPdfa::Impede);
-        let mut rodape = row![if impede { text("Resolva o item em vermelho para salvar").size(13).color(Color::rgb8(0x8f, 0x22, 0x19)) } else { text(resumo).size(12).color(muted) },
+        let mut rodape = row![if impede { text("Resolva o item em vermelho para salvar").size(13).color(Color::rgb8(0x8f, 0x22, 0x19)) } else { text(resumo.clone()).size(12).color(muted) },
             Space::with_width(Length::FILL)].spacing(8).align_y(Align::Center);
         if e.formato == Formato::PdfA { rodape = rodape.push(dlg::botao_secundario("Verificar de novo", Some(Msg::Exp(Ex::Formato(Formato::PdfA))))); }
         if e.formato == Formato::Sheet {
             rodape = rodape.push(button(text("Salvar como…").size(13)).padding([6, 12]).style(tema::estilo_botao_pequeno(false))
                 .on_press_maybe(pode.then_some(Msg::Exp(Ex::Exportar))));
         }
-        rodape = rodape.push(dlg::botao_primario(botao, pode.then_some(Msg::Exp(if e.formato == Formato::Sheet { Ex::AbrirSheet } else { Ex::Exportar }))));
+        if concluido {
+            rodape = row![text(resumo).size(12).color(muted), Space::with_width(Length::FILL),
+                dlg::botao_secundario("Exportar outro", Some(Msg::Exp(Ex::Outro))),
+                dlg::botao_primario("Fechar", Some(Msg::FecharJanela(id)))].spacing(8).align_y(Align::Center);
+        } else {
+            rodape = rodape.push(dlg::botao_primario(botao, pode.then_some(Msg::Exp(if e.formato == Formato::Sheet { Ex::AbrirSheet } else { Ex::Exportar }))));
+        }
         let direita = column![
             container(scrollable(container(corpo).padding([20, 24])).height(Length::FILL)).height(Length::FILL),
             container(rodape).padding([12, 24]),
@@ -609,9 +646,31 @@ fn html_das_paginas(textos: &[(u32, String)]) -> String {
 #[cfg(test)]
 mod testes {
     #[test]
+    fn exportar_termina_na_confirmacao_e_outro_volta_as_opcoes() {
+        use super::{Ex, Formato};
+        let (mut app, _) = crate::App::novo();
+        let _ = app.update(crate::Msg::NovoA4);
+        let _ = app.update_exportar(Ex::Formato(Formato::Texto));
+        let destino = std::env::temp_dir().join(format!("featherpdf-exp-{}.txt", std::process::id()));
+        let _ = app.update_exportar(Ex::Destino(app.id_aberto().unwrap(), Some(destino.clone())));
+        assert!(app.exportar.trabalhando);
+        assert_eq!(app.exportar.salvo_em.as_deref(), Some(destino.as_path()));
+        let _ = app.update_exportar(Ex::Pronto(Ok("Salvo".into())));
+        assert!(matches!(app.exportar.resultado, Some(Ok(_))) && !app.exportar.trabalhando);
+        let _ = app.update_exportar(Ex::Outro);
+        assert!(app.exportar.resultado.is_none() && app.exportar.salvo_em.is_none());
+    }
+
+    #[test]
     fn letras_das_colunas_e_html() {
         assert_eq!((super::letra(0), super::letra(25), super::letra(26)), ("A".into(), "Z".into(), "AA".into()));
         let h = super::html_das_paginas(&[(1, "a < b\nlinha 2\n\noutro".into())]);
         assert!(h.contains("<p>a &lt; b<br>linha 2</p>") && h.contains("<p>outro</p>"), "{h}");
     }
+}
+
+/// Abre o arquivo ou a pasta no programa padrão do sistema.
+pub(crate) fn abrir_no_sistema(alvo: &std::path::Path) -> Result<(), String> {
+    let programa = if cfg!(windows) { "explorer" } else if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+    std::process::Command::new(programa).arg(alvo).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
