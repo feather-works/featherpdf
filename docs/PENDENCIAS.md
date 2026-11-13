@@ -1,5 +1,49 @@
 # Pendências do FeatherPDF
 
+## Auditoria de 13/11/2026 (só anotada, nada corrigido ainda)
+
+Lido no código, com o caso concreto. Ordem: o que perde arquivo ou vaza dado primeiro.
+
+Precisa corrigir:
+1. Tarja: letra só sai com o centro dentro da caixa (`tarja.rs:203`) e desenho só inteiro dentro
+   (`tarja.rs:239`): metade de um dígito coberto continua copiável. Marca à mão: usar `cruza`.
+2. Tarja não tira `/XFA` (cópia em XML do formulário), `/PieceInfo` (original do Illustrator) nem
+   avisa dos marcadores (`tarja.rs:288`, `formularios.rs:123-134`). O Limpar e sanitizar já tira.
+3. Ctrl+Z depois de "Salvar como" volta a origem antiga e o Ctrl+S grava por cima do original
+   (`main.rs:816`, `voltar`): guardar a origem antes da troca e reaplicar com `gravado_em`.
+4. Mesmo arquivo em duas abas: o segundo Ctrl+S apaga o que o primeiro salvou (`main.rs:1111`,
+   `entrar`): se já há aba com a mesma origem, ir para ela.
+5. "Tirar senha" sem passo de desfazer: Ctrl+Z de edição anterior traz a senha de volta
+   (`proteger.rs:152-157`): passar por `self.editar`.
+6. "Salvar como" por cima do original assinado pula `original_sem_assinatura`
+   (`main.rs:1394-1395`): conferir quando o destino é a própria origem.
+7. Desenho de trecho acima de 20 MP falha e é pedido de novo sem fim (`main.rs:1482-1485`,
+   io `lib.rs:513`): limitar a área do trecho a 20 MP e pedir de novo só no `Ok`.
+8. Windows: salvar por cima do arquivo mapeado (`io lib.rs:431-436`) deve falhar; sem mapa no Windows.
+
+Deveria corrigir:
+9. A tela monta as camadas (links, medidas, busca, campos) de todas as páginas a cada quadro
+   (`tela.rs:833`); os links percorrem a árvore de páginas 2× por página. Só as perto da tela.
+10. Tarja grava a largura de cada letra apagada (`tarja.rs:212`): somar as seguidas num número só.
+11. "Achar CPF, CNPJ…" só lê o conteúdo da página (`tarja.rs:157-159`): ler valor de campo e nota.
+12. Sanitizar não vê anotação escrita direto em `/Annots` (`sanitizar.rs:216-239`).
+13. Cartão da assinatura verde mesmo com mudança depois dela (`assinar.rs:291`): âmbar se `!cobre_tudo`.
+14. Miniaturas da aba Páginas ficam brancas depois do zoom (`organizar.rs:260-261`): usar `geracao_fundos`.
+15. Página apagada continua na tela até o desenho novo chegar (`main.rs:762`, `tela.rs:809`):
+    limpar `desenhadas` quando o número de páginas muda ou páginas mudam de lugar.
+16. `objetos` só cresce e é lido na thread da janela ao rolar com Selecionar (`edicao.rs:359`):
+    soltar em `soltar_longe`.
+17. Com a busca aberta, cada edição relê todas as páginas na thread da janela (`main.rs:1277-1281`).
+18. Juntar PDFs com campos de mesmo nome cria campos raiz repetidos (`paginas.rs:218-224`): `nome_livre`.
+
+Bom ter:
+19. `mailto:` vai inteiro ao programa de e-mail (`navegar.rs:391-406`); `?attach=` anexa arquivo.
+20. IP da assinatura vem por HTTP puro de api.ipify.org (`io lib.rs:906-909`); tirar, deixar MAC e nome.
+
+Menores: painel lateral de miniaturas em branco fora da aba Páginas (`tela.rs:762-769`);
+VERMELHO e VERDE repetidos em vários arquivos; marcadores de páginas apagadas ficam sem destino;
+o painel Versões não avisa que o Ctrl+S tira as versões guardadas.
+
 ## Modo escuro (13/11/2026)
 
 Corrigido: imagem quase toda branca (logotipo em fundo branco, página escaneada) escurece junto
