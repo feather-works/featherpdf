@@ -2,20 +2,20 @@
 
 ## Auditoria de 13/11/2026 (só anotada, nada corrigido ainda; 30 itens)
 
-Lido no código, com o caso concreto. Ordem: o que perde arquivo ou vaza dado primeiro.
+Lido no código, com o caso concreto. ✅ = corrigido (com teste). Ordem: o que perde arquivo ou vaza dado primeiro.
 
 Precisa corrigir:
 1. Tarja: letra só sai com o centro dentro da caixa (`tarja.rs:203`) e desenho só inteiro dentro
    (`tarja.rs:239`): metade de um dígito coberto continua copiável. Marca à mão: usar `cruza`.
 2. Tarja não tira `/XFA` (cópia em XML do formulário), `/PieceInfo` (original do Illustrator) nem
    avisa dos marcadores (`tarja.rs:288`, `formularios.rs:123-134`). O Limpar e sanitizar já tira.
-3. Ctrl+Z depois de "Salvar como" volta a origem antiga e o Ctrl+S grava por cima do original
+✅ 3. Ctrl+Z depois de "Salvar como" volta a origem antiga e o Ctrl+S grava por cima do original
    (`main.rs:816`, `voltar`): guardar a origem antes da troca e reaplicar com `gravado_em`.
-4. Mesmo arquivo em duas abas: o segundo Ctrl+S apaga o que o primeiro salvou (`main.rs:1111`,
+✅ 4. Mesmo arquivo em duas abas: o segundo Ctrl+S apaga o que o primeiro salvou (`main.rs:1111`,
    `entrar`): se já há aba com a mesma origem, ir para ela.
-5. "Tirar senha" sem passo de desfazer: Ctrl+Z de edição anterior traz a senha de volta
+✅ 5. "Tirar senha" sem passo de desfazer: Ctrl+Z de edição anterior traz a senha de volta
    (`proteger.rs:152-157`): passar por `self.editar`.
-6. "Salvar como" por cima do original assinado pula `original_sem_assinatura`
+✅ 6. "Salvar como" por cima do original assinado pula `original_sem_assinatura`
    (`main.rs:1394-1395`): conferir quando o destino é a própria origem.
 7. Desenho de trecho acima de 20 MP falha e é pedido de novo sem fim (`main.rs:1482-1485`,
    io `lib.rs:513`): limitar a área do trecho a 20 MP e pedir de novo só no `Ok`.

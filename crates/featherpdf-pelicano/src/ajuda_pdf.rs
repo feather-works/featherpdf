@@ -32,7 +32,7 @@ pub fn modelo() -> &'static Catalogo {
                         m("Ctrl+S grava por cima; Ctrl+Shift+S salva uma cópia com outro nome."),
                         m("A gravação é segura: o arquivo novo é escrito à parte e só troca o antigo no fim, mantendo as permissões."),
                         m("PDF assinado não é regravado por cima: o app pede “Salvar como”, porque mudar o arquivo invalida as assinaturas."),
-                        m("Fechar uma aba com alterações não salvas pede confirmação."),
+                        m("Fechar uma aba com alterações não salvas pede confirmação. Abrir um PDF que já está aberto leva à aba dele."),
                         m("Ctrl+D (ou ☰ Menu ▸ Propriedades do documento): título, autor, assunto e palavras-chave editáveis, e o programa que gerou, datas, versão, páginas e tamanho."),
                         m("A página inicial mostra os recentes e atalhos para abrir, criar, converter, dividir e extrair páginas; ela aparece quando não há documento aberto."),
                         t("Os recentes ficam no menu Arquivo (☰ Menu)."),

@@ -149,12 +149,11 @@ impl App {
                 return crate::focar(id_senha());
             },
             Pr::Fechar => self.protecao = None,
-            Pr::TirarSenha => if let Some(a) = &mut self.aberto {
-                a.pdf.tirar_senha();
-                self.scripts.rodada += 1;
+            // Passo de desfazer: sem ele, o Ctrl+Z de uma edição anterior trazia a senha de volta.
+            Pr::TirarSenha => {
                 self.protecao = None;
-                self.status = "A senha sai do arquivo quando você salvar (Ctrl+S).".into();
-            },
+                return self.editar(|pdf| { pdf.tirar_senha(); Ok("A senha sai do arquivo quando você salvar (Ctrl+S).".into()) });
+            }
             Pr::Tique => {}
             Pr::Nivel(n) => if let Some(Janela::Comprimir(c)) = &mut self.protecao { c.nivel = n },
             Pr::Estimado(g, n, r) => if let Some(Janela::Comprimir(c)) = &mut self.protecao {

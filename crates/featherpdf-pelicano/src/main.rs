@@ -649,6 +649,15 @@ impl App {
     }
 
     /// Põe a aba `i` na frente.
+    /// A aba (a da frente ou outra) que tem `caminho` aberto, comparando o caminho real (link simbólico).
+    fn aba_do_arquivo(&self, caminho: &std::path::Path) -> Option<usize> {
+        let real = |p: &std::path::Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+        let alvo = real(caminho);
+        let mesma = |a: &Aberto| a.pdf.origem().is_some_and(|o| real(o) == alvo);
+        if self.aberto.as_ref().is_some_and(mesma) { return Some(self.ativa); }
+        self.guias.iter().position(|g| g.as_ref().is_some_and(|g| mesma(&g.aberto)))
+    }
+
     fn ir_para_aba(&mut self, i: usize) -> Task<Msg> {
         if i == self.ativa || i >= self.guias.len() { return Task::none(); }
         let Some(g) = self.guias[i].take() else { return Task::none() };
@@ -813,7 +822,11 @@ impl App {
             self.status = if desfazer { "Nada para desfazer.".into() } else { "Nada para refazer.".into() };
             return Task::none();
         };
+        // O passo guardado traz o arquivo de quando foi guardado: depois de um "Salvar como", o
+        // Ctrl+S gravaria por cima do original. O arquivo continua o de agora.
+        let origem = a.pdf.origem().map(PathBuf::from);
         para.push(std::mem::replace(&mut a.pdf, pdf));
+        if let Some(o) = origem { a.pdf.gravado_em(o); }
         self.scripts.rodada += 1;
         // O passo guardado traz o `modificado` de quando foi guardado (talvez antes de salvar).
         a.pdf.marcar_modificado();
@@ -1109,6 +1122,11 @@ impl App {
     /// Documento aberto do disco ou criado: numa aba nova, a não ser que a da frente seja o
     /// "sem título" intocado do começo.
     pub(crate) fn entrar(&mut self, pdf: DocumentoPdf, vis: Visualizador) -> Task<Msg> {
+        // O mesmo arquivo em duas abas: o segundo Ctrl+S apagava o que o primeiro salvou.
+        if let Some(i) = pdf.origem().and_then(|c| self.aba_do_arquivo(c)) {
+            self.status = "Este PDF já está aberto nesta aba.".into();
+            return self.ir_para_aba(i);
+        }
         if let Some(caminho) = pdf.origem() {
             self.recentes.registrar(caminho, pdf.total_paginas());
         }
@@ -1391,9 +1409,19 @@ impl App {
             // O documento da frente mudou enquanto o diálogo estava aberto: não grava o documento errado.
             Msg::DestinoEscolhido(id, Some(_)) if Some(id) != self.id_aberto() => self.status = "O documento mudou: nada foi salvo. Salve de novo.".into(),
             // "Salvar como" escolhido: em segundo plano, a não ser antes de fechar a aba.
-            Msg::DestinoEscolhido(id, Some(destino)) if !self.salvar_ja && self.fechar_depois_de_salvar != Some(id) =>
-                return self.gravar_em_segundo_plano(destino, false),
+            // Por cima do próprio original confere a assinatura, como o Ctrl+S.
+            Msg::DestinoEscolhido(id, Some(destino)) if !self.salvar_ja && self.fechar_depois_de_salvar != Some(id) => {
+                let conferir = self.aberto.as_ref().and_then(|a| a.pdf.origem()) == Some(destino.as_path());
+                return self.gravar_em_segundo_plano(destino, conferir);
+            }
             Msg::DestinoEscolhido(_, Some(destino)) => if let Some(a) = &mut self.aberto {
+                if a.pdf.origem() == Some(destino.as_path()) {
+                    if let Err((_, m)) = original_sem_assinatura(&destino) {
+                        self.fechar_depois_de_salvar = None;
+                        self.status = m;
+                        return Task::none();
+                    }
+                }
                 let assinado = a.pdf.modificado() && assinar::tem_assinatura(&a.pdf);
                 self.status = match featherpdf_io::salvar_como(&mut a.pdf, &destino) {
                     Ok(()) => {
@@ -2156,6 +2184,38 @@ mod testes {
         let mut h = vec![pdf; LIMITE_DESFAZER + 3];
         aparar_historico(&mut h, usize::MAX);
         assert_eq!(h.len(), LIMITE_DESFAZER);
+    }
+
+    #[test]
+    fn desfazer_depois_de_salvar_como_nao_volta_ao_original() {
+        let (mut app, _) = App::novo();
+        let (original, copia) = (temporario("original"), temporario("copia"));
+        abrir_de(&mut app, &original);
+        let _ = app.update(Msg::Pag(organizar::Pag::Duplicar));
+        let id = app.id_aberto().unwrap();
+        let _ = app.update(Msg::DestinoEscolhido(id, Some(copia.clone())));
+        let _ = app.update(Msg::Desfazer);
+        assert_eq!(app.aberto.as_ref().unwrap().pdf.origem(), Some(copia.as_path()), "o Ctrl+S seguinte grava na cópia");
+        let _ = std::fs::remove_file(&copia);
+    }
+
+    #[test]
+    fn mesmo_arquivo_nao_abre_em_duas_abas() {
+        let (mut app, _) = App::novo();
+        let c = temporario("duas-abas");
+        abrir_de(&mut app, &c);
+        let _ = app.update(Msg::NovoA4);
+        assert_eq!(app.guias.len(), 2);
+        abrir_de(&mut app, &c);
+        assert_eq!(app.guias.len(), 2, "não abre aba nova");
+        assert_eq!(app.aberto.as_ref().unwrap().pdf.origem(), Some(c.as_path()), "vai para a aba que já tinha o arquivo");
+    }
+
+    #[test]
+    fn tirar_senha_entra_no_desfazer() {
+        let mut app = com_a4();
+        let _ = app.update(Msg::Prot(proteger::Pr::TirarSenha));
+        assert_eq!(app.historico.len(), 1);
     }
 
     #[test]
