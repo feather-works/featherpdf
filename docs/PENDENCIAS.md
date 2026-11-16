@@ -176,7 +176,40 @@ Corrigido neste dia:
   abas juntas; colar texto troca TAB por espaço e recusa o que não cabe na página; "Comentários"
   no Sanitizar não tira vídeo, som nem 3D.
 
-Falta medir com PDFs reais grandes (memória e tempo) e ver as telas novas rodando.
+Medido em 16/11 (abaixo); falta ver as telas novas rodando.
+
+## Medição de 16/11/2026 — memória e tempo (issues #2 e #3)
+
+`FEATHERPDF_MEDIR=arquivo.pdf cargo test --release -p featherpdf-pelicano medir_sessao -- --ignored --nocapture`
+abre, rola o documento todo a 100% e a 200%, faz as miniaturas, busca "de", salva, junta duas cópias e
+fecha, com o tempo e a memória (pico e depois) de cada etapa. Os desenhos são feitos na hora, sem a placa
+de vídeo. PDFs: manual de 134 páginas com ~300 fotos (11 MB), planta A1 de 5 páginas (51 MB) e o manual
+juntado 8× (1072 páginas, 92 MB).
+
+| Etapa | Manual 134 p. | Planta A1 5 p. | 1072 páginas |
+|---|---|---|---|
+| Abrir | 15–58 ms · 44 MB | 43 ms · 69 MB (pico 113) | 165 ms · 180 MB (pico 258) |
+| Rolar tudo a 100% | 1,5 s · 186 MB | 2,5 s · 311 MB | 13,5 s · 540 MB |
+| Rolar tudo a 200% | 2,6 s · 270 MB | — | 30 s · 552 MB |
+| Miniaturas de todas | 0,45 s | 2,0 s | 7,2 s (232 guardadas) |
+| Buscar "de" | 36 ms (812 achados) | 99 ms | 1,1 s (6496 achados) |
+| Salvar como | 29 ms | 76 ms (pico 380) | 319 ms (pico 788) |
+| Juntar duas cópias | 34 ms | 26 ms | 0,4–0,6 s (pico 950) |
+| **Fechar: antes** | 232 MB | 186 MB | 292 MB |
+| **Fechar: agora** | **28 MB** | **25 MB** | **31 MB** |
+
+O app guarda só as páginas perto da tela (2 desenhos), então o que cresce ao rolar não é dele:
+- **Cache de imagens do hayro vendorado** (`vendor/hayro/src/image.rs`: prontas 64 MB, comprimidas
+  96 MB, brutas 96 MB): 130–257 MB. É de propósito (desenhar de novo a planta: 0,22 s com, 2,4 s sem)
+  e era global, sem nunca esvaziar. ✅ Fechar uma aba agora esvazia (`hayro::liberar_caches`), junto
+  com a análise das páginas, os fundos e as miniaturas que ficavam sem documento; "Liberar cache" no
+  inspetor também.
+- **hayro-syntax** guarda o conteúdo descomprimido de cada página já desenhada (~100 MB nas 1072
+  páginas) até fechar. É da biblioteca; mexer seria trocar o leitor ou fazer patch nela.
+- **lopdf** tem o documento inteiro na memória (~150 MB nas 1072 páginas) para editar; salvar e juntar
+  dobram isso por um instante (pico de 788 e 950 MB). Também da biblioteca.
+- Tempo: nada lento demais para o tamanho; rolar custa ~10–25 ms por página nova (o desenho em si).
+
 
 ## Auditoria de 19/10/2026 (código novo da leva dos 29 itens "planejado")
 

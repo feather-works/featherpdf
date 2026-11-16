@@ -115,9 +115,9 @@ pub struct Organizador {
     arrasto: Option<Arrasto>,
     ultimo_clique: Option<(u32, Instant)>,
     pub miniaturas: HashMap<u32, Image>,
-    pedidas: HashSet<u32>,
+    pub(crate) pedidas: HashSet<u32>,
     /// Deslocamento y, largura e altura visíveis da grade.
-    vista: Option<(f32, f32, f32)>,
+    pub(crate) vista: Option<(f32, f32, f32)>,
     pub dialogo: Option<Dialogos>,
 }
 

@@ -667,6 +667,14 @@ pub(crate) static PRONTAS: std::sync::Mutex<Vec<(u64, Pronta)>> = std::sync::Mut
 // 64 MB + o resto comprimido (COMPRIMIDAS) → ~107 MB e ~18 ms.
 const TETO_PRONTAS: usize = 64 << 20;
 
+/// FeatherPDF: esvazia os três caches de imagem (prontas, comprimidas e brutas). Eles são globais e
+/// chegam a 256 MB juntos; sem isto ficavam na memória depois de fechar o documento.
+pub fn liberar_caches() {
+    if let Ok(mut c) = PRONTAS.lock() { *c = Vec::new(); }
+    if let Ok(mut c) = COMPRIMIDAS.lock() { *c = Vec::new(); }
+    if let Ok(mut c) = BRUTAS.lock() { *c = Vec::new(); }
+}
+
 fn chave_da_imagem(r: &hayro_interpret::RasterImage<'_>, largura: u32, altura: u32) -> u64 {
     use std::hash::{Hash, Hasher};
     // Pelo conteúdo, não pelo endereço: o endereço se repete entre documentos.

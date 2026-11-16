@@ -52,6 +52,7 @@ use std::ops::RangeInclusive;
 use std::rc::Rc;
 
 pub use hayro_interpret;
+pub use image::liberar_caches;
 pub use hayro_interpret::hayro_syntax;
 pub use kurbo;
 pub use vello_cpu;

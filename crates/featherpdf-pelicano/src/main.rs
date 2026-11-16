@@ -787,13 +787,20 @@ impl App {
             self.historico.clear();
             self.refeitos.clear();
             self.desenhadas.clear();
+            // A análise das páginas, os fundos e as miniaturas ficavam na memória sem documento.
+            self.objetos.clear();
+            self.fundos.clear();
+            self.fundos_pedidos.clear();
+            self.org.limpar_miniaturas();
             self.status.clear();
+            soltar_imagens();
             return Task::none();
         }
         let mut tarefa = Task::none();
         if i == self.ativa { tarefa = self.ir_para_aba(if i + 1 < self.guias.len() { i + 1 } else { i - 1 }); }
         self.guias.remove(i);
         if i < self.ativa { self.ativa -= 1; }
+        soltar_imagens();
         tarefa
     }
 
@@ -2144,6 +2151,13 @@ fn main() -> Result<(), Error> {
     )
 }
 
+/// O cache de imagens do desenho é comum a todas as abas e chega a 256 MB: ao fechar uma aba ele é esvaziado
+/// (o das outras volta a encher só com o que for desenhado de novo) e a memória vai de volta ao sistema.
+fn soltar_imagens() {
+    Visualizador::liberar_imagens();
+    alocador::devolver();
+}
+
 #[cfg(test)]
 mod testes {
     use super::*;
@@ -2393,6 +2407,18 @@ mod testes {
     }
 
     #[test]
+    fn fechar_a_ultima_aba_solta_o_que_era_do_documento() {
+        let mut app = com_a4();
+        app.ler_objetos_sempre(&[1]);
+        app.org.miniaturas.insert(1, Image::from_rgba(1, 1, vec![0; 4]).unwrap());
+        app.fundos.insert(1, Image::from_rgba(1, 1, vec![0; 4]).unwrap());
+        app.fechar_pendente = Some(0); // o A4 novo conta como não salvo: fecha sem perguntar
+        let _ = app.update(Msg::FecharGuia(0));
+        assert!(app.aberto.is_none());
+        assert!(app.objetos.is_empty() && app.org.miniaturas.is_empty() && app.fundos.is_empty() && app.desenhadas.is_empty());
+    }
+
+    #[test]
     fn rolar_nao_joga_fora_a_pagina_da_folga() {
         let mut app = com_a4();
         for _ in 0..4 { let _ = app.update(Msg::Pag(organizar::Pag::InserirBranco)); }
@@ -2420,6 +2446,108 @@ mod testes {
         // Depois da alteração, o segundo × volta a só avisar.
         let _ = app.update(Msg::FecharGuia(1));
         assert_eq!(app.guias.len(), 2);
+    }
+
+    /// `FEATHERPDF_MEDIR=arquivo.pdf cargo test --release -p featherpdf-pelicano medir_sessao -- --ignored --nocapture`:
+    /// tempo e memória (RSS e pico de cada etapa) de abrir, rolar o documento todo, zoom, miniaturas, busca, salvar e juntar.
+    /// Os desenhos são feitos na hora, no lugar das tarefas do app; não conta a memória da placa de vídeo.
+    #[test]
+    #[ignore]
+    fn medir_sessao() {
+        let caminho = PathBuf::from(std::env::var("FEATHERPDF_MEDIR").expect("FEATHERPDF_MEDIR=arquivo.pdf"));
+        alocador::configurar();
+        let campo = |nome: &str| std::fs::read_to_string("/proc/self/status").ok()
+            .and_then(|s| s.lines().find(|l| l.starts_with(nome)).and_then(|l| l.split_whitespace().nth(1)?.parse::<u64>().ok()))
+            .unwrap_or(0) / 1024;
+        // Zera o pico (VmHWM) para cada etapa ter o seu.
+        let zerar_pico = || { let _ = std::fs::write("/proc/self/clear_refs", "5"); };
+        let etapa = |nome: &str, t: Instant| {
+            alocador::devolver();
+            println!("| {nome} | {:.0} ms | {} MB | {} MB |", t.elapsed().as_secs_f64() * 1000.0, campo("VmHWM:"), campo("VmRSS:"));
+            zerar_pico();
+        };
+        println!("| Etapa | Tempo | Pico | Depois |\n|---|---|---|---|");
+        zerar_pico();
+        let t = Instant::now();
+        let (mut app, _) = App::novo();
+        etapa("app sem documento", t);
+        let t = Instant::now();
+        let pdf = featherpdf_io::abrir_com_senha(&caminho, None).unwrap();
+        let vis = Visualizador::do_arquivo(&caminho, pdf.total_paginas()).unwrap_or_else(|| Visualizador::novo(pdf.serializar().unwrap()).unwrap());
+        let _ = app.update(Msg::Aberto(Ok((pdf, vis))));
+        etapa(&format!("abrir ({} páginas)", app.total_paginas()), t);
+        // Rola de cima a baixo em passos de meia tela, desenhando o que o app pediria.
+        let rolar = |app: &mut App| {
+            let fim = app.posicoes().last().map_or(0.0, |(_, r)| r.y + r.height);
+            let mut topo = 0.0;
+            while topo < fim {
+                app.viewport = Some((topo, 1000.0, 900.0));
+                app.soltar_longe();
+                let escala = (app.zoom * app.escala_tela).clamp(0.1, 16.0);
+                for (p, _) in app.perto_da_tela() {
+                    if app.desenhadas.contains_key(&p) { continue; }
+                    let a = app.aberto.as_ref().unwrap();
+                    let (l, h) = a.tamanhos[p as usize - 1];
+                    if l * escala * h * escala > LIMITE_INTEIRA { continue; }
+                    let resultado = a.vis.desenhar(p, escala);
+                    let geracao = app.geracao;
+                    let _ = app.update(Msg::Desenhada { geracao, pagina: p, escala, trecho: None, resultado });
+                }
+                topo += 450.0;
+            }
+        };
+        app.zoom = 1.0;
+        let t = Instant::now();
+        rolar(&mut app);
+        etapa(&format!("rolar tudo a 100% ({} na memória)", app.desenhadas.len()), t);
+        let _ = app.update(Msg::Zoom(2.0));
+        while app.zoom_animado.is_some() { let _ = app.update(Msg::ZoomQuadro); }
+        let t = Instant::now();
+        rolar(&mut app);
+        etapa(&format!("rolar tudo a 200% ({} na memória)", app.desenhadas.len()), t);
+        let _ = app.update(Msg::Zoom(1.0));
+        while app.zoom_animado.is_some() { let _ = app.update(Msg::ZoomQuadro); }
+        // Miniaturas: a aba Páginas rolada de cima a baixo.
+        let t = Instant::now();
+        let _ = app.update(Msg::MudarAba(Aba::Paginas));
+        let total = app.total_paginas();
+        let mut topo = 0.0;
+        loop {
+            app.org.vista = Some((topo, 1000.0, 900.0));
+            let _ = app.pedir_miniaturas();
+            let pedidas: Vec<u32> = app.org.pedidas.drain().collect();
+            let a = app.aberto.as_ref().unwrap();
+            let feitas: Vec<_> = pedidas.into_iter().map(|p| {
+                let (l, h) = a.tamanhos[p as usize - 1];
+                (p, a.vis.desenhar(p, ((128.0 / l).min(172.0 / h) * app.escala_tela).clamp(0.1, 4.0)))
+            }).collect();
+            for (p, r) in feitas { if let Ok(r) = r { app.org.miniaturas.insert(p, compat::imagem_rgba(r.largura, r.altura, r.rgba)); } }
+            if app.org.miniaturas.contains_key(&total) { break; }
+            topo += 900.0;
+        }
+        etapa(&format!("miniaturas de todas ({} na memória)", app.org.miniaturas.len()), t);
+        let _ = app.update(Msg::MudarAba(Aba::Inicio));
+        let t = Instant::now();
+        let _ = app.update(Msg::Busca(busca::Busca::Abrir(false)));
+        let _ = app.update(Msg::Busca(busca::Busca::Termo("de".into())));
+        etapa(&format!("buscar \"de\" ({} achados)", app.busca.achados.len()), t);
+        let _ = app.update(Msg::Busca(busca::Busca::Fechar));
+        let t = Instant::now();
+        app.soltar_longe();
+        etapa("fechar a busca", t);
+        let destino = std::env::temp_dir().join("featherpdf-medir.pdf");
+        let t = Instant::now();
+        featherpdf_io::salvar_como(&mut app.aberto.as_mut().unwrap().pdf, &destino).unwrap();
+        etapa("salvar como", t);
+        let t = Instant::now();
+        let junto = juntar::juntar_arquivos(&[caminho.clone(), caminho.clone()]).unwrap();
+        let n = junto.total_paginas();
+        drop(junto);
+        etapa(&format!("juntar duas cópias ({n} páginas)"), t);
+        let t = Instant::now();
+        let _ = app.update(Msg::FecharGuia(app.ativa));
+        etapa("fechar o documento", t);
+        let _ = std::fs::remove_file(destino);
     }
 
     /// `FEATHERPDF_CAPTURA=tela.png cargo test -p featherpdf-pelicano captura -- --ignored`: a janela em PNG, sem abrir janela.

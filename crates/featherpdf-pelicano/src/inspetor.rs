@@ -175,7 +175,8 @@ impl App {
             Ins::LiberarCache => {
                 let bytes: usize = self.desenhadas.values().map(|d| d.largura as usize * d.altura as usize * 4).sum();
                 self.desenhadas.clear();
-                self.monitor.tela.registrar(Nivel::Info, "Memória", &format!("[memória] cache de páginas liberado: {}", tamanho(bytes)));
+                crate::soltar_imagens();
+                self.monitor.tela.registrar(Nivel::Info, "Memória", &format!("[memória] cache de páginas e de imagens liberado: {}", tamanho(bytes)));
                 // As páginas à vista são pedidas de novo.
                 return self.invalidar();
             }

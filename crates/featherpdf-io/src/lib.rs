@@ -445,6 +445,10 @@ impl Visualizador {
 
     pub fn total_paginas(&self) -> u32 { self.doc().pages().len() as u32 }
 
+    /// Esvazia o cache de imagens do desenho (até 256 MB, comum a todos os documentos abertos).
+    /// As imagens das páginas à vista são lidas de novo no próximo desenho.
+    pub fn liberar_imagens() { hayro::liberar_caches(); }
+
     /// Tamanho de cada página em pontos, já com o giro aplicado.
     pub fn tamanhos(&self) -> Vec<(f32, f32)> {
         self.doc().pages().iter().map(|p| p.render_dimensions()).map(|(l, a)| if self.giro % 180 == 0 { (l, a) } else { (a, l) }).collect()
