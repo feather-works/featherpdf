@@ -71,7 +71,7 @@ impl App {
                     return self.update_regiao(Rr::Tabelas(aberto.pdf.dados_do_grafico(pagina, caixa)));
                 }
                 // Fração da página vista (y para baixo), para desenhar só o trecho e voltar aos pontos.
-                let (pl, pa) = aberto.tamanhos[pagina as usize - 1];
+                let (pl, pa) = aberto.virar(aberto.tamanhos[pagina as usize - 1]);
                 let (l, h) = (pl * self.zoom, pa * self.zoom);
                 let f = [a.x.min(b.x) / l, a.y.min(b.y) / h, a.x.max(b.x) / l, a.y.max(b.y) / h].map(|v| v.clamp(0.0, 1.0));
                 if uso == Uso::Zoom {
@@ -80,7 +80,7 @@ impl App {
                     return Task::none();
                 }
                 if uso == Uso::Imagem {
-                    let vis = aberto.vis.clone();
+                    let vis = aberto.vis.girado(aberto.giro_vista);
                     let escala = escala_da_copia(((f[2] - f[0]) * pl, (f[3] - f[1]) * pa), self.zoom);
                     self.status = "Copiando a área…".into();
                     return Task::perform(async move {
@@ -88,8 +88,8 @@ impl App {
                             .await.unwrap_or_else(|e| Err(e.to_string()))
                     }, |r| Msg::Regiao(Rr::ImagemCopiada(r)));
                 }
-                let Ok((geometria, giro)) = aberto.pdf.geometria(pagina) else { return Task::none() };
-                let vis = aberto.vis.clone();
+                let Ok((geometria, giro)) = aberto.geometria_vista(pagina) else { return Task::none() };
+                let vis = aberto.vis.girado(aberto.giro_vista);
                 self.regiao.lendo = true;
                 self.status = "Lendo a área…".into();
                 return Task::perform(async move {

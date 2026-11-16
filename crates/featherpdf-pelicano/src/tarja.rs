@@ -133,7 +133,7 @@ impl App {
         let ferramenta = self.ferramenta == Ferramenta::Tarja;
         let aqui: Vec<&Marca> = self.tarjas.marcas.iter().filter(|m| m.pagina == n).collect();
         if !ferramenta && aqui.is_empty() { return None; }
-        let (pag, giro) = self.aberto.as_ref()?.pdf.geometria(n).ok()?;
+        let (pag, giro) = self.aberto.as_ref()?.geometria_vista(n).ok()?;
         let caixas = aqui.iter().map(|m| (na_tela(m.caixa, pag, giro, self.zoom), m.ativa)).collect();
         let mut pilha = Stack::new().width(l).height(a).push(canvas::Canvas::new(Desenho { caixas }).width(l).height(a));
         if ferramenta {

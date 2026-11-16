@@ -235,7 +235,7 @@ impl App {
         let ab = self.aberto.as_ref()?;
         let links = ab.pdf.links(n);
         if links.is_empty() { return None; }
-        let (pagina, giro) = ab.pdf.geometria(n).ok()?;
+        let (pagina, giro) = ab.geometria_vista(n).ok()?;
         let mut pilha = Stack::new().width(l).height(a);
         for (caixa, destino) in links {
             let r = crate::edicao::na_tela(caixa, pagina, giro, self.zoom);

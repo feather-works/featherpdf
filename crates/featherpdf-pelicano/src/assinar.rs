@@ -255,7 +255,7 @@ impl App {
             return Some(crate::inserir::camada_arrastar(n, |pagina, a, b| Msg::Assin(As::Lugar { pagina, a, b }), l, a));
         }
         let (_, caixa) = s.lugar.filter(|l| l.0 == n)?;
-        let (pag, giro) = self.aberto.as_ref()?.pdf.geometria(n).ok()?;
+        let (pag, giro) = self.aberto.as_ref()?.geometria_vista(n).ok()?;
         let r = crate::edicao::na_tela(caixa, pag, giro, self.zoom);
         Some(Stack::new().width(l).height(a).push(column![
             Space::with_height(r.y),

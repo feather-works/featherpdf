@@ -830,7 +830,7 @@ fn paginas(app: &App, largura_visivel: f32) -> Element<'_, Msg> {
         let mut linha = row![].spacing(VAO_PAGINAS).align(Align::Start);
         let mut largura_linha = VAO_PAGINAS * (numeros.len() as f32 - 1.0);
         for n in numeros {
-            let (l, a) = aberto.tamanhos[n as usize - 1];
+            let (l, a) = aberto.virar(aberto.tamanhos[n as usize - 1]);
             let (l, a) = ((l * app.zoom).round(), (a * app.zoom).round());
             largura_linha += l;
             let conteudo: Element<'_, Msg> = match app.desenhadas.get(&n) {
@@ -942,6 +942,7 @@ fn rodape(app: &App) -> Element<'_, Msg> {
         container(text(app.status.as_str()).size(12).color(COR_TEXTO_MUTED()).ellipsis()).width(Length::FILL).padding([0u16, 16]),
         modo("layout-sidebar", "Uma página", Disposicao::UmaPagina),
         modo("book-2", "Duas páginas", Disposicao::DuasPaginas),
+        girar_vista(app),
         Space::new(10.0, 0.0),
         pick_list(&NIVEIS[..], Some(NivelZoom(zoom)), |n: NivelZoom| Msg::Zoom(n.0 as f32 / 100.0)).size(13).width(82.0),
         Space::new(8.0, 0.0),
@@ -950,6 +951,18 @@ fn rodape(app: &App) -> Element<'_, Msg> {
         botao_icone(icone("arrows-horizontal", 18.), "Ajustar à largura", Some(Msg::AjustarLargura), false),
         botao_icone(icone("maximize", 18.), "Tela cheia (F11)", Some(Msg::TelaCheia), false),
     ].spacing(4).align(Align::Center)).padding([6u16, 12]).width(Length::FILL).style(cartao).into()
+}
+
+/// Gira só a tela, 90° no sentido horário por clique; aceso enquanto a vista estiver girada.
+fn girar_vista(app: &App) -> Element<'_, Msg> {
+    let girada = app.aberto.as_ref().is_some_and(|a| a.giro_vista != 0);
+    button(icone("rotate-clockwise", 18.)).padding([5u16, 8])
+        .style(move |_, s| {
+            let st = Style::default().border(Border::rounded(6.0));
+            if girada || s == Status::Hovered { st.background(COR_HOVER()) } else { st }
+        })
+        .on_press_maybe(app.aberto.is_some().then_some(Msg::GirarVista(90)))
+        .into_dica("Girar a vista (Ctrl+Shift+=; Ctrl+Shift+- volta). Só na tela: o arquivo não muda.")
 }
 
 trait ComDica<'a> { fn into_dica(self, texto: &str) -> Element<'a, Msg>; }

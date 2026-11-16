@@ -15,6 +15,11 @@
 
 Todas as versões e os `SHA256SUMS` ficam na [página de releases](https://github.com/feather-works/featherpdf/releases).
 
+### Na próxima versão
+
+- **Girar a vista:** Ctrl+Shift+= e Ctrl+Shift+- (ou o botão de girar no rodapé) giram a página na tela de 90 em 90°, para ler uma planta ou tabela deitada; o arquivo não muda. Campos, comentários, busca, medidas e seleção acompanham o giro.
+- **Datas nos campos de formulário como no Acrobat:** o campo com formato de data (`AFDate_FormatEx`) aceita "5/3/85", "05032026" ou "5 março 2026" e grava no formato do campo ("05/03/1985", "2026-03-05", "mar 5, 2026"…); data que não existe (31/02) é recusada com o formato certo no aviso, e o calendário lê e escreve no mesmo formato.
+
 ### Novidades da 0.1.8
 
 - **Tela inicial nova:** "Continuar de onde parou" com a página onde você saiu, ferramentas em blocos e os recentes em cartões com a capa da página 1.

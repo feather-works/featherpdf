@@ -295,7 +295,7 @@ impl App {
         let tipo = self.medidor().map(Medidor::tipo);
         let atual_aqui = self.medidas.atual.as_ref().filter(|(p, _)| *p == n);
         if tipo.is_none() && !self.medidas.feitas.iter().any(|m| m.pagina == n) { return None; }
-        let ([x0, y0, x1, y1], giro) = self.aberto.as_ref()?.pdf.geometria(n).ok()?;
+        let ([x0, y0, x1, y1], giro) = self.aberto.as_ref()?.geometria_vista(n).ok()?;
         let tela = |pts: &[(f32, f32)]| -> Vec<Point> {
             pts.iter().map(|&(x, y)| na_tela([x, y, x, y], [x0, y0, x1, y1], giro, self.zoom).position()).collect()
         };
@@ -607,7 +607,7 @@ impl App {
             }
             desenhos.push((m.pagina, caixa, DesenhoNovo { preenchida: Caminho::novo(), tracos, preenchimento: None, contorno: Some(AZUL_PDF), espessura: 1.2 }));
             // O valor perto do mesmo ponto da tela; a caixa do texto começa um pouco acima e à direita.
-            let tela: Vec<Point> = m.pontos.iter().map(|&(x, y)| na_tela([x, y, x, y], pag, giro, self.zoom).position()).collect();
+            let tela: Vec<Point> = m.pontos.iter().map(|&(x, y)| na_tela([x, y, x, y], pag, (giro + aberto.giro_vista).rem_euclid(360), self.zoom).position()).collect();
             let alvo = ponto_do_rotulo(m.tipo, &tela);
             if let Some((x, y)) = self.ponto_na_pagina(m.pagina, Point::new(alvo.x + 6.0 * self.zoom, alvo.y - 14.0 * self.zoom)) {
                 textos.push((m.pagina, x, y, medir(m.tipo, &m.pontos, &self.medidas.escala).1));

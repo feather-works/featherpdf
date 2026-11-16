@@ -31,8 +31,9 @@ pub struct Campo {
     pub caixa: [f32; 4],
     /// Letra (pt) com que a aparência escreve o valor: a do /DA, ou a automática.
     pub tamanho: f32,
-    /// Campo de data (o nosso, pela dica /TU, ou o do Acrobat, pelo AFDate no formato).
-    pub data: bool,
+    /// Campo de data e o formato dele ("dd/mm/yyyy"): o nosso, pela dica /TU, ou o do Acrobat,
+    /// pelo AFDate no /AA /F.
+    pub data: Option<String>,
     /// Máscara e validação (`regras.rs`).
     pub regra: Option<crate::Regra>,
     pub calculo: Option<crate::Calculo>,
@@ -224,8 +225,8 @@ impl DocumentoPdf {
         let dica = d.get(b"TU").ok().and_then(|t| lopdf::decode_text_string(t).ok()).unwrap_or_default();
         let formato = d.get(b"AA").ok().and_then(|aa| self.dict(aa)).and_then(|aa| aa.get(b"F").ok().and_then(|f| self.dict(f)))
             .and_then(|f| f.get(b"JS").ok().and_then(|js| js.as_str().ok()).map(|js| String::from_utf8_lossy(js).into_owned()));
-        let data = matches!(tipo, TipoCampo::Texto { multilinha: false })
-            && (dica.starts_with("Data (") || formato.is_some_and(|js| js.contains("AFDate_")));
+        let data = matches!(tipo, TipoCampo::Texto { multilinha: false }).then(|| formato.as_deref().and_then(crate::datas::formato_do_js)
+            .or_else(|| dica.starts_with("Data (").then(|| crate::FORMATO_DATA.to_string()))).flatten();
         let dono = self.documento.get_dictionary(campo).ok();
         let (regra, calculo, limite) = crate::regras::ler_regras(self, &[Some(d), dono].into_iter().flatten().collect::<Vec<_>>());
         let padrao = [dono, Some(d)].into_iter().flatten().find_map(|x| x.get(b"DV").ok()).map(|o| match o {
@@ -276,6 +277,7 @@ impl DocumentoPdf {
         if c.so_leitura { return Err(format!("“{}” é somente leitura.", c.nome)); }
         if c.calculo.is_some() { return Err(format!("“{}” é calculado: muda sozinho quando os campos da conta mudam.", c.nome)); }
         let valor = match c.regra { Some(r) => r.aplicar(valor)?, None => valor.to_string() };
+        let valor = match &c.data { Some(f) => crate::datas::aplicar(f, &c.nome, &valor, crate::anotacoes::agora().0 as i32)?, None => valor };
         if let Some(n) = c.limite.filter(|&n| valor.chars().count() > n) { return Err(format!("“{}” aceita até {n} caracteres.", c.nome)); }
         self.gravar_valor(c, &valor)?;
         self.recalcular()?;
@@ -686,8 +688,12 @@ mod testes {
         pdf.criar_campo(1, [72.0, 300.0, 152.0, 318.0], &CampoNovo::Data, "Nascimento").unwrap();
         let data = pdf.campos().into_iter().find(|c| c.nome == "Nascimento").unwrap();
         // Data: 18 pt de altura com /DA automático escreve com 18 × 0,65 = 11,7 pt.
-        assert!(data.data && (data.tamanho - 11.7).abs() < 0.01, "{data:?}");
-        assert!(!pdf.campos().iter().find(|c| c.nome == "Nome").unwrap().data);
+        assert!(data.data.as_deref() == Some("dd/mm/yyyy") && (data.tamanho - 11.7).abs() < 0.01, "{data:?}");
+        assert!(pdf.campos().iter().find(|c| c.nome == "Nome").unwrap().data.is_none());
+        // Digitado sem barras, gravado no formato do campo; data que não existe é recusada.
+        pdf.preencher(&data, "5/3/85").unwrap();
+        assert_eq!(pdf.campos().into_iter().find(|c| c.nome == "Nascimento").unwrap().valor, "05/03/1985");
+        assert!(pdf.preencher(&data, "31/02/2026").is_err());
         pdf.limpar_campos().unwrap();
         assert!(pdf.campos().iter().all(|c| c.valor.is_empty() || c.valor == "Off"));
     }

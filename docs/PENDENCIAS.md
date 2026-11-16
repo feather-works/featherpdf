@@ -1,5 +1,18 @@
 # Pendências do FeatherPDF
 
+## Girar a vista e datas nos campos (16/11/2026)
+
+Feito (com teste): girar só a vista (Ctrl+Shift+= / Ctrl+Shift+-, botão no rodapé), de 90 em 90°,
+por documento; o desenhador recebe o giro (`Visualizador::girado`) e a tela usa
+`Aberto::geometria_vista`/`tamanho_visto`, então campos, comentários, busca, medidas, tarja e seleção
+acompanham. Exportar, imprimir, OCR e comparar continuam vendo o arquivo como está. Campos de data
+leem o formato do `AFDate_FormatEx`/`AFDate_Format(n)` (`featherpdf-core/src/datas.rs`): o que se
+digita é lido na ordem do formato (com ano de 2 dígitos como o Acrobat, até 49 = 20xx) e gravado no
+formato do campo; data que não existe é recusada.
+Limites: o giro da vista não é lembrado ao reabrir o arquivo; com a vista girada a Página escura
+escurece também as fotos (como já acontecia em página com /Rotate); formato com hora (`h:MM tt`)
+fica como foi digitado. Conferido só por captura, não no app aberto.
+
 ## Auditoria de 13/11/2026 (só anotada, nada corrigido ainda; 30 itens)
 
 Lido no código, com o caso concreto. ✅ = corrigido (com teste). Ordem: o que perde arquivo ou vaza dado primeiro.

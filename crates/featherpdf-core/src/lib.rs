@@ -48,6 +48,8 @@ mod pdfa;
 mod propriedades;
 pub use propriedades::Propriedades;
 mod regras;
+mod datas;
+pub use datas::{escrever_data, ler_data, FORMATO_DATA};
 mod preflight;
 mod tarja;
 mod versoes;

@@ -247,6 +247,8 @@ pub enum Msg {
     Soltou(PathBuf),
     GirarEsquerda,
     GirarDireita,
+    /// Gira só a vista (graus, horário): o arquivo não muda.
+    GirarVista(i64),
     /// Gira a página atual (ou as escolhidas) por estes graus.
     Girar(i64),
     Excluir,
@@ -317,6 +319,18 @@ pub struct Aberto {
     pub vis: Visualizador,
     /// Tamanho de cada página em pontos, com o giro aplicado.
     pub tamanhos: Vec<(f32, f32)>,
+    /// Giro só da tela (Ctrl+Shift+= / Ctrl+Shift+-), somado ao /Rotate: o arquivo não muda.
+    pub giro_vista: i64,
+}
+
+impl Aberto {
+    /// Largura e altura como aparecem na tela (trocadas com a vista deitada).
+    pub fn virar(&self, (l, a): (f32, f32)) -> (f32, f32) { if self.giro_vista % 180 == 0 { (l, a) } else { (a, l) } }
+    pub fn tamanho_visto(&self, pagina: u32) -> Option<(f32, f32)> { self.tamanhos.get(pagina.checked_sub(1)? as usize).map(|&t| self.virar(t)) }
+    /// A geometria da página com o giro da vista: para converter entre a tela e os pontos do PDF.
+    pub fn geometria_vista(&self, pagina: u32) -> Result<([f32; 4], i64), String> {
+        self.pdf.geometria(pagina).map(|(c, g)| (c, (g + self.giro_vista).rem_euclid(360)))
+    }
 }
 
 /// Documento de uma aba que não está na frente: volta para a tela como estava.
@@ -881,7 +895,8 @@ impl App {
     pub fn linhas(&self) -> Vec<(Vec<u32>, f32)> {
         let Some(aberto) = &self.aberto else { return Vec::new() };
         let por_linha = if self.disposicao == Disposicao::DuasPaginas { 2 } else { 1 };
-        aberto.tamanhos.chunks(por_linha).enumerate().map(|(i, grupo)| {
+        let vistos: Vec<(f32, f32)> = aberto.tamanhos.iter().map(|&t| aberto.virar(t)).collect();
+        vistos.chunks(por_linha).enumerate().map(|(i, grupo)| {
             let paginas = (0..grupo.len()).map(|j| (i * por_linha + j + 1) as u32).collect();
             let altura = grupo.iter().map(|t| (t.1 * self.zoom).round()).fold(0.0, f32::max);
             (paginas, altura)
@@ -892,7 +907,7 @@ impl App {
     pub fn posicoes(&self) -> Vec<(u32, Rect)> {
         let Some(aberto) = &self.aberto else { return Vec::new() };
         let tamanho = |n: u32| {
-            let (l, a) = aberto.tamanhos[n as usize - 1];
+            let (l, a) = aberto.virar(aberto.tamanhos[n as usize - 1]);
             ((l * self.zoom).round(), (a * self.zoom).round())
         };
         let largura = |ns: &[u32]| ns.iter().map(|&n| tamanho(n).0).sum::<f32>() + VAO_PAGINAS * (ns.len() as f32 - 1.0);
@@ -956,10 +971,10 @@ impl App {
         let folga = Rect { x: tela.x - tela.width / 2.0, y: tela.y - tela.height / 2.0, width: tela.width * 2.0, height: tela.height * 2.0 };
         let mut tarefas = Vec::new();
         for (pagina, r) in visiveis {
-            let (pl, pa) = aberto.tamanhos[pagina as usize - 1];
+            let (pl, pa) = aberto.virar(aberto.tamanhos[pagina as usize - 1]);
             // shortcut: no modo escuro o fundo sairia claro (sem o `escurecer`); fica sem fundo.
             if !self.modo_escuro && pl * escala * pa * escala > LIMITE_INTEIRA && !self.fundos.contains_key(&pagina) && self.fundos_pedidos.insert(pagina) {
-                let (vis, g) = (aberto.vis.clone(), self.geracao_fundos);
+                let (vis, g) = (aberto.vis.girado(aberto.giro_vista), self.geracao_fundos);
                 let escala_fundo = (2_000_000.0 / (pl * pa)).sqrt().clamp(0.1, 8.0);
                 tarefas.push(Task::perform(async move {
                     let _vez = DESENHOS.acquire().await;
@@ -995,7 +1010,7 @@ impl App {
             };
             if trecho.is_none() && self.desenhadas.get(&pagina).is_some_and(|d| d.geracao == self.geracao && d.trecho.is_none()) { continue; }
             if !self.pedidas.insert(pagina) { continue; }
-            let vis = aberto.vis.clone();
+            let vis = aberto.vis.girado(aberto.giro_vista);
             let geracao = self.geracao;
             self.inicio_render.insert(pagina, Instant::now());
             let fotos = self.modo_escuro.then(|| self.fotos_da_pagina(pagina, escala, trecho));
@@ -1193,7 +1208,7 @@ impl App {
     fn entrar_sem_registro(&mut self, pdf: DocumentoPdf, vis: Visualizador) -> Task<Msg> {
         let tamanhos = vis.tamanhos();
         self.status = format!("{} página(s)", tamanhos.len());
-        self.aberto = Some(Aberto { id: novo_id(), pdf, vis, tamanhos });
+        self.aberto = Some(Aberto { id: novo_id(), pdf, vis, tamanhos, giro_vista: 0 });
         self.monitor.insp.novo_documento();
         self.validacao = None;
         self.assinatura = None;
@@ -1608,24 +1623,33 @@ impl App {
             Msg::Zoom(z) => return self.mudar_zoom(z),
             Msg::AjustarLargura => {
                 let largura_pagina = self.aberto.as_ref()
-                    .and_then(|a| a.tamanhos.get(self.pagina as usize - 1)).map_or(595.0, |t| t.0);
+                    .and_then(|a| a.tamanho_visto(self.pagina)).map_or(595.0, |t| t.0);
                 let visivel = self.viewport.map_or(800.0, |v| v.1);
                 let por_linha = if self.disposicao == Disposicao::DuasPaginas { 2.0 } else { 1.0 };
                 return self.mudar_zoom((visivel - 3.0 * VAO_PAGINAS - 12.0) / (largura_pagina * por_linha));
             }
             Msg::AjustarPagina => {
-                let (l, a) = self.aberto.as_ref().and_then(|x| x.tamanhos.get(self.pagina as usize - 1)).copied().unwrap_or((595.0, 842.0));
+                let (l, a) = self.aberto.as_ref().and_then(|x| x.tamanho_visto(self.pagina)).unwrap_or((595.0, 842.0));
                 let (_, largura, altura) = self.viewport.unwrap_or((0.0, 800.0, 600.0));
                 let por_linha = if self.disposicao == Disposicao::DuasPaginas { 2.0 } else { 1.0 };
                 let zoom = ((largura - 3.0 * VAO_PAGINAS) / (l * por_linha)).min((altura - 2.0 * VAO_PAGINAS) / a);
                 return self.mudar_zoom(zoom);
             }
             Msg::AjustarAltura => {
-                let a = self.aberto.as_ref().and_then(|x| x.tamanhos.get(self.pagina as usize - 1)).map_or(842.0, |t| t.1);
+                let a = self.aberto.as_ref().and_then(|x| x.tamanho_visto(self.pagina)).map_or(842.0, |t| t.1);
                 let (_, _, altura) = self.viewport.unwrap_or((0.0, 800.0, 600.0));
                 return self.mudar_zoom((altura - 2.0 * VAO_PAGINAS) / a);
             }
             Msg::Disposicao(d) => { self.disposicao = d; return self.invalidar(); }
+            Msg::GirarVista(graus) => {
+                let Some(a) = &mut self.aberto else { return Task::none() };
+                a.giro_vista = (a.giro_vista + graus).rem_euclid(360);
+                // As caixas lidas (texto, busca, objetos) guardam o giro de antes.
+                self.objetos.clear();
+                self.selecao_texto = None;
+                self.status = match a.giro_vista { 0 => "Vista em pé, como no arquivo.".into(), g => format!("Vista girada {g}° (só na tela; o arquivo não muda).") };
+                return Task::batch([self.invalidar(), self.rolar_para(self.pagina)]);
+            }
             Msg::GirarEsquerda | Msg::GirarDireita | Msg::Girar(_) => {
                 let graus = match msg { Msg::GirarDireita => 90, Msg::GirarEsquerda => -90, Msg::Girar(g) => g, _ => 0 };
                 let alvo = self.alvo();
@@ -1926,6 +1950,8 @@ impl App {
             else if ctrl && c("j") { Msg::Juntar(juntar::Jt::Escolher(false)) }
             else if ctrl && c("d") && self.aberto.is_some() { Msg::Prop(propriedades::Pp::Abrir) }
             else if ctrl && c("k") { Msg::Pesquisar }
+            else if ctrl && shift && (c("=") || c("+")) && self.aberto.is_some() { Msg::GirarVista(90) }
+            else if ctrl && shift && (c("-") || c("_")) && self.aberto.is_some() { Msg::GirarVista(-90) }
             else if ctrl && (c("=") || c("+")) { Msg::ZoomMais }
             else if ctrl && c("-") { Msg::ZoomMenos }
             else if ctrl && c("0") { Msg::Zoom(1.0) }
@@ -2437,8 +2463,11 @@ mod testes {
         }
         // `FEATHERPDF_CAPTURA_APRESENTAR=1`: em apresentação (a janela não cresce aqui; encaixa no viewport).
         if std::env::var_os("FEATHERPDF_CAPTURA_APRESENTAR").is_some() { app.viewport = Some((0.0, 1672.0, 941.0)); let _ = app.update(Msg::Apresentar); let _ = app.update(Msg::AjustarPagina); }
+        // `FEATHERPDF_CAPTURA_GIRO=90`: a vista girada (só na tela).
+        if let Some(g) = std::env::var("FEATHERPDF_CAPTURA_GIRO").ok().and_then(|g| g.parse().ok()) { let _ = app.update(Msg::GirarVista(g)); }
         for pagina in 1..=app.total_paginas().min(4) as u32 {
-            let mut resultado = app.aberto.as_ref().unwrap().vis.desenhar(pagina, 1.0);
+            let a = app.aberto.as_ref().unwrap();
+            let mut resultado = a.vis.girado(a.giro_vista).desenhar(pagina, 1.0);
             if app.modo_escuro {
                 app.ler_objetos_sempre(&[pagina]);
                 let fotos = app.fotos_da_pagina(pagina, 1.0, None);
@@ -2457,6 +2486,30 @@ mod testes {
                 std::fs::write(destino.replace(".png", &format!("-{}.png", i + 1)), foto(&app)).unwrap();
             }
         }
+    }
+
+    #[test]
+    fn girar_a_vista_deita_a_pagina_sem_mexer_no_arquivo() {
+        let mut app = com_a4();
+        app.viewport = Some((0.0, 1000.0, 640.0));
+        let em_pe = app.posicoes()[0].1;
+        let antes = app.aberto.as_ref().unwrap().pdf.serializar().unwrap();
+        let _ = app.update(Msg::GirarVista(90));
+        let deitada = app.posicoes()[0].1;
+        assert_eq!((deitada.width, deitada.height), (em_pe.height, em_pe.width));
+        let a = app.aberto.as_ref().unwrap();
+        assert_eq!(a.geometria_vista(1).unwrap().1, 90);
+        assert_eq!(a.pdf.geometria(1).unwrap().1, 0, "o /Rotate do arquivo fica como estava");
+        assert_eq!(a.pdf.serializar().unwrap(), antes);
+        assert!(app.historico.is_empty(), "girar a vista não é edição");
+        // O canto de cima à esquerda do PDF (0, 842) aparece no canto de cima à direita da tela.
+        let p = crate::edicao::na_tela([0.0, 842.0, 0.0, 842.0], [0.0, 0.0, 595.0, 842.0], 90, 1.0);
+        assert!((p.x - 842.0).abs() < 0.5 && p.y.abs() < 0.5, "{p:?}");
+        // Volta e dá a volta inteira.
+        let _ = app.update(Msg::GirarVista(-90));
+        assert_eq!(app.aberto.as_ref().unwrap().giro_vista, 0);
+        for _ in 0..4 { let _ = app.update(Msg::GirarVista(90)); }
+        assert_eq!(app.aberto.as_ref().unwrap().giro_vista, 0);
     }
 
     #[test]

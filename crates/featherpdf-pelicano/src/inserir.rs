@@ -330,7 +330,7 @@ impl App {
 
     /// Ponto da tela (a partir do canto da página) no espaço da página.
     pub(crate) fn ponto_na_pagina(&self, pagina: u32, p: Point) -> Option<(f32, f32)> {
-        let (pag, giro) = self.aberto.as_ref()?.pdf.geometria(pagina).ok()?;
+        let (pag, giro) = self.aberto.as_ref()?.geometria_vista(pagina).ok()?;
         Some(crate::edicao::da_tela(p, pag, giro, self.zoom))
     }
 
@@ -474,7 +474,7 @@ impl App {
                 self.ins.largura_imagem = None;
                 // No meio da página atual, a 96 dpi, até metade da largura (como um clique da ferramenta Imagem).
                 let pagina = self.pagina;
-                let Some(&(pl, pa)) = self.aberto.as_ref().and_then(|a| a.tamanhos.get(pagina as usize - 1)) else { return Task::none() };
+                let Some((pl, pa)) = self.aberto.as_ref().and_then(|a| a.tamanho_visto(pagina)) else { return Task::none() };
                 let z = self.zoom;
                 let largura = (w as f32 * 0.75).min(pl / 2.0);
                 let altura = largura * h as f32 / w as f32;

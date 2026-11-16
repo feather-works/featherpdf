@@ -364,7 +364,7 @@ impl App {
         for &p in paginas {
             if self.objetos.contains_key(&p) { continue; }
             let lido = a.pdf.objetos(p).and_then(|lista| {
-                let (caixa, giro) = a.pdf.geometria(p)?;
+                let (caixa, giro) = a.geometria_vista(p)?;
                 Ok(ObjetosDaPagina { lista, caixa, giro })
             });
             match lido {

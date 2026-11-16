@@ -338,6 +338,8 @@ fn pintar<P: image::Pixel>(i: &mut image::ImageBuffer<P, Vec<P::Subpixel>>, [x0,
 #[derive(Clone)]
 pub struct Visualizador {
     pdf: std::sync::Arc<std::sync::OnceLock<std::sync::Arc<hayro::hayro_syntax::Pdf>>>,
+    /// Giro só da vista (0, 90, 180 ou 270, horário), somado ao /Rotate de cada página.
+    giro: u16,
 }
 
 impl std::fmt::Debug for Visualizador {
@@ -392,10 +394,13 @@ impl Visualizador {
     }
 
     fn pronto(pdf: std::sync::Arc<hayro::hayro_syntax::Pdf>) -> Self {
-        Self { pdf: std::sync::Arc::new(std::sync::OnceLock::from(pdf)) }
+        Self { pdf: std::sync::Arc::new(std::sync::OnceLock::from(pdf)), giro: 0 }
     }
 
     fn doc(&self) -> &hayro::hayro_syntax::Pdf { self.pdf.wait() }
+
+    /// O mesmo documento desenhado girado `graus` (múltiplo de 90, horário) só na tela: o arquivo não muda.
+    pub fn girado(&self, graus: i64) -> Self { Self { pdf: self.pdf.clone(), giro: graus.rem_euclid(360) as u16 / 90 * 90 } }
 
     /// Interpreta em outra thread os bytes que `bytes` devolver e já volta: num PDF grande isso
     /// leva segundos, e a janela não para. Quem usar antes espera ficar pronto. Se falhar, fica o
@@ -420,7 +425,7 @@ impl Visualizador {
             fila.1 = true;
             std::thread::spawn(preparar_na_fila);
         }
-        (Self { pdf: celula }, recebe)
+        (Self { pdf: celula, giro: 0 }, recebe)
     }
 
     /// Lê o arquivo direto do disco, mapeado na memória: sem a segunda cópia de ~50 MB que
@@ -442,7 +447,7 @@ impl Visualizador {
 
     /// Tamanho de cada página em pontos, já com o giro aplicado.
     pub fn tamanhos(&self) -> Vec<(f32, f32)> {
-        self.doc().pages().iter().map(|p| p.render_dimensions()).collect()
+        self.doc().pages().iter().map(|p| p.render_dimensions()).map(|(l, a)| if self.giro % 180 == 0 { (l, a) } else { (a, l) }).collect()
     }
 
     /// Desenha a página (começando em 1). Rodar fora da thread da interface.
@@ -510,6 +515,11 @@ impl Visualizador {
             .ok_or_else(|| "A página pedida não existe.".to_string())?;
 
         let (largura, altura) = pagina.render_dimensions();
+        let (w, h) = ((largura * escala) as f64, (altura * escala) as f64);
+        // Giro da vista: a página desenhada inteira gira em volta do canto e volta para dentro do quadro.
+        let giro = match self.giro { 90 => Affine::translate((h, 0.0)), 180 => Affine::translate((w, h)), 270 => Affine::translate((0.0, w)), _ => Affine::IDENTITY }
+            * Affine::rotate((self.giro as f64).to_radians());
+        let (largura, altura) = if self.giro % 180 == 0 { (largura, altura) } else { (altura, largura) };
         let [x, y, l, a] = trecho.unwrap_or([0, 0, (largura * escala) as u32, (altura * escala) as u32]);
         // Defesa contra paginas com dimensoes absurdas ou consumo exagerado de memoria.
         if l < 1 || a < 1 || l > 8000 || a > 8000 || l as u64 * a as u64 > 20_000_000 {
@@ -520,7 +530,7 @@ impl Visualizador {
         // Trecho grande (zoom alto) com 4 threads; desenho pequeno (miniatura) não compensa o custo de dividir.
         let threads = if l as u64 * a as u64 >= 1_000_000 { 4 } else { 0 };
         let mut ctx = RenderContext::new_with(l as u16, a as u16, hayro::vello_cpu::RenderSettings { num_threads: threads, ..Default::default() });
-        let transform = Affine::translate((-(x as f64), -(y as f64)))
+        let transform = Affine::translate((-(x as f64), -(y as f64))) * giro
             * Affine::scale(escala as f64) * pagina.initial_transform(true).to_kurbo();
         render_into(pagina, &cache, &InterpreterSettings::default(), &RenderSettings::default(), &mut ctx, transform);
         ctx.flush();
@@ -958,6 +968,35 @@ mod testes {
         assert!(parece_papel(&folha, 600, 800));
         assert!(!parece_papel(&foto, 600, 800));
         assert!(!parece_papel(&logo, 100, 100));
+    }
+
+    #[test]
+    fn giro_da_vista_desenha_deitada_sem_mexer_no_arquivo() {
+        let mut pdf = criar_a4().unwrap();
+        // Marca escura no canto de cima à esquerda.
+        pdf.inserir_texto(1, 20.0, 790.0, "MMMM", 40.0, false, [0.0; 3]).unwrap();
+        let bytes = pdf.serializar().unwrap();
+        let v = Visualizador::novo(bytes.clone()).unwrap();
+        // Quadrante (0 = cima/esquerda, 1 = cima/direita, 2 = baixo/esquerda, 3 = baixo/direita) mais escuro.
+        let escuro = |r: &PaginaRaster| (0..4).max_by_key(|q| r.rgba.chunks_exact(4).enumerate().filter(|(i, p)| {
+            let (x, y) = (*i as u32 % r.largura, *i as u32 / r.largura);
+            p[0] < 128 && (x >= r.largura / 2) as usize + 2 * (y >= r.altura / 2) as usize == *q
+        }).count()).unwrap();
+        let r = v.desenhar(1, 0.25).unwrap();
+        assert_eq!(escuro(&r), 0);
+        for (graus, canto) in [(90, 1), (180, 3), (270, 2), (-90, 2)] {
+            let g = v.girado(graus);
+            let d = g.desenhar(1, 0.25).unwrap();
+            assert_eq!(escuro(&d), canto, "{graus}°");
+            let (l, a) = g.tamanhos()[0];
+            assert_eq!(((l * 0.25) as u32, (a * 0.25) as u32), (d.largura, d.altura), "{graus}°");
+        }
+        // Trecho da vista girada é o pedaço certo do desenho inteiro.
+        let g = v.girado(90);
+        let (inteiro, t) = (g.desenhar(1, 0.25).unwrap(), g.desenhar_trecho(1, 0.25, [100, 10, 50, 40]).unwrap());
+        let px = |r: &PaginaRaster, x: u32, y: u32| r.rgba[((y * r.largura + x) * 4) as usize];
+        assert!((0..40).all(|y| (0..50).all(|x| px(&t, x, y).abs_diff(px(&inteiro, 100 + x, 10 + y)) < 40)));
+        assert_eq!(v.tamanhos()[0], (595.0, 842.0), "o documento continua em pé");
     }
 
     #[test]

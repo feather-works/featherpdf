@@ -36,8 +36,6 @@ mod testes {
         assert_eq!(data_de(dias_de(2026, 10, 19)), (2026, 10, 19));
         assert_eq!((dias_no_mes(2024, 2), dias_no_mes(2026, 2), dias_no_mes(2026, 12)), (29, 28, 31));
         assert_eq!((dias_de(2026, 10, 1) + 4).rem_euclid(7), 4, "1/10/2026 é quinta");
-        assert_eq!(ler_data("05/03/26"), Some((2026, 3, 5)));
-        assert_eq!(ler_data("31/02/2026"), None);
     }
 }
 
@@ -116,13 +114,8 @@ fn dias_no_mes(ano: i32, mes: u32) -> u32 {
     (dias_de(a, m, 1) - dias_de(ano, mes, 1)) as u32
 }
 
-/// "dd/mm/aaaa" -> (ano, mês, dia).
-fn ler_data(t: &str) -> Option<(i32, u32, u32)> {
-    let mut p = t.trim().split(['/', '-', '.']);
-    let (d, m, a) = (p.next()?.parse().ok()?, p.next()?.parse().ok()?, p.next()?.parse::<i32>().ok()?);
-    let a = if a < 100 { a + 2000 } else { a };
-    ((1..=12).contains(&m) && d >= 1 && d <= dias_no_mes(a, m)).then_some((a, m, d))
-}
+/// A data do campo, lida no formato dele.
+fn ler_data(c: &Campo) -> Option<(i32, u32, u32)> { featherpdf_core::ler_data(c.data.as_deref()?, &c.valor, hoje().0) }
 
 const MESES: [&str; 12] = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -232,10 +225,10 @@ impl App {
         anterior.is_some_and(|x| x != c.campo)
     }
 
-    /// A pessoa parou de digitar: o campo com regra ganha a máscara (ou o aviso do que está errado).
+    /// A pessoa parou de digitar: o campo com regra ganha a máscara, o de data, o formato dele (ou o aviso do que está errado).
     fn aplicar_mascara(&mut self) {
         let (Some(dono), Some(a)) = (self.form.digitando, &mut self.aberto) else { return };
-        let Some(c) = a.pdf.campos().into_iter().find(|c| c.campo == dono && c.regra.is_some()) else { return };
+        let Some(c) = a.pdf.campos().into_iter().find(|c| c.campo == dono && (c.regra.is_some() || c.data.is_some())) else { return };
         match a.pdf.preencher(&c, &c.valor) {
             Ok(()) => self.form.campos = None,
             Err(e) => self.status = format!("{}: {e}", c.nome),
@@ -262,7 +255,7 @@ impl App {
                 self.form.calendario = match self.form.calendario {
                     Some((j, ..)) if j == i => None,
                     _ => {
-                        let (a, m, _) = self.campo(i).and_then(|c| ler_data(&c.valor)).unwrap_or_else(hoje);
+                        let (a, m, _) = self.campo(i).and_then(|c| ler_data(&c)).unwrap_or_else(hoje);
                         Some((i, a, m))
                     }
                 };
@@ -273,7 +266,8 @@ impl App {
             },
             Fm::Dia(a, m, d) => if let Some((i, ..)) = self.form.calendario.take() {
                 let Some(c) = self.campo(i) else { return Task::none() };
-                self.preencher_aqui(&c, &format!("{d:02}/{m:02}/{a}"));
+                let formato = c.data.as_deref().unwrap_or(featherpdf_core::FORMATO_DATA);
+                self.preencher_aqui(&c, &featherpdf_core::escrever_data(formato, (a, m, d)));
                 self.form.digitando = None;
                 self.form.pendente = false;
                 return self.refazer_vista();
@@ -372,7 +366,7 @@ impl App {
         if self.ferramenta != Ferramenta::Selecionar { return None; }
         let campos = self.form.campos.as_ref()?;
         if !campos.iter().any(|c| c.pagina == n) { return None; }
-        let (pag, giro) = self.aberto.as_ref()?.pdf.geometria(n).ok()?;
+        let (pag, giro) = self.aberto.as_ref()?.geometria_vista(n).ok()?;
         let mut pilha = Stack::new().width(l).height(a);
         // Assinatura já feita mostra a própria aparência, sem o realce de campo por cima.
         for (i, c) in campos.iter().enumerate().filter(|(_, c)| c.pagina == n && !(c.tipo == TipoCampo::Assinatura && !c.valor.is_empty())) {
@@ -406,7 +400,7 @@ impl App {
                         });
                     // Sem moldura: o PDF já desenha as dele. Vazio ganha só um realce leve, para achar onde preencher.
                     let fundo = if vazio { Color { a: 0.08, ..azul() } } else { Color::TRANSPARENT };
-                    let conteudo: Element<'_, Msg> = if c.data {
+                    let conteudo: Element<'_, Msg> = if c.data.is_some() {
                         let lado = (h - 2.0).clamp(10.0, 18.0);
                         row![entrada, button(icone_calendario(lado)).padding(1).style(botao_texto).on_press(Msg::Form(Fm::Calendario(i)))]
                             .align_y(Align::Center).into()
@@ -451,7 +445,7 @@ impl App {
 
     /// Mês em grade, a semana começando no domingo; hoje e o dia escolhido em destaque.
     fn calendario(&self, i: usize, c: &Campo, ano: i32, mes: u32) -> Element<'_, Msg> {
-        let escolhido = ler_data(&c.valor);
+        let escolhido = ler_data(c);
         let agora = hoje();
         let negrito = Font::SEMIBOLD;
         let seta = |nome: &'static str, passo: i32| button(feather_ui::icones::icone(nome, 14.0)).padding(4).style(botao_texto).on_press(Msg::Form(Fm::Mes(passo)));
