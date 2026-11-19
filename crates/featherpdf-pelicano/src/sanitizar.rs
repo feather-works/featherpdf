@@ -24,7 +24,7 @@ pub enum Sz { Abrir, Opcao(usize, bool), Aplicar }
 const OPCOES: [(&str, &str); 8] = [
     ("Metadados", "Autor, título, programa e datas guardados no arquivo."),
     ("Histórico de edição", "Dados privados de programas, miniaturas e revisões anteriores."),
-    ("Anexos", "Arquivos embutidos no PDF."),
+    ("Anexos", "Arquivos embutidos no PDF, inclusive vídeo, som e 3D."),
     ("JavaScript", "Código que roda ao abrir, ao clicar ou ao preencher."),
     ("Autores dos comentários", "Os comentários ficam, sem o nome de quem escreveu."),
     ("Camadas ocultas", "Conteúdo de camadas desligadas, que não aparece mas está lá."),

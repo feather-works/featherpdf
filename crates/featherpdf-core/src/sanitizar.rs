@@ -1,5 +1,5 @@
 //! Limpar e sanitizar antes de mandar o PDF para fora: metadados, histórico de edição,
-//! anexos, JavaScript, autores dos comentários, camadas ocultas e links externos.
+//! anexos e multimídia (vídeo, som, 3D), JavaScript, autores dos comentários, camadas ocultas e links externos.
 //! Devolve o relatório do que saiu, uma linha por item.
 
 use std::collections::HashSet;
@@ -137,6 +137,17 @@ impl DocumentoPdf {
             let antes = self.anexos().len();
             crate::otimizar::tirar_anexos(&mut self.documento);
             if antes > 0 { relatorio.push(format!("{antes} arquivo(s) anexado(s).")); }
+            // Vídeo, som, 3D e RichMedia levam o arquivo dentro da anotação: saem junto com os anexos.
+            const MIDIA: &[&[u8]] = &[b"Movie", b"Sound", b"Screen", b"RichMedia", b"3D"];
+            let mut n = 0;
+            for &id in &ids {
+                let mut lista = self.lista_anotacoes(id);
+                let antes = lista.len();
+                lista.retain(|o| !self.dicionario(o).is_some_and(|d| d.get(b"Subtype").and_then(Object::as_name).is_ok_and(|s| MIDIA.contains(&s))));
+                n += antes - lista.len();
+                if antes != lista.len() { if let Ok(p) = self.documento.get_dictionary_mut(id) { p.set("Annots", lista); } }
+            }
+            if n > 0 { relatorio.push(format!("{n} vídeo(s), som(ns) ou objeto(s) 3D.")); }
         }
         if op.javascript || op.links_externos { self.tirar_acoes(&ids, op, &mut relatorio); }
         if op.autores {
@@ -420,8 +431,10 @@ mod testes {
         let link = pdf.documento.add_object(dictionary! { "Type" => "Annot", "Subtype" => "Link" });
         let video = pdf.documento.add_object(dictionary! { "Type" => "Annot", "Subtype" => "Screen" });
         pdf.documento.get_dictionary_mut(id).unwrap().set("Annots", vec![Object::Reference(nota), Object::Reference(link), Object::Reference(video)]);
-        assert!(pdf.sanitizar(OpcoesLimpeza::default()).unwrap().iter().all(|r| !r.contains("comentário(s) e")), "por padrão os comentários ficam");
-        let r = pdf.sanitizar(OpcoesLimpeza { comentarios: true, ..OpcoesLimpeza::default() }).unwrap();
+        // Sem anexos: o vídeo só sai com eles (sanitizar_tira_video_e_deixa_o_link).
+        let sem_anexos = OpcoesLimpeza { anexos: false, ..OpcoesLimpeza::default() };
+        assert!(pdf.sanitizar(sem_anexos).unwrap().iter().all(|r| !r.contains("comentário(s) e")), "por padrão os comentários ficam");
+        let r = pdf.sanitizar(OpcoesLimpeza { comentarios: true, ..sem_anexos }).unwrap();
         assert!(r.iter().any(|r| r.starts_with("1 comentário")), "{r:?}");
         assert_eq!(pdf.lista_anotacoes(id), vec![Object::Reference(link), Object::Reference(video)], "link e vídeo ficam");
     }
@@ -496,5 +509,23 @@ mod testes {
         assert_eq!(pdf.anotacoes().iter().map(|a| a.autor.as_str()).collect::<Vec<_>>(), [""]);
         assert!(pdf.documento.catalog().unwrap().get(b"OpenAction").is_err());
         assert!(pdf.documento.trailer.get(b"Info").is_err());
+    }
+
+    #[test]
+    fn sanitizar_tira_video_e_deixa_o_link() {
+        let mut pdf = pdf_com("BT /F1 12 Tf 72 700 Td (oi) Tj ET");
+        let filme = pdf.documento.add_object(lopdf::Stream::new(Dictionary::new(), b"FILME SECRETO".to_vec()));
+        let video = pdf.documento.add_object(dictionary! { "Type" => "Annot", "Subtype" => "RichMedia",
+            "Rect" => vec![0.into(), 0.into(), 10.into(), 10.into()], "RichMediaContent" => dictionary! { "Assets" => Object::Reference(filme) } });
+        pdf.inserir_link(1, [10.0, 10.0, 50.0, 30.0], crate::Destino::Pagina(1)).unwrap();
+        let id = pdf.id_pagina(1).unwrap();
+        let mut lista = pdf.lista_anotacoes(id);
+        lista.push(Object::Reference(video));
+        pdf.documento.get_dictionary_mut(id).unwrap().set("Annots", lista);
+        let relatorio = pdf.sanitizar(OpcoesLimpeza::default()).unwrap();
+        assert!(relatorio.iter().any(|l| l.contains("vídeo")), "{relatorio:?}");
+        let bytes = pdf.serializar().unwrap();
+        assert!(!bytes.windows(13).any(|w| w == b"FILME SECRETO"), "o vídeo ficou no arquivo");
+        assert_eq!(pdf.lista_anotacoes(id).len(), 1, "o link interno fica");
     }
 }

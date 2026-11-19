@@ -7,7 +7,7 @@
 
 ## Resumo
 
-Total: **649** itens. ✅ feito: **315** · 🟡 parcial: **70** · ❌ falta: **264**.
+Total: **649** itens. ✅ feito: **316** · 🟡 parcial: **70** · ❌ falta: **263**.
 
 Ver a contagem por seção abaixo. Desde 10/11 (decisão do usuário) o FeatherPDF não tem nada que dependa de internet ou de IA: saíram da lista os serviços da Adobe (nuvem, compartilhamento, Acrobat Sign remoto, AI Assistant), as seções Compartilhamento e Inteligência artificial e os itens que pedem rede (PDF de página da internet, enviar formulário, procurar atualizações). O OCR local com o modelo latino embutido continua; os modelos baixados de outras línguas saíram. Contagem refeita a partir das linhas de cada seção.
 
@@ -19,7 +19,7 @@ Ver a contagem por seção abaixo. Desde 10/11 (decisão do usuário) o FeatherP
 | 4. Organização de páginas | 27 | 25 | 1 | 1 |
 | 5. Criação de PDF | 21 | 7 | 4 | 10 |
 | 6. Conversão e exportação | 33 | 19 | 3 | 11 |
-| 7. Compressão e otimização de PDF | 41 | 20 | 1 | 20 |
+| 7. Compressão e otimização de PDF | 41 | 21 | 1 | 19 |
 | 8. OCR e digitalização | 22 | 10 | 3 | 9 |
 | 9. Comentários e anotações | 40 | 21 | 11 | 8 |
 | 10. Formulários PDF | 42 | 26 | 5 | 11 |
@@ -314,7 +314,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Remover metadados. | ✅ feito | limpar_metadados (documento.rs) |
 | Remover dados privados de aplicativos. | ✅ feito | PieceInfo em limpar (otimizar.rs) |
 | Remover conteúdo de camadas ocultas. | ✅ feito | Limpar e sanitizar ▸ Camadas ocultas (core sanitizar.rs) |
-| Remover multimídia. | ❌ falta | não há no código |
+| Remover multimídia. | ✅ feito | Limpar e sanitizar ▸ Anexos tira vídeo, som, 3D e RichMedia (19/11) |
 | Otimizar para visualização rápida na web (*Fast Web View*). | ✅ feito | Converter ▸ Para a web (core linearizar.rs) |
 | Processar vários PDFs em lote. | ✅ feito | Fluxos em lote, modelo “Comprimir vários PDFs” (fluxos.rs) |
 | Analisar o espaço utilizado por cada categoria de objeto. | ✅ feito | peso por imagens, fontes e resto (otimizar.rs peso) |

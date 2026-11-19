@@ -85,7 +85,7 @@ pub fn modelo() -> &'static Catalogo {
                         m("Senha: senha para abrir (AES-256) e permissões de imprimir, copiar e editar. A senha de dono precisa ser diferente da de abrir. Num PDF que já tem senha, a janela mostra a cifra e o que ele não deixa fazer."),
                         m("Assinar: certificado A1 (.pfx/.p12), visível ou não. Validar confere se o arquivo mudou depois de assinado."),
                         m("O verificador não consulta a cadeia ICP-Brasil: identidade não verificada aparece em âmbar. Para valor jurídico, confira em validar.iti.gov.br."),
-                        m("Limpar e sanitizar tira JavaScript, links externos, anexos, metadados (inclusive EXIF de fotos), camadas ocultas e, se marcado, os comentários."),
+                        m("Limpar e sanitizar tira JavaScript, links externos, anexos (inclusive vídeo, som e 3D), metadados (inclusive EXIF de fotos), camadas ocultas e, se marcado, os comentários."),
                         m("Achatar transforma campos e comentários em desenho fixo."),
                     ]),
                     topico("tarja", "Tarja definitiva", vec![
