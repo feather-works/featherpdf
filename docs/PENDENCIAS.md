@@ -154,7 +154,11 @@ Ficou para depois:
   documento não mudou no meio (mesmo documento e mesma `scripts.rodada`); senão é descartada com
   aviso, para não apagar a mudança feita enquanto rodava. Recortar só exclui se a seleção ainda é a
   copiada. Teste: `edicao_fora_da_janela_nao_apaga_o_que_mudou_no_meio`.
-- Cache `objetos` só cresce ao rolar documento enorme: soltar as páginas longe da tela.
+- ✅ Cache `objetos` só cresce ao rolar documento enorme: já resolvido em 969a903 (`soltar_longe` guarda só as
+  páginas perto da tela; com a busca aberta guarda todas, porque os achados apontam para elas).
+- Fica como está (decisão de 19/11): o "salvar antes de fechar" grava na thread da janela. A aba ou a janela
+  fecha logo depois, então a espera é só antes de fechar; levar para outra thread mexeria no fechamento de
+  várias abas, onde um erro perde arquivo.
 - Tarja de texto desenhado sem `Tf` (fonte vinda de `gs` com /Font) não é achada.
 - Link de site abre o navegador num clique (há a opção de desligar); pensar em confirmar o domínio.
 - `instancia.txt` velho depois de travar: apagar ao sair.
