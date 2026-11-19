@@ -1859,6 +1859,7 @@ impl App {
                     return Task::none();
                 }
                 self.lembrar_pagina();
+                instancia::parar();
                 return Task::window(WindowCmd::Close);
             }
             Msg::Teclado(id, key, mods) => return self.tratar_tecla(id, key, mods),
@@ -2169,7 +2170,7 @@ fn main() -> Result<(), Error> {
     }
     // A marca antes da janela: o app_id ("featherpdf") e o ícone saem dela; depois seria o padrão (FeatherSheet).
     marca::definir_marca(marca::Produto::FeatherPDF, false);
-    pelicano::run(
+    let resultado = pelicano::run(
         marca::preparar_janela(Settings {
             title: "FeatherPDF".into(),
             size: Size::new(1280.0, 820.0),
@@ -2179,7 +2180,9 @@ fn main() -> Result<(), Error> {
             ..Default::default()
         }),
         App::novo,
-    )
+    );
+    instancia::parar();
+    resultado
 }
 
 /// O cache de imagens do desenho é comum a todas as abas e chega a 256 MB: ao fechar uma aba ele é esvaziado

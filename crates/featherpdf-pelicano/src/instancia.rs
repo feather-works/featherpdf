@@ -16,6 +16,9 @@ use pelicano::futures::channel::mpsc;
 /// Caminhos que chegaram de outra instância; a assinatura em `App::subscription` tira daqui.
 static RECEBIDOS: Mutex<Option<mpsc::UnboundedReceiver<PathBuf>>> = Mutex::new(None);
 
+/// O que esta instância gravou em `instancia.txt` (para apagar só o dela ao sair).
+static GRAVADO: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
 fn arquivo() -> Option<PathBuf> { crate::recentes::pasta_config().map(|p| p.join("instancia.txt")) }
 
 /// Manda `caminho` para o FeatherPDF que já está aberto. `true`: ele recebeu, esta pode sair.
@@ -44,7 +47,9 @@ pub fn escutar() {
     let Ok(porta) = ouvinte.local_addr().map(|a| a.port()) else { return };
     let senha = senha_aleatoria();
     let _ = destino.parent().map(std::fs::create_dir_all);
-    if featherpdf_io::gravar_atomico(&destino, format!("{porta} {senha}\n").as_bytes()).is_err() { return; }
+    let linha = format!("{porta} {senha}\n");
+    if featherpdf_io::gravar_atomico(&destino, linha.as_bytes()).is_err() { return; }
+    let _ = GRAVADO.set(linha);
     // Só o dono lê a senha: com 0644 outra conta da máquina mandaria abrir arquivos nesta janela.
     #[cfg(unix)]
     { use std::os::unix::fs::PermissionsExt; if std::fs::set_permissions(&destino, std::fs::Permissions::from_mode(0o600)).is_err() { return; } }
@@ -55,6 +60,13 @@ pub fn escutar() {
             if let Some(c) = ler_pedido(conexao, &senha) { let _ = tx.unbounded_send(c); }
         }
     });
+}
+
+/// Ao sair: apaga `instancia.txt` se ainda é o desta instância. Sem isso a senha ficava no disco
+/// apontando para uma porta que outro programa pode ocupar depois.
+pub fn parar() {
+    let (Some(a), Some(nosso)) = (arquivo(), GRAVADO.get()) else { return };
+    if std::fs::read_to_string(&a).is_ok_and(|t| &t == nosso) { let _ = std::fs::remove_file(a); }
 }
 
 /// Senha e caminho, uma linha cada; responde "ok" só com a senha certa.
