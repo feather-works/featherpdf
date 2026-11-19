@@ -7,7 +7,7 @@
 
 ## Resumo
 
-Total: **649** itens. ✅ feito: **312** · 🟡 parcial: **70** · ❌ falta: **267**.
+Total: **649** itens. ✅ feito: **314** · 🟡 parcial: **70** · ❌ falta: **265**.
 
 Ver a contagem por seção abaixo. Desde 10/11 (decisão do usuário) o FeatherPDF não tem nada que dependa de internet ou de IA: saíram da lista os serviços da Adobe (nuvem, compartilhamento, Acrobat Sign remoto, AI Assistant), as seções Compartilhamento e Inteligência artificial e os itens que pedem rede (PDF de página da internet, enviar formulário, procurar atualizações). O OCR local com o modelo latino embutido continua; os modelos baixados de outras línguas saíram. Contagem refeita a partir das linhas de cada seção.
 
@@ -17,8 +17,8 @@ Ver a contagem por seção abaixo. Desde 10/11 (decisão do usuário) o FeatherP
 | 2. Edição de texto | 24 | 11 | 4 | 9 |
 | 3. Edição de imagens | 18 | 12 | 2 | 4 |
 | 4. Organização de páginas | 27 | 25 | 1 | 1 |
-| 5. Criação de PDF | 21 | 6 | 4 | 11 |
-| 6. Conversão e exportação | 33 | 18 | 3 | 12 |
+| 5. Criação de PDF | 21 | 7 | 4 | 10 |
+| 6. Conversão e exportação | 33 | 19 | 3 | 11 |
 | 7. Compressão e otimização de PDF | 41 | 20 | 1 | 20 |
 | 8. OCR e digitalização | 22 | 10 | 3 | 9 |
 | 9. Comentários e anotações | 40 | 20 | 11 | 9 |
@@ -37,7 +37,7 @@ Ver a contagem por seção abaixo. Desde 10/11 (decisão do usuário) o FeatherP
 | 22. Recursos de engenharia, medições e PDF 3D | 28 | 8 | 1 | 19 |
 | 23. Multimídia e documentos interativos | 18 | 0 | 2 | 16 |
 | 24. Preferências e personalização | 15 | 4 | 2 | 9 |
-| **Total** | **649** | **312** | **70** | **267** |
+| **Total** | **649** | **314** | **70** | **265** |
 
 ## Próximos lotes sugeridos
 
@@ -218,7 +218,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Criar PDF a partir de planilhas Excel. | ❌ falta | não há no código |
 | Criar PDF a partir de apresentações PowerPoint. | ❌ falta | não há no código |
 | Criar PDF a partir de imagens. | ✅ feito | Página inicial ▸ Imagens para PDF; arrastar PNG/JPG abre como PDF (juntar.rs) |
-| Criar PDF a partir de arquivos de texto. | ❌ falta | não há no código |
+| Criar PDF a partir de arquivos de texto. | ✅ feito | Abrir um `.txt` (ou arrastar, juntar, fluxos) vira PDF A4 com o texto corrido, 19/11 |
 | Criar PDF a partir de páginas HTML. | ❌ falta | não há no código |
 | Criar PDF a partir da área de transferência. | 🟡 parcial | Novo PDF (Ctrl+N) e Ctrl+V cola a imagem ou o texto; sem comando direto |
 | Criar PDF utilizando scanner. | ❌ falta | não há no código |
@@ -257,7 +257,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | DOCX → PDF. | ❌ falta | não há no código |
 | XLSX → PDF. | ❌ falta | não há no código |
 | PPTX → PDF. | ❌ falta | não há no código |
-| TXT → PDF. | ❌ falta | não há no código |
+| TXT → PDF. | ✅ feito | o mesmo do item da seção 5 (UTF-8 ou Windows-1252) |
 | RTF → PDF. | ❌ falta | não há no código |
 | HTML → PDF. | ❌ falta | não há no código |
 | JPEG → PDF. | ✅ feito | Imagens para PDF; arrastar JPG abre como PDF (juntar.rs) |

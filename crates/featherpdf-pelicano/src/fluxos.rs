@@ -261,9 +261,9 @@ impl Fluxos {
     pub fn arrastando(&self) -> bool { self.arrasto.is_some() }
 }
 
-/// PDF ou imagem (a imagem vira um PDF de uma página).
+/// PDF, imagem ou texto (imagem e texto viram um PDF novo).
 fn serve(p: &Caminho) -> bool {
-    p.is_file() && (p.extension().is_some_and(|x| x.eq_ignore_ascii_case("pdf")) || crate::juntar::e_imagem(p))
+    p.is_file() && (p.extension().is_some_and(|x| x.eq_ignore_ascii_case("pdf")) || crate::juntar::vira_pdf(p))
 }
 
 fn arquivos_da_pasta(pasta: &Caminho) -> Vec<PathBuf> {

@@ -26,8 +26,32 @@ pub enum Jt {
     Pronto(Result<(DocumentoPdf, Visualizador), String>),
 }
 
-pub fn e_imagem(caminho: &Path) -> bool {
-    caminho.extension().and_then(|e| e.to_str()).is_some_and(|e| EXTENSOES_PAGINAS.contains(&e))
+/// Imagem ou texto: abre (e junta) como um PDF novo.
+pub fn vira_pdf(caminho: &Path) -> bool {
+    caminho.extension().and_then(|e| e.to_str()).is_some_and(|e| EXTENSOES_PAGINAS.contains(&e) || e.eq_ignore_ascii_case("txt"))
+}
+
+fn e_texto(caminho: &Path) -> bool {
+    caminho.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("txt"))
+}
+
+/// Teto do `.txt` aberto como PDF: 20 MB já dão milhares de páginas.
+const TETO_TEXTO: u64 = 20 << 20;
+
+/// Um `.txt` vira PDF A4 com o texto corrido. UTF-8; o que não for UTF-8 é lido como Windows-1252
+/// (o Bloco de Notas antigo grava assim).
+fn texto_para_pdf(caminho: &Path) -> Result<DocumentoPdf, String> {
+    let tamanho = std::fs::metadata(caminho).map_err(|e| e.to_string())?.len();
+    if tamanho > TETO_TEXTO { return Err("Arquivo de texto grande demais para virar PDF (mais de 20 MB).".into()); }
+    let bytes = featherpdf_io::ler_bytes(caminho)?;
+    let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF][..]).unwrap_or(&bytes);
+    let texto = match std::str::from_utf8(bytes) {
+        Ok(t) => t.to_string(),
+        Err(_) => bytes.iter().map(|&b| featherpdf_core::de_win_ansi(b).unwrap_or(b as char)).collect(),
+    };
+    let mut pdf = featherpdf_io::criar_a4()?;
+    pdf.escrever_texto_corrido(&texto)?;
+    Ok(pdf)
 }
 
 fn e_tiff(caminho: &Path) -> bool {
@@ -36,7 +60,8 @@ fn e_tiff(caminho: &Path) -> bool {
 
 /// Abre um PDF, ou faz um PDF de uma página com a imagem (bloqueante).
 pub fn documento_de_arquivo(caminho: &Path) -> Result<DocumentoPdf, String> {
-    if !e_imagem(caminho) { return featherpdf_io::abrir(caminho); }
+    if e_texto(caminho) { return texto_para_pdf(caminho); }
+    if !vira_pdf(caminho) { return featherpdf_io::abrir(caminho); }
     let bytes = featherpdf_io::ler_bytes(caminho)?;
     let imagens = if e_tiff(caminho) {
         featherpdf_io::paginas_tiff(&bytes)?.into_iter()
@@ -148,9 +173,25 @@ mod testes {
         drop(t);
         let caminho = std::env::temp_dir().join(format!("featherpdf-scan-{}.TIF", std::process::id()));
         std::fs::write(&caminho, bytes.get_ref()).unwrap();
-        assert!(e_imagem(&caminho));
+        assert!(vira_pdf(&caminho));
         let pdf = documento_de_arquivo(&caminho).unwrap();
         std::fs::remove_file(&caminho).ok();
         assert_eq!(pdf.total_paginas(), 3);
+    }
+
+    #[test]
+    fn txt_vira_pdf_em_utf8_e_windows_1252() {
+        let pasta = std::env::temp_dir();
+        let utf8 = pasta.join(format!("featherpdf-texto-{}.txt", std::process::id()));
+        std::fs::write(&utf8, "\u{FEFF}Relatório de ação\nlinha 2").unwrap();
+        let antigo = pasta.join(format!("featherpdf-texto-{}-1252.TXT", std::process::id()));
+        std::fs::write(&antigo, b"Fun\xe7\xe3o").unwrap();
+        assert!(vira_pdf(&utf8) && vira_pdf(&antigo));
+        let a = documento_de_arquivo(&utf8).unwrap();
+        let b = documento_de_arquivo(&antigo).unwrap();
+        std::fs::remove_file(&utf8).ok();
+        std::fs::remove_file(&antigo).ok();
+        assert!(a.texto_pagina(1).unwrap().contains("Relatório de ação"));
+        assert!(b.texto_pagina(1).unwrap().contains("Função"));
     }
 }

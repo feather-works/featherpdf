@@ -49,7 +49,7 @@ pub(crate) fn win_ansi(c: char) -> Option<u8> {
     }
 }
 
-pub(crate) fn de_win_ansi(b: u8) -> Option<char> {
+pub fn de_win_ansi(b: u8) -> Option<char> {
     match b {
         0x20..=0x7E | 0xA0..=0xFF => Some(b as char),
         _ => WIN_ANSI.iter().find(|(_, k)| *k == b).map(|(c, _)| *c),
@@ -144,6 +144,67 @@ impl DocumentoPdf {
         let conteudo = format!("q {} BT /{nome} {tamanho:.2} Tf {} rg 0 {:.3} Td {} Tj ET Q",
             cm([m[0], m[1], m[2], m[3], x, y]), cor(c), -0.75 * tamanho, format!("<{hexa}>"));
         self.acrescentar(pagina, conteudo, &[("Font", nome, f)])
+    }
+
+    /// Texto corrido (um `.txt`) a partir da página 1, que deve estar em branco: Helvetica 11,
+    /// margem de 2 cm, quebra por palavra (palavra maior que a linha é partida), páginas novas do
+    /// tamanho da primeira; tabulação vira 4 espaços e o form feed (`\x0c`) começa outra página.
+    /// Uma fonte só para o documento todo. Devolve quantas letras fora do WinAnsi viraram "?".
+    pub fn escrever_texto_corrido(&mut self, texto: &str) -> Result<usize, String> {
+        const TAMANHO: f32 = 11.0;
+        const ENTRELINHA: f32 = 14.5;
+        const MARGEM: f32 = 56.7;
+        let texto = texto.replace("\r\n", "\n").replace('\r', "\n").replace('\t', "    ");
+        if texto.trim().is_empty() { return Err("O arquivo de texto está vazio.".into()); }
+        let (caixa, giro) = self.geometria(1)?;
+        // shortcut: só página em pé (o A4 novo); página girada pediria trocar x e y.
+        if giro != 0 { return Err("O texto corrido vai numa página sem giro.".into()); }
+        let (largura, altura) = (caixa[2] - caixa[0], caixa[3] - caixa[1]);
+        let util = largura - 2.0 * MARGEM;
+        let por_pagina = (((altura - 2.0 * MARGEM) / ENTRELINHA).floor() as usize).max(1);
+        let cabe = |t: &str| largura_texto(t, FontePdf::Helvetica, TAMANHO) <= util;
+        // Páginas de linhas: `None` numa página marca o form feed.
+        let mut paginas: Vec<Vec<String>> = vec![Vec::new()];
+        let mut por = |linha: String, paginas: &mut Vec<Vec<String>>| {
+            if paginas.last().is_some_and(|p| p.len() >= por_pagina) { paginas.push(Vec::new()); }
+            paginas.last_mut().expect("sempre há uma").push(linha);
+        };
+        for (k, bloco) in texto.split('\x0c').enumerate() {
+            if k > 0 { paginas.push(Vec::new()); }
+            for paragrafo in bloco.split('\n') {
+                let mut linha = String::new();
+                for palavra in paragrafo.split(' ') {
+                    let tentativa = if linha.is_empty() { palavra.to_string() } else { format!("{linha} {palavra}") };
+                    if cabe(&tentativa) { linha = tentativa; continue; }
+                    if !linha.is_empty() { por(std::mem::take(&mut linha), &mut paginas); }
+                    // Palavra sozinha maior que a linha: parte letra a letra.
+                    for c in palavra.chars() {
+                        linha.push(c);
+                        if !cabe(&linha) { let ultima = linha.pop().expect("acabou de entrar"); por(std::mem::take(&mut linha), &mut paginas); linha.push(ultima); }
+                    }
+                }
+                por(linha, &mut paginas);
+            }
+        }
+        let f = self.fonte_com_larguras(false);
+        let nome = format!("FPt{}", f.0);
+        let mut faltas = 0;
+        for (i, linhas) in paginas.iter().enumerate() {
+            let n = i as u32 + 1;
+            if n > 1 { self.inserir_em_branco(n)?; }
+            let mut conteudo = String::new();
+            for (j, linha) in linhas.iter().enumerate() {
+                let linha = linha.trim_end();
+                if linha.is_empty() { continue; }
+                let hexa: String = linha.chars().map(|c| win_ansi(c).unwrap_or_else(|| { faltas += 1; b'?' })).map(|b| format!("{b:02X}")).collect();
+                // y do PDF conta do pé da página: a primeira linha fica no alto.
+                let (x, y) = (caixa[0] + MARGEM, caixa[3] - MARGEM - j as f32 * ENTRELINHA);
+                let (m, _, _) = em_pe([x, y, x, y], giro);
+                conteudo.push_str(&format!("q {} BT /{nome} {TAMANHO:.2} Tf 0 g 0 {:.3} Td <{hexa}> Tj ET Q\n", cm([m[0], m[1], m[2], m[3], x, y]), -0.75 * TAMANHO));
+            }
+            if !conteudo.is_empty() { self.acrescentar(n, conteudo, &[("Font", nome.clone(), f)])?; }
+        }
+        Ok(faltas)
     }
 
     /// Helvetica com as larguras: sem elas a caixa da linha (e a seleção) sairia errada.
@@ -468,6 +529,21 @@ mod testes {
         pdf.inserir_link(1, [200.0, 50.0, 300.0, 100.0], Destino::Endereco("fulano@site.com".into())).unwrap();
         let enderecos: Vec<String> = pdf.links(1).into_iter().filter_map(|(_, d)| match d { Destino::Endereco(u) => Some(u), _ => None }).collect();
         assert!(enderecos.contains(&"mailto:fulano@site.com".to_string()) && enderecos.contains(&"https://gov.br".to_string()), "{enderecos:?}");
+    }
+
+    #[test]
+    fn texto_corrido_quebra_linhas_e_paginas() {
+        let mut pdf = pdf_teste();
+        let longo = "palavra ".repeat(40);
+        let texto = format!("Título\n{longo}\nação ✓\x0cSegunda página");
+        let faltas = pdf.escrever_texto_corrido(&texto).unwrap();
+        assert_eq!(faltas, 1, "o ✓ não está no WinAnsi");
+        assert_eq!(pdf.total_paginas(), 2, "o form feed abre outra página");
+        let linhas: Vec<String> = pdf.objetos(1).unwrap().into_iter().filter_map(|o| match o.tipo { crate::TipoObjeto::Texto { texto, .. } => Some(texto), _ => None }).collect();
+        assert!(linhas.len() >= 4, "a linha comprida quebra: {linhas:?}");
+        assert!(linhas.iter().any(|l| l.contains("ação")));
+        assert!(pdf.texto_pagina(1).unwrap().trim_start().starts_with("Título"), "a primeira linha no alto: {}", pdf.texto_pagina(1).unwrap());
+        assert!(pdf.escrever_texto_corrido("  \n ").is_err());
     }
 
     #[test]

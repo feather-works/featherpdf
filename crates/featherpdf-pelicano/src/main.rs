@@ -1197,11 +1197,11 @@ impl App {
             tokio::task::spawn_blocking(move || {
                 // As etapas vão ao Console do F12, como o "[abrir]" do FeatherSheet.
                 let inicio = Instant::now();
-                // Uma imagem PNG/JPG abre como PDF novo de uma página (TIFF: uma por página do arquivo).
-                let pdf = if juntar::e_imagem(&caminho) { juntar::documento_de_arquivo(&caminho)? }
+                // Uma imagem PNG/JPG abre como PDF novo de uma página (TIFF: uma por página do arquivo); um .txt, como texto corrido.
+                let pdf = if juntar::vira_pdf(&caminho) { juntar::documento_de_arquivo(&caminho)? }
                     else { featherpdf_io::abrir_com_senha(&caminho, senha.as_deref())? };
                 let ler = inicio.elapsed();
-                let mapeado = (!juntar::e_imagem(&caminho)).then(|| Visualizador::do_arquivo(&caminho, pdf.total_paginas())).flatten();
+                let mapeado = (!juntar::vira_pdf(&caminho)).then(|| Visualizador::do_arquivo(&caminho, pdf.total_paginas())).flatten();
                 let vis = match mapeado { Some(v) => v, None => Visualizador::novo(pdf.serializar()?)? };
                 let serializar = inicio.elapsed() - ler;
                 monitor::anotar(format!("[abrir] {} páginas em {} · ler a estrutura {} · serializar {} · preparar o desenho {}",
@@ -1444,7 +1444,7 @@ impl App {
             Msg::Abrir => {
                 self.menu = false;
                 return Task::perform(async {
-                    rfd::AsyncFileDialog::new().add_filter("PDF", &["pdf", "PDF"]).add_filter("Imagem (vira PDF)", &juntar::EXTENSOES_PAGINAS).add_filter("Todos os arquivos", &["*"]).pick_files().await
+                    rfd::AsyncFileDialog::new().add_filter("PDF", &["pdf", "PDF"]).add_filter("Imagem (vira PDF)", &juntar::EXTENSOES_PAGINAS).add_filter("Texto (vira PDF)", &["txt", "TXT"]).add_filter("Todos os arquivos", &["*"]).pick_files().await
                         .map(|hs| hs.iter().map(|h| h.path().to_path_buf()).collect())
                 }, Msg::CaminhoEscolhido);
             }
@@ -1573,7 +1573,7 @@ impl App {
             Msg::FecharGuia(i) => return self.fechar_aba(i),
             Msg::ProximaGuia => return self.ir_para_aba((self.ativa + 1) % self.guias.len()),
             Msg::Soltou(caminho) => {
-                let pdf = caminho.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")) || juntar::e_imagem(&caminho);
+                let pdf = caminho.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")) || juntar::vira_pdf(&caminho);
                 if self.aba == Aba::Paginas && self.aberto.is_some() && pdf {
                     let depois = self.alvo().last().copied().unwrap_or(self.total_paginas());
                     return self.juntar(vec![caminho], depois + 1);
@@ -2679,8 +2679,11 @@ mod testes {
         let mut app = match std::env::var_os("FEATHERPDF_CAPTURA_PDF").map(PathBuf::from) {
             Some(caminho) => {
                 let (mut app, _) = App::novo();
-                let pdf = featherpdf_io::abrir_com_senha(&caminho, None).unwrap();
-                let vis = Visualizador::do_arquivo(&caminho, pdf.total_paginas()).unwrap_or_else(|| Visualizador::novo(pdf.serializar().unwrap()).unwrap());
+                // Imagem e .txt viram PDF como no app (`juntar::documento_de_arquivo`).
+                let convertido = juntar::vira_pdf(&caminho);
+                let pdf = if convertido { juntar::documento_de_arquivo(&caminho).unwrap() } else { featherpdf_io::abrir_com_senha(&caminho, None).unwrap() };
+                let mapeado = (!convertido).then(|| Visualizador::do_arquivo(&caminho, pdf.total_paginas())).flatten();
+                let vis = mapeado.unwrap_or_else(|| Visualizador::novo(pdf.serializar().unwrap()).unwrap());
                 let _ = app.update(Msg::Aberto(Ok((pdf, vis))));
                 app
             }

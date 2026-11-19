@@ -1,5 +1,14 @@
 # Pendências do FeatherPDF
 
+## Texto (.txt) vira PDF (19/11/2026)
+
+Abrir, arrastar, juntar ou pôr num fluxo um `.txt` faz um PDF A4 com o texto corrido (`juntar::vira_pdf`, que
+substituiu o `e_imagem`; `DocumentoPdf::escrever_texto_corrido`): Helvetica 11, margem de 2 cm, quebra por palavra,
+form feed abre página, tabulação = 4 espaços, uma fonte só no documento. UTF-8 (com ou sem BOM); senão Windows-1252.
+Letra fora do WinAnsi vira "?" (shortcut: sem fonte Unicode embutida, como o `inserir_texto`). Teto de 20 MB. Testes:
+`texto_corrido_quebra_linhas_e_paginas` (core) e `txt_vira_pdf_em_utf8_e_windows_1252` (app). Foto conferida
+(`FEATHERPDF_CAPTURA_PDF=arquivo.txt` agora passa pelo mesmo caminho do app); a primeira versão saía de baixo para cima.
+
 ## Rolagem automática (19/11/2026)
 
 Exibir ▸ Rolagem automática ou Ctrl+Shift+H (`Msg::RolagemAuto`): desce a 60 px/s (10 a 800), ↓/↑ mudam 20 px/s,

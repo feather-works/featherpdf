@@ -67,7 +67,7 @@ pub use navegacao::{Anexo, LinkPdf, Marcador, MoverMarcador};
 pub use anotacoes::{cor_do_carimbo, hoje, Anotacao, AnotacaoNova, Camada, Marcacao};
 pub use formularios::{obrigatorios_vazios_de, Campo, CampoNovo, TipoCampo};
 pub use fluxo::{BlocoFluxo, CelulaFluxo, PaginaFluxo};
-pub use inserir::{DesenhoNovo, Destino, ImagemNova};
+pub use inserir::{de_win_ansi, DesenhoNovo, Destino, ImagemNova};
 pub use inspecao::{tamanho, Cor, DetalheObjeto, FonteInfo, Gravidade, ImagemInfo, Inspecao, LinhaArvore, NoEstrutura, Pedaco, Problema, Resumo};
 pub use medida::{comprimento, medir, numero, Escala, TipoMedida, Unidade};
 pub use objetos::{achar, achar_sem_caixa, EstiloDesenho, ObjetoPdf, OpcoesBusca, TipoObjeto};

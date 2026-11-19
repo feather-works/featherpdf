@@ -17,6 +17,7 @@ Todas as versões e os `SHA256SUMS` ficam na [página de releases](https://githu
 
 ### Na próxima versão
 
+- **Texto vira PDF:** abra ou arraste um `.txt` e ele vira um PDF A4 com o texto corrido (também ao juntar arquivos e nos fluxos).
 - **Rolagem automática** (Exibir ou Ctrl+Shift+H): o documento desce sozinho para ler sem tocar no mouse; ↓ acelera, ↑ desacelera, Esc para.
 - **Janela sem travar em PDF grande:** buscar (Ctrl+F), tarjar, proteger com senha, anexar arquivo, copiar e recortar páginas e levar ao FeatherDocs rodam em segundo plano; se você mexer no documento enquanto isso, nada do que fez se perde.
 
