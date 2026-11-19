@@ -8,6 +8,8 @@ form feed abre página, tabulação = 4 espaços, uma fonte só no documento. UT
 Letra fora do WinAnsi vira "?" (shortcut: sem fonte Unicode embutida, como o `inserir_texto`). Teto de 20 MB. Testes:
 `texto_corrido_quebra_linhas_e_paginas` (core) e `txt_vira_pdf_em_utf8_e_windows_1252` (app). Foto conferida
 (`FEATHERPDF_CAPTURA_PDF=arquivo.txt` agora passa pelo mesmo caminho do app); a primeira versão saía de baixo para cima.
+O documento convertido (texto ou imagem) leva o nome do arquivo de origem (`DocumentoPdf::nome_sugerido`): a aba
+mostra "relatorio.pdf" e o "Salvar como" já sugere esse nome, em vez de "Documento sem título.pdf".
 
 ## Rolagem automática (19/11/2026)
 

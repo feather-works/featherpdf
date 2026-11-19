@@ -102,6 +102,8 @@ pub struct DocumentoPdf {
     documento: Document,
     origem: Option<PathBuf>,
     modificado: bool,
+    /// Nome para o documento ainda sem arquivo (o `.txt` ou a imagem de onde veio): aba e "Salvar como".
+    nome_sugerido: Option<String>,
 }
 
 impl DocumentoPdf {
@@ -129,10 +131,14 @@ impl DocumentoPdf {
         let modificado = origem.is_none();
         let mut documento = documento;
         normalizar_cmaps(&mut documento);
-        Ok(Self { documento, origem, modificado })
+        Ok(Self { documento, origem, modificado, nome_sugerido: None })
     }
 
     pub fn origem(&self) -> Option<&Path> { self.origem.as_deref() }
+
+    /// Nome do documento sem arquivo (vale até ele ser salvo; com arquivo, manda o do arquivo).
+    pub fn nome_sugerido(&self) -> Option<&str> { self.nome_sugerido.as_deref() }
+    pub fn sugerir_nome(&mut self, nome: impl Into<String>) { self.nome_sugerido = Some(nome.into()); }
 
     /// Veio com senha ou restrições (e elas voltam ao salvar).
     pub fn tem_senha(&self) -> bool { self.documento.encryption_state.is_some() }

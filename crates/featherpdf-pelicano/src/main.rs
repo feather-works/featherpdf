@@ -518,7 +518,9 @@ fn novo_id() -> u64 {
 }
 
 fn nome_do(pdf: &DocumentoPdf) -> String {
-    pdf.origem().and_then(|p| p.file_name()).map_or("Documento sem título.pdf".into(), |n| n.to_string_lossy().into_owned())
+    pdf.origem().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned())
+        .or_else(|| pdf.nome_sugerido().map(str::to_owned))
+        .unwrap_or_else(|| "Documento sem título.pdf".into())
 }
 
 impl App {

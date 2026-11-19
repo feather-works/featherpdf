@@ -60,8 +60,16 @@ fn e_tiff(caminho: &Path) -> bool {
 
 /// Abre um PDF, ou faz um PDF de uma página com a imagem (bloqueante).
 pub fn documento_de_arquivo(caminho: &Path) -> Result<DocumentoPdf, String> {
-    if e_texto(caminho) { return texto_para_pdf(caminho); }
     if !vira_pdf(caminho) { return featherpdf_io::abrir(caminho); }
+    let mut pdf = convertido(caminho)?;
+    // relatorio.txt vira "relatorio.pdf" na aba e no "Salvar como".
+    if let Some(base) = caminho.file_stem() { pdf.sugerir_nome(format!("{}.pdf", base.to_string_lossy())); }
+    Ok(pdf)
+}
+
+/// Imagem ou texto → PDF novo (bloqueante).
+fn convertido(caminho: &Path) -> Result<DocumentoPdf, String> {
+    if e_texto(caminho) { return texto_para_pdf(caminho); }
     let bytes = featherpdf_io::ler_bytes(caminho)?;
     let imagens = if e_tiff(caminho) {
         featherpdf_io::paginas_tiff(&bytes)?.into_iter()
@@ -192,6 +200,7 @@ mod testes {
         std::fs::remove_file(&utf8).ok();
         std::fs::remove_file(&antigo).ok();
         assert!(a.texto_pagina(1).unwrap().contains("Relatório de ação"));
+        assert_eq!(a.nome_sugerido(), Some(format!("featherpdf-texto-{}.pdf", std::process::id()).as_str()));
         assert!(b.texto_pagina(1).unwrap().contains("Função"));
     }
 }
