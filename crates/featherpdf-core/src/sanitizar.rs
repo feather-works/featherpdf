@@ -90,25 +90,36 @@ impl DocumentoPdf {
         Ok(n)
     }
 
+    /// Info e XMP do documento, o XMP de páginas, imagens e fontes e o EXIF/IPTC das fotos JPEG (GPS, câmera).
+    /// Devolve se o documento tinha metadados e quantos objetos perderam os seus.
+    pub(crate) fn tirar_metadados(&mut self) -> (bool, usize) {
+        let info = self.documento.trailer.remove(b"Info").is_some();
+        let xmp = self.documento.catalog_mut().map(|c| c.remove(b"Metadata").is_some()).unwrap_or(false);
+        let mut n = 0;
+        for o in self.documento.objects.values_mut() {
+            let st = match o {
+                Object::Dictionary(d) => { if d.remove(b"Metadata").is_some() { n += 1; } continue }
+                Object::Stream(st) => st,
+                _ => continue,
+            };
+            if st.dict.remove(b"Metadata").is_some() { n += 1; }
+            let dct = match st.dict.get(b"Filter") {
+                Ok(Object::Name(f)) => f == b"DCTDecode",
+                Ok(Object::Array(v)) => v.len() == 1 && v[0].as_name().is_ok_and(|f| f == b"DCTDecode"),
+                _ => false,
+            };
+            if let Some(limpo) = dct.then(|| sem_exif(&st.content)).flatten() { st.set_content(limpo); n += 1; }
+        }
+        self.modificado = true;
+        (info || xmp, n)
+    }
+
     pub fn sanitizar(&mut self, op: OpcoesLimpeza) -> Result<Vec<String>, String> {
         let mut relatorio = Vec::new();
         let ids = self.achatar()?;
         if op.metadados {
-            let info = self.documento.trailer.remove(b"Info").is_some();
-            let xmp = self.documento.catalog_mut().map(|c| c.remove(b"Metadata").is_some()).unwrap_or(false);
-            if info || xmp { relatorio.push("Metadados do documento (autor, título, programa, datas).".into()); }
-            // Imagens e fontes trazem o próprio XMP; a foto JPEG traz EXIF (GPS, câmera) e IPTC.
-            let mut n = 0;
-            for o in self.documento.objects.values_mut() {
-                let Object::Stream(st) = o else { continue };
-                if st.dict.remove(b"Metadata").is_some() { n += 1; }
-                let dct = match st.dict.get(b"Filter") {
-                    Ok(Object::Name(f)) => f == b"DCTDecode",
-                    Ok(Object::Array(v)) => v.len() == 1 && v[0].as_name().is_ok_and(|f| f == b"DCTDecode"),
-                    _ => false,
-                };
-                if let Some(limpo) = dct.then(|| sem_exif(&st.content)).flatten() { st.set_content(limpo); n += 1; }
-            }
+            let (documento, n) = self.tirar_metadados();
+            if documento { relatorio.push("Metadados do documento (autor, título, programa, datas).".into()); }
             if n > 0 { relatorio.push(format!("Metadados de {n} imagem(ns) ou fonte(s) (EXIF, XMP).")); }
         }
         if op.historico {

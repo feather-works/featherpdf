@@ -438,10 +438,10 @@ impl DocumentoPdf {
         if !saem.is_empty() { self.tirar_campos(&saem); }
     }
 
-    /// Tira título, autor, programa e datas (Info e XMP) e os anexos.
+    /// Tira título, autor, programa e datas (Info e XMP, também das imagens e páginas), o EXIF das fotos e os anexos.
     pub fn limpar_metadados(&mut self) {
-        self.documento.trailer.remove(b"Info");
-        if let Ok(c) = self.documento.catalog_mut() { c.remove(b"Metadata"); }
+        // O mesmo do Limpar e sanitizar: sem isso o XMP e o EXIF das fotos (autor, GPS) ficavam no PDF tarjado.
+        self.tirar_metadados();
         tirar_anexos(&mut self.documento);
         self.modificado = true;
     }
@@ -603,6 +603,24 @@ mod testes {
         pdf.tarjar(&[(1, [60.0, 690.0, 200.0, 720.0])], "", &|_, _| None).unwrap();
         assert!(!pdf.documento.objects.values().any(tem), "o segredo ficou no arquivo");
         assert!(pdf.lista_anotacoes(id).is_empty());
+    }
+
+    #[test]
+    fn limpar_metadados_tira_tambem_o_xmp_das_imagens_e_paginas() {
+        let mut pdf = pdf_com("BT /F1 12 Tf 72 700 Td (oi) Tj ET");
+        let xmp = pdf.documento.add_object(Stream::new(dictionary! { "Type" => "Metadata", "Subtype" => "XML" }, b"<dc:creator>Ana</dc:creator>".to_vec()));
+        let id = pdf.id_pagina(1).unwrap();
+        pdf.documento.get_dictionary_mut(id).unwrap().set("Metadata", xmp);
+        for o in pdf.documento.objects.values_mut() {
+            if let Object::Stream(st) = o { if st.dict.get(b"Subtype").is_ok_and(|s| s.as_name().is_ok_and(|n| n == b"Image")) { st.dict.set("Metadata", xmp); } }
+        }
+        pdf.limpar_metadados();
+        let sobrou = pdf.documento.objects.values().any(|o| match o {
+            Object::Dictionary(d) => d.has(b"Metadata"),
+            Object::Stream(st) => st.dict.has(b"Metadata"),
+            _ => false,
+        });
+        assert!(!sobrou, "XMP de página ou imagem ficou");
     }
 
     #[test]
