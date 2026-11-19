@@ -41,6 +41,9 @@ pub enum Rv {
     Opacidade(u32, usize, f32),
     Exportar,
     ExportarPara(Option<PathBuf>),
+    /// Resumo dos comentários num PDF novo, para imprimir ou mandar (Acrobat: "Imprimir resumo").
+    Resumo,
+    ResumoPara(Option<PathBuf>),
     ParaSheet,
 }
 
@@ -54,6 +57,28 @@ fn autor() -> String {
 fn combina(lista: &[Anotacao], a: &Anotacao, filtro: &str) -> bool {
     let tem = |x: &Anotacao| [x.tipo, &x.autor, &x.texto].iter().any(|t| t.to_lowercase().contains(filtro));
     filtro.is_empty() || tem(a) || lista.iter().any(|r| r.pagina == a.pagina && r.responde_a == Some(a.indice) && tem(r))
+}
+
+fn nome_do_doc(n: &Option<String>) -> String { n.clone().unwrap_or_else(|| "documento.pdf".into()) }
+
+/// O texto do resumo: cada comentário com página, tipo, autor, data, estado e respostas.
+pub fn resumo(nome: &str, lista: &[Anotacao]) -> String {
+    let mut t = format!("Resumo dos comentários\n{nome}\n\n");
+    let principais: Vec<&Anotacao> = lista.iter().filter(|a| a.responde_a.is_none()).collect();
+    if principais.is_empty() { t.push_str("O documento não tem comentários.\n"); return t; }
+    for a in &principais {
+        let mut cab = format!("Página {} · {}", a.pagina, a.tipo);
+        for x in [a.autor.as_str(), a.data.as_str()] { if !x.is_empty() { cab.push_str(" · "); cab.push_str(x); } }
+        if let Some(e) = estado_atual(lista, a) { cab.push_str(&format!(" · {}", nome_estado(e))); }
+        t.push_str(&cab); t.push('\n');
+        if !a.texto.is_empty() { t.push_str(&format!("    {}\n", a.texto.replace('\n', "\n    "))); }
+        for r in lista.iter().filter(|x| x.pagina == a.pagina && x.responde_a == Some(a.indice) && x.estado.is_none()) {
+            let quem = if r.autor.is_empty() { "Resposta".to_string() } else { r.autor.clone() };
+            t.push_str(&format!("    ↳ {quem}: {}\n", r.texto.replace('\n', " ")));
+        }
+        t.push('\n');
+    }
+    t
 }
 
 impl App {
@@ -96,6 +121,31 @@ impl App {
                     Err(e) => self.status = format!("Não consegui gravar a lista: {e}"),
                 }
             }
+            Rv::Resumo => {
+                let nome = self.nome_documento().unwrap_or_else(|| "documento.pdf".into());
+                let sugestao = format!("{} - resumo dos comentários.pdf", nome.strip_suffix(".pdf").unwrap_or(&nome));
+                return Task::perform(async move {
+                    rfd::AsyncFileDialog::new().add_filter("PDF", &["pdf"]).set_file_name(sugestao).save_file().await.map(|h| h.path().to_path_buf())
+                }, |d| Msg::Rev(Rv::ResumoPara(d)));
+            }
+            Rv::ResumoPara(None) => {}
+            Rv::ResumoPara(Some(destino)) => {
+                let Some(a) = self.aberto.as_ref() else { return Task::none() };
+                let texto = resumo(&nome_do_doc(&self.nome_documento()), &a.pdf.anotacoes());
+                // Destino igual ao arquivo aberto apagaria o documento: recusa.
+                if a.pdf.origem().is_some_and(|o| o == destino) {
+                    self.status = "Escolha outro nome: o resumo não pode ficar por cima do documento aberto.".into();
+                    return Task::none();
+                }
+                let feito = featherpdf_io::criar_a4().and_then(|mut pdf| {
+                    pdf.escrever_texto_corrido(&texto)?;
+                    pdf.serializar()
+                }).and_then(|b| featherpdf_io::gravar_atomico(&destino, &b));
+                match feito {
+                    Ok(()) => self.avisar_salvo(format!("Resumo dos comentários salvo em {}", destino.display()), destino),
+                    Err(e) => self.status = format!("Não consegui gravar o resumo: {e}"),
+                }
+            }
             Rv::ParaSheet => {
                 let csv = self.aberto.as_ref().map(|a| comentarios_csv(&a.pdf.anotacoes())).unwrap_or_default();
                 let destino = crate::recentes::pasta_temporaria().map(|p| p.join("comentarios.csv"));
@@ -132,6 +182,8 @@ impl App {
                 Space::with_width(Length::FILL),
                 button(text("CSV…").size(12)).padding([3, 8]).style(tema::estilo_botao_pequeno(false))
                     .on_press_maybe((!lista.is_empty()).then_some(Msg::Rev(Rv::Exportar))),
+                button(text("Resumo PDF…").size(12)).padding([3, 8]).style(tema::estilo_botao_pequeno(false))
+                    .on_press_maybe((!lista.is_empty()).then_some(Msg::Rev(Rv::Resumo))),
                 button(text("Para o FeatherSheet").size(12)).padding([3, 8]).style(tema::estilo_botao_pequeno(false))
                     .on_press_maybe((!lista.is_empty()).then_some(Msg::Rev(Rv::ParaSheet))),
             ].spacing(4).align_y(Align::Center),
@@ -210,5 +262,23 @@ impl App {
             col = col.push(text("Nenhum comentário com esse filtro.").size(13).color(muted));
         }
         column![topo, scrollable(col).height(Length::FILL)].spacing(10).into()
+    }
+}
+
+#[cfg(test)]
+mod testes_resumo {
+    use super::*;
+
+    #[test]
+    fn resumo_lista_comentario_com_resposta_e_vira_pdf() {
+        let c = |indice, texto: &str, autor: &str, responde_a| Anotacao { pagina: 2, indice, tipo: "Nota", texto: texto.into(), autor: autor.into(),
+            caixa: [0.0; 4], responde_a, data: String::new(), estado: None, opacidade: 1.0 };
+        let lista = vec![c(0, "Conferir o valor", "Ana", None), c(1, "Conferido", "Bia", Some(0))];
+        let t = resumo("contrato.pdf", &lista);
+        assert!(t.contains("Página 2 · Nota · Ana") && t.contains("Conferir o valor") && t.contains("↳ Bia: Conferido"), "{t}");
+        assert!(resumo("x.pdf", &[]).contains("não tem comentários"));
+        let mut pdf = featherpdf_io::criar_a4().unwrap();
+        pdf.escrever_texto_corrido(&t).unwrap();
+        assert!(pdf.texto_pagina(1).unwrap().contains("Conferir o valor"));
     }
 }

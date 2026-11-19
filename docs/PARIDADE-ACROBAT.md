@@ -7,7 +7,7 @@
 
 ## Resumo
 
-Total: **649** itens. ✅ feito: **314** · 🟡 parcial: **70** · ❌ falta: **265**.
+Total: **649** itens. ✅ feito: **315** · 🟡 parcial: **70** · ❌ falta: **264**.
 
 Ver a contagem por seção abaixo. Desde 10/11 (decisão do usuário) o FeatherPDF não tem nada que dependa de internet ou de IA: saíram da lista os serviços da Adobe (nuvem, compartilhamento, Acrobat Sign remoto, AI Assistant), as seções Compartilhamento e Inteligência artificial e os itens que pedem rede (PDF de página da internet, enviar formulário, procurar atualizações). O OCR local com o modelo latino embutido continua; os modelos baixados de outras línguas saíram. Contagem refeita a partir das linhas de cada seção.
 
@@ -21,7 +21,7 @@ Ver a contagem por seção abaixo. Desde 10/11 (decisão do usuário) o FeatherP
 | 6. Conversão e exportação | 33 | 19 | 3 | 11 |
 | 7. Compressão e otimização de PDF | 41 | 20 | 1 | 20 |
 | 8. OCR e digitalização | 22 | 10 | 3 | 9 |
-| 9. Comentários e anotações | 40 | 20 | 11 | 9 |
+| 9. Comentários e anotações | 40 | 21 | 11 | 8 |
 | 10. Formulários PDF | 42 | 26 | 5 | 11 |
 | 11. Assinaturas eletrônicas e digitais | 25 | 14 | 5 | 6 |
 | 12. Segurança e proteção de documentos | 33 | 19 | 5 | 9 |
@@ -37,7 +37,7 @@ Ver a contagem por seção abaixo. Desde 10/11 (decisão do usuário) o FeatherP
 | 22. Recursos de engenharia, medições e PDF 3D | 28 | 8 | 1 | 19 |
 | 23. Multimídia e documentos interativos | 18 | 0 | 2 | 16 |
 | 24. Preferências e personalização | 15 | 4 | 2 | 9 |
-| **Total** | **649** | **314** | **70** | **265** |
+| **Total** | **649** | **315** | **70** | **264** |
 
 ## Próximos lotes sugeridos
 
@@ -393,7 +393,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Marcar comentários como não lidos. | ❌ falta | não há no código |
 | Reagir a comentários. | ❌ falta | não há no código |
 | Exportar informações de revisão. | ✅ feito | painel Comentários ▸ CSV ou Para o FeatherSheet (revisao.rs) |
-| Imprimir resumo dos comentários. | ❌ falta | não há no código |
+| Imprimir resumo dos comentários. | ✅ feito | painel Comentários ▸ Resumo PDF… (`revisao::resumo`, 19/11) |
 
 
 ## 10. Formulários PDF
