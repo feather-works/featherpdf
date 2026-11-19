@@ -115,21 +115,16 @@ impl App {
             Nv::Anexado(_, None) => {}
             Nv::Anexado(doc, Some(_)) if Some(doc) != self.id_aberto() => self.status = "O documento mudou: nada foi anexado.".into(),
             Nv::Anexado(_, Some(caminho)) => {
-                // Teto: o anexo vai inteiro para a memória e para o arquivo salvo.
-                const TETO: u64 = 256 << 20;
-                match std::fs::metadata(&caminho) {
-                    Ok(m) if m.len() > TETO => self.status = "Arquivo grande demais para anexar (mais de 256 MB).".into(),
-                    Err(e) => self.status = format!("Não consegui ler o arquivo: {e}"),
-                    Ok(_) => match std::fs::read(&caminho) {
-                        Err(e) => self.status = format!("Não consegui ler o arquivo: {e}"),
-                        Ok(bytes) => {
-                            let nome = caminho.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "anexo".into());
-                            let tarefa = self.editar(move |pdf| pdf.anexar(&nome, bytes).map(|n| format!("\"{n}\" anexado ao PDF. Ctrl+Z desfaz.")));
-                            self.ler_navegacao();
-                            return tarefa;
-                        }
-                    },
-                }
+                // Lê e comprime fora da janela (até 256 MB).
+                return self.editar_fora("Anexando…", move |pdf| {
+                    // Teto: o anexo vai inteiro para a memória e para o arquivo salvo.
+                    const TETO: u64 = 256 << 20;
+                    let m = std::fs::metadata(&caminho).map_err(|e| format!("Não consegui ler o arquivo: {e}"))?;
+                    if m.len() > TETO { return Err("Arquivo grande demais para anexar (mais de 256 MB).".into()); }
+                    let bytes = std::fs::read(&caminho).map_err(|e| format!("Não consegui ler o arquivo: {e}"))?;
+                    let nome = caminho.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "anexo".into());
+                    pdf.anexar(&nome, bytes).map(|n| format!("\"{n}\" anexado ao PDF. Ctrl+Z desfaz."))
+                });
             }
             Nv::RemoverAnexo(i) => {
                 let tarefa = self.editar(move |pdf| pdf.remover_anexo(i).map(|()| "Anexo tirado do PDF. Ctrl+Z desfaz.".to_string()));

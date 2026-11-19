@@ -2,7 +2,7 @@
 //! (CPF, CNPJ, e-mail, telefone, CEP) e aplicar numa cópia "— tarjado.pdf".
 
 use feather_ui::{icones as ic, tema};
-use featherpdf_core::Padrao;
+use featherpdf_core::{Achado, Padrao};
 
 use pelicano::*;
 use pelicano::column;
@@ -33,6 +33,9 @@ pub enum Tj {
     Rotulo(String),
     Metadados(bool),
     Aplicar,
+    /// Resposta da busca feita fora da janela: (aba, rodada de edição) de quando começou.
+    Achados((usize, u64), Vec<Achado>),
+    Aplicado(Result<Vec<u8>, String>, bool),
 }
 
 pub fn id_busca() -> &'static str { "tarja-busca" }
@@ -70,9 +73,19 @@ impl App {
         self.status = format!("{novas} trecho(s) marcado(s) para tarjar. Aplicar no painel Tarjar.");
     }
 
-    fn achar(&mut self, busca: &str, padroes: &[Padrao]) {
-        let Some(a) = &self.aberto else { return };
-        let achados = a.pdf.achar_para_tarja(busca, padroes);
+    /// Lê o documento todo (pode levar segundos num PDF grande): roda fora da thread da janela.
+    fn achar(&mut self, busca: &str, padroes: &[Padrao]) -> Task<Msg> {
+        let Some(a) = &self.aberto else { return Task::none() };
+        let pdf = a.pdf.clone();
+        let (busca, padroes) = (busca.to_string(), padroes.to_vec());
+        let quando = (self.ativa, self.scripts.rodada);
+        self.status = "Procurando…".into();
+        Task::perform(async move {
+            tokio::task::spawn_blocking(move || pdf.achar_para_tarja(&busca, &padroes)).await.unwrap_or_default()
+        }, move |achados| Msg::Tarja(Tj::Achados(quando, achados)))
+    }
+
+    fn achados(&mut self, achados: Vec<Achado>) {
         let total = achados.len();
         let novas = self.marcar(achados.into_iter().map(|x| Marca {
             pagina: x.pagina, caixa: x.caixa, texto: x.texto,
@@ -99,9 +112,13 @@ impl App {
                     return crate::focar(id_busca());
                 }
                 let busca = self.tarjas.busca.clone();
-                self.achar(&busca, &[]);
+                return self.achar(&busca, &[]);
             }
-            Tj::Padroes => self.achar("", &Padrao::TODOS),
+            Tj::Padroes => return self.achar("", &Padrao::TODOS),
+            // Caixas de outra aba ou de antes de uma edição cairiam no lugar errado: busca de novo.
+            Tj::Achados(quando, _) if quando != (self.ativa, self.scripts.rodada) =>
+                self.status = "O documento mudou durante a busca; busque de novo.".into(),
+            Tj::Achados(_, achados) => self.achados(achados),
             Tj::Ativar(i, v) => if let Some(m) = self.tarjas.marcas.get_mut(i) { m.ativa = v },
             Tj::Apagar(i) => if i < self.tarjas.marcas.len() { self.tarjas.marcas.remove(i); },
             Tj::Limpar => self.tarjas.marcas.clear(),
@@ -114,11 +131,17 @@ impl App {
                 let assinado = crate::assinar::tem_assinatura(&a.pdf);
                 // A tarja vai numa cópia: o documento aberto continua como estava.
                 let mut copia = a.pdf.clone();
-                let r = copia.tarjar(&marcas, &self.tarjas.rotulo, &featherpdf_io::apagar_pixels_jpeg).and_then(|_| {
-                    if self.tarjas.metadados { copia.limpar_metadados(); }
-                    // Com senha, a cópia tarjada sai com a mesma senha.
-                    copia.bytes_para_gravar()
-                });
+                let (rotulo, metadados) = (self.tarjas.rotulo.clone(), self.tarjas.metadados);
+                self.status = "Tarjando…".into();
+                return Task::perform(async move {
+                    tokio::task::spawn_blocking(move || copia.tarjar(&marcas, &rotulo, &featherpdf_io::apagar_pixels_jpeg).and_then(|_| {
+                        if metadados { copia.limpar_metadados(); }
+                        // Com senha, a cópia tarjada sai com a mesma senha.
+                        copia.bytes_para_gravar()
+                    })).await.unwrap_or_else(|e| Err(format!("Falha ao tarjar: {e}")))
+                }, move |r| Msg::Tarja(Tj::Aplicado(r, assinado)));
+            }
+            Tj::Aplicado(r, assinado) => {
                 let ok = r.is_ok();
                 let tarefa = self.update_protecao(Pr::Pronto(r, None, "tarjado"));
                 if ok && assinado { self.status = "A cópia tarjada é regravada inteira: as assinaturas do PDF não valem nela.".into(); }

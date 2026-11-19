@@ -103,6 +103,8 @@ pub enum Pag {
     Recortar,
     /// Põe as páginas guardadas depois da última escolhida.
     Colar,
+    /// Páginas extraídas fora da janela: (documento, rodada), páginas, se recorta, a cópia.
+    Copiado((u64, u64), Vec<u32>, bool, Result<Box<DocumentoPdf>, String>),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -328,15 +330,26 @@ impl App {
                     return Task::none();
                 }
                 // shortcut: guarda as páginas inteiras na memória (um PDF delas); com muitas páginas pesadas, guardar só a lista e ler ao colar.
-                match a.pdf.extrair(&alvo).and_then(|b| DocumentoPdf::de_bytes(&b, None)) {
-                    Ok(copia) => {
-                        self.paginas_copiadas = Some(copia);
-                        if recortar { return self.update_interno(Msg::Excluir); }
-                        self.status = format!("{} página(s) copiada(s). Colar põe depois da página escolhida, aqui ou em outro PDF.", alvo.len());
-                    }
-                    Err(e) => self.status = e,
-                }
+                let (pdf, paginas) = (a.pdf.clone(), alvo.clone());
+                let quando = (a.id, self.scripts.rodada);
+                self.status = "Copiando páginas…".into();
+                return Task::perform(async move {
+                    tokio::task::spawn_blocking(move || pdf.extrair(&paginas).and_then(|b| DocumentoPdf::de_bytes(&b, None)).map(Box::new)).await
+                        .unwrap_or_else(|e| Err(format!("Falha ao copiar: {e}")))
+                }, move |r| Msg::Pag(Pag::Copiado(quando, alvo.clone(), recortar, r)));
             },
+            Pag::Copiado(_, _, _, Err(e)) => self.status = e,
+            Pag::Copiado(quando, alvo, recortar, Ok(copia)) => {
+                let mesmo = Some(quando) == self.id_aberto().map(|id| (id, self.scripts.rodada)) && self.alvo() == alvo;
+                // Recortar exclui a seleção de agora: só se ainda for a que foi copiada.
+                if recortar && !mesmo {
+                    self.status = "O documento ou a seleção mudou durante a cópia: nada foi recortado. Tente de novo.".into();
+                    return Task::none();
+                }
+                self.paginas_copiadas = Some(*copia);
+                if recortar { return self.update_interno(Msg::Excluir); }
+                self.status = format!("{} página(s) copiada(s). Colar põe depois da página escolhida, aqui ou em outro PDF.", alvo.len());
+            }
             Pag::Colar => if let Some(copia) = self.paginas_copiadas.clone() {
                 let posicao = self.alvo().last().copied().unwrap_or(total) + 1;
                 return self.editar(move |pdf| {

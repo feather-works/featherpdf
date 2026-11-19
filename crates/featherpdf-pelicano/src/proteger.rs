@@ -51,6 +51,8 @@ pub struct Senha {
     perm: Permissoes,
     dono: String,
     aes256: bool,
+    /// A cifragem roda fora da janela; enquanto isso o botão não aceita outro clique.
+    cifrando: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -144,7 +146,7 @@ impl App {
                 self.protecao = Some(Janela::Senha(Senha {
                     abrir: true, senha: String::new(), repetir: String::new(), limitar: false,
                     perm: Permissoes { imprimir: true, alta_qualidade: true, copiar: false, preencher: true, comentar: false, editar: false },
-                    dono: String::new(), aes256: true,
+                    dono: String::new(), aes256: true, cifrando: false,
                 }));
                 return crate::focar(id_senha());
             },
@@ -206,16 +208,24 @@ impl App {
                         return tarefa.map(move |r| Msg::Prot(Pr::Pronto(r, destino.clone(), "comprimido")));
                     }
                     Janela::Senha(s) => {
+                        if s.cifrando { return Task::none(); }
                         let Some(p) = protecao_valida(s) else { return Task::none() };
-                        let r = a.pdf.protegido(&p);
-                        return self.update_protecao(Pr::Pronto(r, None, "protegido"));
+                        let pdf = a.pdf.clone();
+                        if let Some(Janela::Senha(s)) = &mut self.protecao { s.cifrando = true; }
+                        self.status = "Protegendo…".into();
+                        return Task::perform(async move {
+                            tokio::task::spawn_blocking(move || pdf.protegido(&p)).await
+                                .unwrap_or_else(|e| Err(format!("Falha ao proteger: {e}")))
+                        }, |r| Msg::Prot(Pr::Pronto(r, None, "protegido")));
                     }
                 }
             }
             // Cancelou no meio: o resultado da compressão chega depois e é descartado.
             Pr::Pronto(_, _, "comprimido") if !matches!(self.protecao, Some(Janela::Comprimir(_))) => self.status = "Compressão cancelada.".into(),
+            Pr::Pronto(_, _, "protegido") if !matches!(self.protecao, Some(Janela::Senha(_))) => self.status = "Proteção cancelada.".into(),
             Pr::Pronto(Err(e), _, _) => {
                 if let Some(Janela::Comprimir(c)) = &mut self.protecao { c.desde = None; }
+                if let Some(Janela::Senha(s)) = &mut self.protecao { s.cifrando = false; }
                 self.status = e;
             }
             Pr::Pronto(Ok(bytes), Some(destino), _) => {
@@ -239,6 +249,7 @@ impl App {
             }
             Pr::Pronto(Ok(bytes), None, rotulo) => {
                 if let Some(Janela::Comprimir(c)) = &mut self.protecao { c.desde = None; }
+                if let Some(Janela::Senha(s)) = &mut self.protecao { s.cifrando = false; }
                 let nome = sufixo(&self.nome_documento().unwrap_or_else(|| "documento.pdf".into()), rotulo);
                 self.saida_pendente = Some(bytes);
                 return Task::perform(async move {
@@ -426,6 +437,6 @@ fn dialogo_senha(s: &Senha, seguranca: Option<String>) -> Dialogo<'_, Msg> {
             .size(12).color(muted));
     Dialogo::new("Senha e permissões", corpo).icone("lock").largura(540.0)
         .secundario("Cancelar", Some(Msg::Prot(Pr::Fechar)))
-        .primario("Proteger e salvar cópia", protecao_valida(s).map(|_| Msg::Prot(Pr::Confirmar)))
+        .primario(if s.cifrando { "Protegendo…" } else { "Proteger e salvar cópia" }, protecao_valida(s).filter(|_| !s.cifrando).map(|_| Msg::Prot(Pr::Confirmar)))
         .ao_fechar(Msg::Prot(Pr::Fechar)).topo(90.0)
 }

@@ -144,8 +144,8 @@ fn letra(c: usize) -> String {
 impl App {
     pub fn update_exportar(&mut self, m: Ex) -> Task<Msg> {
         if matches!(m, Ex::Exportar) && self.exportar.formato == Formato::Docs {
-            self.exportar.resultado = Some(self.para_featherdocs());
-            return Task::none();
+            self.exportar.trabalhando = true;
+            return self.para_featherdocs().map(|r| Msg::Exp(Ex::Pronto(r)));
         }
         if let Ex::Abrir(Formato::PdfA) | Ex::Formato(Formato::PdfA) = m {
             self.exportar.pdfa = self.aberto.as_ref().map(|a| a.pdf.verificar_pdfa()).unwrap_or_default();

@@ -148,10 +148,12 @@ Segunda auditoria do dia (sobre o que entrou):
 - Comprimir sem cópia não fecha a aba que tem algo por salvar.
 
 Ficou para depois:
-- Anexar arquivo (lê e comprime até 256 MB) e Copiar/Recortar páginas (extrai o documento) rodam
-  na thread da janela.
-- Trabalho pesado ainda na thread da janela: abrir o Ctrl+F (lê todos os objetos e anexos), achar
-  e aplicar tarja, proteger com senha, levar ao FeatherDocs. Passar para `spawn_blocking`.
+- ✅ (19/11) Anexar arquivo, Copiar/Recortar páginas, abrir o Ctrl+F (objetos, campos e anexos),
+  achar e aplicar tarja, proteger com senha e levar ao FeatherDocs rodam fora da thread da janela.
+  Edição feita assim (`App::editar_fora`, `Msg::EditadoFora`) roda numa cópia e só entra se o
+  documento não mudou no meio (mesmo documento e mesma `scripts.rodada`); senão é descartada com
+  aviso, para não apagar a mudança feita enquanto rodava. Recortar só exclui se a seleção ainda é a
+  copiada. Teste: `edicao_fora_da_janela_nao_apaga_o_que_mudou_no_meio`.
 - Cache `objetos` só cresce ao rolar documento enorme: soltar as páginas longe da tela.
 - Tarja de texto desenhado sem `Tf` (fonte vinda de `gs` com /Font) não é achada.
 - Link de site abre o navegador num clique (há a opção de desligar); pensar em confirmar o domínio.

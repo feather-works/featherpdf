@@ -252,6 +252,8 @@ pub enum Msg {
     /// Gira a página atual (ou as escolhidas) por estes graus.
     Girar(i64),
     Excluir,
+    /// Edição feita numa cópia fora da janela ((documento, rodada) de quando começou, cópia e aviso).
+    EditadoFora((u64, u64), Result<(Box<DocumentoPdf>, String), String>),
     /// Exclui todas as páginas menos a atual.
     ExcluirOutras,
     Busca(busca::Busca),
@@ -642,16 +644,23 @@ impl App {
     pub fn pode_refazer(&self) -> bool { !self.refeitos.is_empty() }
 
     /// Páginas do PDF em texto corrido, gravadas num `.docx` temporário e abertas no FeatherDocs.
-    pub(crate) fn para_featherdocs(&self) -> Result<String, String> {
-        let a = self.aberto.as_ref().ok_or_else(String::new)?;
-        let fluxo = a.pdf.paginas_em_fluxo()?;
-        if fluxo.iter().all(|p| p.blocos.is_empty()) { return Err("Este PDF não tem texto nem imagem para levar ao documento.".into()); }
+    /// Monta o .docx fora da thread da janela (lê o texto de todas as páginas) e abre no FeatherDocs.
+    pub(crate) fn para_featherdocs(&mut self) -> Task<Result<String, String>> {
+        let Some(a) = self.aberto.as_ref() else { return Task::none() };
+        let pdf = a.pdf.clone();
         let nome = self.nome_documento().unwrap_or_default();
-        let base = std::path::Path::new(&nome).file_stem().map_or("PDF".into(), |n| n.to_string_lossy().into_owned());
-        let pasta = recentes::pasta_temporaria().map_err(|e| format!("Não consegui gravar o documento: {e}"))?;
-        let destino = pasta.join(format!("{base}.docx"));
-        featherpdf_io::gravar_docx(&a.pdf, &fluxo, &destino)?;
-        abrir_no("featherdocs", "FeatherDocs", &destino).map(|_| format!("{} página(s) abertas no FeatherDocs.", fluxo.len()))
+        self.status = "Levando ao FeatherDocs…".into();
+        Task::perform(async move {
+            tokio::task::spawn_blocking(move || -> Result<String, String> {
+                let fluxo = pdf.paginas_em_fluxo()?;
+                if fluxo.iter().all(|p| p.blocos.is_empty()) { return Err("Este PDF não tem texto nem imagem para levar ao documento.".into()); }
+                let base = std::path::Path::new(&nome).file_stem().map_or("PDF".into(), |n| n.to_string_lossy().into_owned());
+                let pasta = recentes::pasta_temporaria().map_err(|e| format!("Não consegui gravar o documento: {e}"))?;
+                let destino = pasta.join(format!("{base}.docx"));
+                featherpdf_io::gravar_docx(&pdf, &fluxo, &destino)?;
+                abrir_no("featherdocs", "FeatherDocs", &destino).map(|_| format!("{} página(s) abertas no FeatherDocs.", fluxo.len()))
+            }).await.unwrap_or_else(|e| Err(format!("Falha: {e}")))
+        }, |r| r)
     }
 
     pub fn nome_documento(&self) -> Option<String> {
@@ -864,6 +873,20 @@ impl App {
                 Task::none()
             }
         }
+    }
+
+    /// Como `editar`, mas o trabalho pesado roda numa cópia fora da thread da janela. Se o
+    /// documento mudar no meio (outra edição, Ctrl+Z, outra aba), a cópia é descartada: aplicá-la
+    /// apagaria a mudança feita no meio.
+    pub fn editar_fora(&mut self, espera: &str, f: impl FnOnce(&mut DocumentoPdf) -> Result<String, String> + Send + 'static) -> Task<Msg> {
+        let Some(a) = &self.aberto else { return Task::none() };
+        let mut pdf = a.pdf.clone();
+        let quando = (a.id, self.scripts.rodada);
+        self.status = espera.into();
+        Task::perform(async move {
+            tokio::task::spawn_blocking(move || f(&mut pdf).map(|aviso| (Box::new(pdf), aviso))).await
+                .unwrap_or_else(|e| Err(format!("Falha: {e}")))
+        }, move |r| Msg::EditadoFora(quando, r))
     }
 
     fn voltar(&mut self, desfazer: bool) -> Task<Msg> {
@@ -1443,6 +1466,14 @@ impl App {
             Msg::Assin(m) => return self.update_assinatura(m),
             Msg::Rub(m) => return self.update_rubrica(m),
             Msg::Tarja(m) => return self.update_tarja(m),
+            Msg::EditadoFora(quando, _) if Some(quando) != self.id_aberto().map(|id| (id, self.scripts.rodada)) =>
+                self.status = "O documento mudou enquanto a alteração era feita: nada foi aplicado. Tente de novo.".into(),
+            Msg::EditadoFora(_, Err(e)) => self.status = e,
+            Msg::EditadoFora(_, Ok((novo, aviso))) => {
+                let tarefa = self.editar(move |pdf| { *pdf = *novo; Ok(aviso) });
+                self.ler_navegacao();
+                return tarefa;
+            }
             Msg::Com(m) => return self.update_comentar(m),
             Msg::Form(m) => return self.update_formulario(m),
             Msg::Marca(m) => return self.update_marcas(m),
@@ -1473,7 +1504,7 @@ impl App {
             }),
             Msg::Selecao(m) => return self.update_selecao(m),
             Msg::Imp(m) => return self.update_imprimir(m),
-            Msg::ParaFeatherDocs => self.status = self.para_featherdocs().unwrap_or_else(|e| e),
+            Msg::ParaFeatherDocs => return self.para_featherdocs().map(|r| Msg::Status(r.unwrap_or_else(|e| e))),
             // O documento da frente mudou enquanto o diálogo estava aberto: não grava o documento errado.
             Msg::DestinoEscolhido(id, Some(_)) if Some(id) != self.id_aberto() => self.status = "O documento mudou: nada foi salvo. Salve de novo.".into(),
             // "Salvar como" escolhido: em segundo plano, a não ser antes de fechar a aba.
@@ -2161,6 +2192,26 @@ fn soltar_imagens() {
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    #[test]
+    fn edicao_fora_da_janela_nao_apaga_o_que_mudou_no_meio() {
+        let mut app = com_a4();
+        let quando = (app.id_aberto().unwrap(), app.scripts.rodada);
+        let mut copia = app.aberto.as_ref().unwrap().pdf.clone();
+        copia.anexar("a.txt", b"x".to_vec()).unwrap();
+        // Uma edição chega antes da cópia: a cópia, de antes dela, é jogada fora.
+        let _ = app.update(Msg::Girar(90));
+        let passos = app.historico.len();
+        let _ = app.update(Msg::EditadoFora(quando, Ok((Box::new(copia.clone()), "anexado".into()))));
+        assert_eq!(app.historico.len(), passos);
+        assert!(app.aberto.as_ref().unwrap().pdf.anexos().is_empty());
+        // Sem mudança no meio, entra como uma edição comum (com Ctrl+Z).
+        let mut copia = app.aberto.as_ref().unwrap().pdf.clone();
+        copia.anexar("a.txt", b"x".to_vec()).unwrap();
+        let quando = (app.id_aberto().unwrap(), app.scripts.rodada);
+        let _ = app.update(Msg::EditadoFora(quando, Ok((Box::new(copia), "anexado".into()))));
+        assert_eq!((app.historico.len(), app.aberto.as_ref().unwrap().pdf.anexos().len()), (passos + 1, 1));
+    }
 
     /// O app como fica depois de "PDF em branco" na página inicial.
     fn com_a4() -> App {

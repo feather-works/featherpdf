@@ -12,7 +12,7 @@ use pelicano::column;
 use crate::compat::*;
 use crate::compat::mouse::Cursor;
 use crate::compat::canvas::{self, Frame, Geometry};
-use crate::edicao::na_tela;
+use crate::edicao::{na_tela, ObjetosDaPagina};
 use crate::{App, Msg};
 
 pub fn id_localizar() -> &'static str { "featherpdf.localizar" }
@@ -37,6 +37,19 @@ pub enum Busca {
     Exportar,
     /// O CSV pronto e o destino escolhido.
     Gravar(String, Option<std::path::PathBuf>),
+    /// Páginas, campos e anexos lidos fora da janela; `Some(i)` volta ao achado `i` (depois de trocar).
+    Lido((usize, u64), std::sync::Arc<Lido>, Option<usize>),
+}
+
+/// O que a barra de busca lê do documento inteiro.
+pub struct Lido {
+    paginas: Vec<(u32, Result<(Vec<featherpdf_core::ObjetoPdf>, [f32; 4], i64), String>)>,
+    campos: Vec<(String, String, u32)>,
+    anexos: Vec<(String, Option<String>)>,
+}
+
+impl std::fmt::Debug for Lido {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "Lido({} páginas)", self.paginas.len()) }
 }
 
 /// Um achado: página, objeto (linha) e posição do termo na linha, em caracteres.
@@ -81,25 +94,19 @@ impl canvas::Program<Msg> for Destaques {
 }
 
 impl App {
-    /// Lê os objetos de todas as páginas (para buscar). ~1–2 ms por página.
-    fn ler_todos_objetos(&mut self) {
-        let total = self.total_paginas();
-        let pendentes: Vec<u32> = (1..=total).filter(|p| !self.objetos.contains_key(p)).collect();
-        self.ler_objetos_sempre(&pendentes);
-    }
-
-    /// Lê os campos e o texto dos anexos (uma vez por abertura da barra ou troca).
-    fn ler_campos_e_anexos(&mut self) {
-        let Some(a) = &self.aberto else { return };
-        self.busca.campos = a.pdf.campos().into_iter().map(|c| (c.nome, c.valor, c.pagina)).collect();
-        let mut lido = 0;
-        self.busca.anexos = a.pdf.anexos().into_iter().enumerate().map(|(i, an)| {
-            // `anexo_ate`: o /Size pode mentir; a leitura para no teto de qualquer jeito.
-            // Conta o que foi lido antes de ver se é texto: binário também custa descomprimir.
-            let texto = (an.tamanho <= TETO_ANEXO && lido + an.tamanho <= TETO_ANEXOS).then(|| a.pdf.anexo_ate(i, TETO_ANEXO as u64)).flatten()
-                .and_then(|(_, b)| { lido += b.len(); String::from_utf8(b).ok() });
-            (an.nome, texto)
-        }).collect();
+    /// Lê as páginas que faltam, os campos e o texto dos anexos fora da thread da janela
+    /// (~1–2 ms por página: mil páginas travavam a janela por segundos ao abrir o Ctrl+F).
+    fn ler_para_buscar(&mut self, voltar_a: Option<usize>) -> Task<Msg> {
+        let Some(a) = &self.aberto else { return Task::none() };
+        let pdf = a.pdf.clone();
+        let pendentes: Vec<u32> = (1..=self.total_paginas()).filter(|p| !self.objetos.contains_key(p)).collect();
+        let quando = (self.ativa, self.scripts.rodada);
+        Task::perform(async move {
+            tokio::task::spawn_blocking(move || std::sync::Arc::new(ler_tudo(&pdf, &pendentes))).await.ok()
+        }, move |lido| match lido {
+            Some(l) => Msg::Busca(Busca::Lido(quando, l, voltar_a)),
+            None => Msg::Busca(Busca::Termo(String::new())),
+        })
     }
 
     fn refazer_busca(&mut self) {
@@ -161,10 +168,32 @@ impl App {
                 if self.aberto.is_none() { return Task::none(); }
                 self.busca.aberta = true;
                 self.busca.trocar = trocar;
-                self.ler_todos_objetos();
-                self.ler_campos_e_anexos();
                 self.refazer_busca();
-                return crate::focar(id_localizar());
+                return Task::batch([crate::focar(id_localizar()), self.ler_para_buscar(None)]);
+            }
+            // Lido de outra aba ou antes de uma edição: as linhas não batem mais; lê de novo.
+            Busca::Lido(quando, _, voltar_a) if quando != (self.ativa, self.scripts.rodada) =>
+                if self.busca.aberta { return self.ler_para_buscar(voltar_a); },
+            Busca::Lido(_, lido, voltar_a) => {
+                let giro_vista = self.aberto.as_ref().map_or(0, |a| a.giro_vista);
+                for (p, r) in &lido.paginas {
+                    if self.objetos.contains_key(p) { continue; }
+                    let o = match r {
+                        Ok((lista, caixa, giro)) => ObjetosDaPagina { lista: lista.clone(), caixa: *caixa, giro: (giro + giro_vista).rem_euclid(360) },
+                        Err(e) => {
+                            self.status = format!("Página {p}: {e}");
+                            ObjetosDaPagina { lista: vec![], caixa: [0.0; 4], giro: 0 }
+                        }
+                    };
+                    self.objetos.insert(*p, o);
+                }
+                self.busca.campos = lido.campos.clone();
+                self.busca.anexos = lido.anexos.clone();
+                let nada_antes = self.busca.achados.is_empty();
+                self.refazer_busca();
+                if let Some(i) = voltar_a { self.busca.atual = i.min(self.busca.achados.len().saturating_sub(1)); }
+                // Só rola se o termo digitado durante a leitura achou agora (abrir a barra não mexe na tela).
+                if voltar_a.is_some() || (nada_antes && !self.busca.termo.is_empty()) { return self.ir_ao_atual(); }
             }
             Busca::Fechar => { self.busca.aberta = false; self.busca.achados.clear(); }
             Busca::Termo(t) => {
@@ -223,11 +252,9 @@ impl App {
                     for (pagina, objeto) in alvos { ultimo = pdf.substituir_com_refluxo_com(pagina, objeto, &termo, &novo, op).map_err(|e| format!("Página {pagina}: {e}"))?; }
                     Ok(ultimo)
                 });
-                // `editar` esvaziou os objetos: lê de novo e mantém a posição na lista.
-                self.ler_todos_objetos();
+                // `editar` esvaziou os objetos: lê de novo (fora da janela) e volta à mesma posição na lista.
                 self.refazer_busca();
-                self.busca.atual = atual.min(self.busca.achados.len().saturating_sub(1));
-                return Task::batch([tarefa, self.ir_ao_atual()]);
+                return Task::batch([tarefa, self.ler_para_buscar(Some(atual))]);
             }
         }
         Task::none()
@@ -330,4 +357,31 @@ mod testes {
         assert_eq!(super::celula_csv("=SOMA(A1)"), "\"'=SOMA(A1)\"");
         assert_eq!(super::celula_csv("diz \"oi\";\nfim"), "\"diz \"\"oi\"\";fim\"");
     }
+
+    #[test]
+    fn ler_tudo_acha_o_texto_e_o_anexo() {
+        let mut pdf = featherpdf_io::criar_a4().unwrap();
+        pdf.inserir_texto(1, 72.0, 700.0, "contrato social", 12.0, false, [0.0; 3]).unwrap();
+        pdf.anexar("nota.txt", b"segredo".to_vec()).unwrap();
+        let lido = super::ler_tudo(&pdf, &[1]);
+        let (_, r) = &lido.paginas[0];
+        assert!(r.as_ref().unwrap().0.iter().any(|o| matches!(&o.tipo, featherpdf_core::TipoObjeto::Texto { texto, .. } if texto.contains("contrato"))));
+        assert_eq!(lido.anexos, vec![("nota.txt".to_string(), Some("segredo".to_string()))]);
+    }
+}
+
+/// Objetos das `paginas` (com a caixa e o giro do arquivo), campos e texto dos anexos.
+fn ler_tudo(pdf: &featherpdf_core::DocumentoPdf, paginas: &[u32]) -> Lido {
+    crate::alocador::prioridade_baixa();
+    let paginas = paginas.iter().map(|&p| (p, pdf.objetos(p).and_then(|l| pdf.geometria(p).map(|(c, g)| (l, c, g))))).collect();
+    let campos = pdf.campos().into_iter().map(|c| (c.nome, c.valor, c.pagina)).collect();
+    let mut lido = 0;
+    let anexos = pdf.anexos().into_iter().enumerate().map(|(i, an)| {
+        // `anexo_ate`: o /Size pode mentir; a leitura para no teto de qualquer jeito.
+        // Conta o que foi lido antes de ver se é texto: binário também custa descomprimir.
+        let texto = (an.tamanho <= TETO_ANEXO && lido + an.tamanho <= TETO_ANEXOS).then(|| pdf.anexo_ate(i, TETO_ANEXO as u64)).flatten()
+            .and_then(|(_, b)| { lido += b.len(); String::from_utf8(b).ok() });
+        (an.nome, texto)
+    }).collect();
+    Lido { paginas, campos, anexos }
 }
