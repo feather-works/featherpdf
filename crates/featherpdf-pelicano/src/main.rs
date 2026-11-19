@@ -67,6 +67,11 @@ pub const VERSAO: &str = env!("CARGO_PKG_VERSION");
 pub(crate) const ACENTO_PDF: usize = 4;
 pub const ZOOM_MIN: f32 = 0.25;
 pub const ZOOM_MAX: f32 = 8.0;
+/// Rolagem automática: velocidade inicial, limites e quanto ↑/↓ mudam (px por segundo).
+const ROLAGEM_PADRAO: f32 = 60.0;
+const ROLAGEM_MIN: f32 = 10.0;
+const ROLAGEM_MAX: f32 = 800.0;
+const ROLAGEM_PASSO: f32 = 20.0;
 /// Espaço entre páginas e margem da mesa, em pixels lógicos.
 pub const VAO_PAGINAS: f32 = 16.0;
 /// Passos de Ctrl+Z guardados.
@@ -264,6 +269,12 @@ pub enum Msg {
     Leitura,
     /// Apresentação: tela cheia, uma página por vez em fundo preto (F5; Esc sai).
     Apresentar,
+    /// Rolagem automática (Ctrl+Shift+H, como no Acrobat): liga/desliga.
+    RolagemAuto,
+    /// Um quadro da rolagem automática.
+    RolagemQuadro,
+    /// Muda a velocidade da rolagem automática (px/s; negativo = mais devagar).
+    RolagemVelocidade(f32),
     AlternarFerramentas,
     FiltroFerramentas(String),
     BuscaComandos(String),
@@ -408,6 +419,8 @@ pub struct App {
     pub aba: Aba,
     pub faixa_aberta: bool,
     pub leitura: bool,
+    /// Rolagem automática ligada: velocidade (px por segundo) e a hora do último quadro.
+    rolagem_auto: Option<(f32, Instant)>,
     /// Em apresentação: o zoom e a disposição de antes, para voltar ao sair.
     pub apresentacao: Option<(f32, Disposicao)>,
     pub ferramentas_abertas: bool,
@@ -555,6 +568,7 @@ impl App {
             faixa_aberta: config.faixa,
             leitura: false,
             apresentacao: None,
+            rolagem_auto: None,
             ferramentas_abertas: config.ferramentas,
             painel: None,
             ferramenta: Ferramenta::Selecionar,
@@ -1733,6 +1747,31 @@ impl App {
             }
             Msg::AlternarFaixa => { self.faixa_aberta = !self.faixa_aberta; self.config.faixa = self.faixa_aberta; self.config.gravar(); }
             Msg::Leitura => self.leitura = !self.leitura,
+            Msg::RolagemAuto => {
+                if self.rolagem_auto.take().is_some() { self.status = "Rolagem automática desligada.".into(); }
+                else if self.aberto.is_some() {
+                    self.rolagem_auto = Some((ROLAGEM_PADRAO, Instant::now()));
+                    self.status = "Rolagem automática: ↑ e ↓ mudam a velocidade, Esc para.".into();
+                }
+            }
+            Msg::RolagemVelocidade(d) => if let Some((v, _)) = &mut self.rolagem_auto {
+                *v = (*v + d).clamp(ROLAGEM_MIN, ROLAGEM_MAX);
+                self.status = format!("Rolagem automática: {:.0} px/s.", *v);
+            },
+            Msg::RolagemQuadro => {
+                let (Some((v, antes)), Some((topo, _, altura))) = (self.rolagem_auto, self.viewport) else { return Task::none() };
+                let agora = Instant::now();
+                // Teto no passo: depois de a janela ficar parada (arrastada, minimizada) não dá um salto.
+                let passo = v * agora.duration_since(antes).as_secs_f32().min(0.1);
+                self.rolagem_auto = Some((v, agora));
+                let fim = self.posicoes().last().map_or(0.0, |(_, r)| r.y + r.height) - altura;
+                if topo >= fim - 0.5 {
+                    self.rolagem_auto = None;
+                    self.status = "Rolagem automática: fim do documento.".into();
+                    return Task::none();
+                }
+                return Task::scroll_to(ID_MESA, Point::new(self.rolagem_x, (topo + passo).min(fim)));
+            }
             Msg::Apresentar => {
                 if self.aberto.is_none() { return Task::none(); }
                 // shortcut: alterna a tela cheia; quem já estava em F11 sai dela ao começar.
@@ -1930,6 +1969,11 @@ impl App {
         let c = |k: &str| letra == k;
         let n = |k: NamedKey| key == Key::Named(k);
         use NamedKey as N;
+        if self.rolagem_auto.is_some() {
+            if n(N::Escape) { return self.update(Msg::RolagemAuto); }
+            if n(N::ArrowDown) { return self.update(Msg::RolagemVelocidade(ROLAGEM_PASSO)); }
+            if n(N::ArrowUp) { return self.update(Msg::RolagemVelocidade(-ROLAGEM_PASSO)); }
+        }
         if n(N::Escape) {
             return if self.menu || self.suspenso.is_some() { self.update(Msg::Escape) }
             else if self.apresentacao.is_some() { self.update(Msg::Apresentar) }
@@ -1964,6 +2008,7 @@ impl App {
             if n(N::Backspace) { return self.update(Msg::Medir(medir::Med::DesfazerPonto)); }
         }
         if ctrl && c("f") { return self.update(Msg::Busca(busca::Busca::Abrir(false))); }
+        if ctrl && shift && c("h") { return self.update(Msg::RolagemAuto); }
         if ctrl && c("h") { return self.update(Msg::Busca(busca::Busca::Abrir(true))); }
         if (n(N::Delete) || n(N::Backspace)) && self.escolhidos.is_some() && self.editando_objetos() { return self.update(Msg::Obj(edicao::Obj::Excluir)); }
         if self.escolhidos.is_some() && self.editando_objetos() {
@@ -2074,6 +2119,9 @@ impl pelicano::App for App {
         }
         if self.zoom_animado.is_some() {
             subs.push(Subscription::every(Duration::from_millis(16)).map(|_| Msg::ZoomQuadro));
+        }
+        if self.rolagem_auto.is_some() {
+            subs.push(Subscription::every(Duration::from_millis(16)).map(|_| Msg::RolagemQuadro));
         }
         Subscription::batch(subs)
     }
@@ -2214,6 +2262,22 @@ mod testes {
         let quando = (app.id_aberto().unwrap(), app.scripts.rodada);
         let _ = app.update(Msg::EditadoFora(quando, Ok((Box::new(copia), "anexado".into()))));
         assert_eq!((app.historico.len(), app.aberto.as_ref().unwrap().pdf.anexos().len()), (passos + 1, 1));
+    }
+
+    #[test]
+    fn rolagem_automatica_liga_acelera_e_para_no_fim() {
+        let mut app = com_a4();
+        let _ = app.update(Msg::RolagemAuto);
+        assert_eq!(app.rolagem_auto.map(|r| r.0), Some(ROLAGEM_PADRAO));
+        for _ in 0..100 { let _ = app.update(Msg::RolagemVelocidade(ROLAGEM_PASSO)); }
+        assert_eq!(app.rolagem_auto.map(|r| r.0), Some(ROLAGEM_MAX));
+        // Já no fim (a página inteira cabe na tela): o quadro desliga.
+        app.viewport = Some((0.0, 1200.0, 5000.0));
+        let _ = app.update(Msg::RolagemQuadro);
+        assert!(app.rolagem_auto.is_none());
+        let _ = app.update(Msg::RolagemAuto);
+        let _ = app.update(Msg::RolagemAuto);
+        assert!(app.rolagem_auto.is_none(), "o segundo Ctrl+Shift+H desliga");
     }
 
     /// O app como fica depois de "PDF em branco" na página inicial.

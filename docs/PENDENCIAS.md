@@ -1,5 +1,13 @@
 # Pendências do FeatherPDF
 
+## Rolagem automática (19/11/2026)
+
+Exibir ▸ Rolagem automática ou Ctrl+Shift+H (`Msg::RolagemAuto`): desce a 60 px/s (10 a 800), ↓/↑ mudam 20 px/s,
+Esc ou o mesmo atalho param, e para sozinha no fim do documento. Um quadro a cada 16 ms (`Msg::RolagemQuadro`, passo
+pelo tempo real com teto de 0,1 s para não saltar depois de a janela ficar parada). Teste:
+`rolagem_automatica_liga_acelera_e_para_no_fim`. Foto da faixa conferida; a rolagem em si não foi vista na tela.
+A PARIDADE-ACROBAT também ganhou apresentação, girar a vista e formato de data, que já estavam feitos.
+
 ## Girar a vista e datas nos campos (16/11/2026)
 
 Feito (com teste): girar só a vista (Ctrl+Shift+= / Ctrl+Shift+-, botão no rodapé), de 90 em 90°,

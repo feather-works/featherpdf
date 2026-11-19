@@ -664,6 +664,7 @@ fn faixa_exibir(app: &App) -> Vec<Element<'_, Msg>> {
             grande("book-2", None, "Duas páginas", Some(Msg::Disposicao(Disposicao::DuasPaginas)), app.disposicao == Disposicao::DuasPaginas),
             grande("eye", None, "Leitura", Some(Msg::Leitura), false),
             grande("player-play", None, "Apresentar (F5)", Some(Msg::Apresentar), false),
+            grande("arrow-down", None, "Rolagem automática", app.aberto.is_some().then_some(Msg::RolagemAuto), app.rolagem_auto.is_some()),
             grande("palette", None, "Página escura", Some(Msg::ModoEscuro), app.modo_escuro),
         ].spacing(4), "Disposição"),
         grupo(row![

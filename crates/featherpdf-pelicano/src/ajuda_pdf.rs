@@ -138,7 +138,7 @@ pub fn modelo() -> &'static Catalogo {
                         t("Zoom, leitura, apresentação e tela cheia."),
                         m("Ctrl++ e Ctrl+- mudam o zoom; Ctrl+0 volta a 100%. Ctrl+Shift+= e Ctrl+Shift+- (ou o botão de girar no rodapé) giram só a vista, de 90 em 90°, para ler uma planta deitada; o arquivo não muda (para girar de verdade, use Páginas → Girar). Na caixa do zoom dá para digitar o percentual (Enter aplica). Largura, Altura e Inteira ajustam à janela."),
                         m("Área: arraste um retângulo e ele passa a encher a tela (zoom por área)."),
-                        m("Página escura inverte as cores para ler à noite: fotos ficam como são, mas logotipo em fundo branco e página escaneada escurecem junto. Leitura esconde as barras. Apresentar (F5) mostra uma página por vez em tela cheia: setas, espaço ou Page Down passam, Esc sai."),
+                        m("Página escura inverte as cores para ler à noite: fotos ficam como são, mas logotipo em fundo branco e página escaneada escurecem junto. Leitura esconde as barras. Apresentar (F5) mostra uma página por vez em tela cheia: setas, espaço ou Page Down passam, Esc sai. Rolagem automática (Ctrl+Shift+H) desce o documento sozinha: ↓ acelera, ↑ desacelera, Esc para."),
                         m("Painéis: Miniaturas, Marcadores, Links da página, Comentários, Camadas e Anexos, na barra da direita."),
                         m("Anexos: Anexar arquivo… põe uma planilha, foto ou outro arquivo dentro do PDF (até 256 MB); a lixeira tira um anexo. Ctrl+Z desfaz."),
                         m("Links da página: para onde cada link vai; o lápis troca o destino (número = página, o resto = site ou e-mail) e a lixeira apaga."),
@@ -177,6 +177,7 @@ pub fn modelo() -> &'static Catalogo {
                         a("Pesquisar comandos", "Ctrl+K"),
                         a("Tela cheia", "F11"),
                         a("Apresentar", "F5"),
+                        a("Rolagem automática", "Ctrl+Shift+H"),
                         a("Fechar painel ou cancelar", "Esc"),
                     ]),
                     topico("teclas-arquivos", "Arquivos e abas", vec![

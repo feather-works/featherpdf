@@ -7,13 +7,13 @@
 
 ## Resumo
 
-Total: **649** itens. ✅ feito: **308** · 🟡 parcial: **70** · ❌ falta: **271**.
+Total: **649** itens. ✅ feito: **312** · 🟡 parcial: **70** · ❌ falta: **267**.
 
 Ver a contagem por seção abaixo. Desde 10/11 (decisão do usuário) o FeatherPDF não tem nada que dependa de internet ou de IA: saíram da lista os serviços da Adobe (nuvem, compartilhamento, Acrobat Sign remoto, AI Assistant), as seções Compartilhamento e Inteligência artificial e os itens que pedem rede (PDF de página da internet, enviar formulário, procurar atualizações). O OCR local com o modelo latino embutido continua; os modelos baixados de outras línguas saíram. Contagem refeita a partir das linhas de cada seção.
 
 | Seção | Itens | ✅ feito | 🟡 parcial | ❌ falta |
 |---|---|---|---|---|
-| 1. Visualização e leitura de PDF | 35 | 24 | 6 | 5 |
+| 1. Visualização e leitura de PDF | 35 | 27 | 6 | 2 |
 | 2. Edição de texto | 24 | 11 | 4 | 9 |
 | 3. Edição de imagens | 18 | 12 | 2 | 4 |
 | 4. Organização de páginas | 27 | 25 | 1 | 1 |
@@ -22,7 +22,7 @@ Ver a contagem por seção abaixo. Desde 10/11 (decisão do usuário) o FeatherP
 | 7. Compressão e otimização de PDF | 41 | 20 | 1 | 20 |
 | 8. OCR e digitalização | 22 | 10 | 3 | 9 |
 | 9. Comentários e anotações | 40 | 20 | 11 | 9 |
-| 10. Formulários PDF | 42 | 25 | 5 | 12 |
+| 10. Formulários PDF | 42 | 26 | 5 | 11 |
 | 11. Assinaturas eletrônicas e digitais | 25 | 14 | 5 | 6 |
 | 12. Segurança e proteção de documentos | 33 | 19 | 5 | 9 |
 | 13. Hiperlinks, marcadores e navegação | 21 | 12 | 0 | 9 |
@@ -37,7 +37,7 @@ Ver a contagem por seção abaixo. Desde 10/11 (decisão do usuário) o FeatherP
 | 22. Recursos de engenharia, medições e PDF 3D | 28 | 8 | 1 | 19 |
 | 23. Multimídia e documentos interativos | 18 | 0 | 2 | 16 |
 | 24. Preferências e personalização | 15 | 4 | 2 | 9 |
-| **Total** | **649** | **308** | **70** | **271** |
+| **Total** | **649** | **312** | **70** | **267** |
 
 ## Próximos lotes sugeridos
 
@@ -47,7 +47,7 @@ Critério: uso diário de PDF, sem os itens exóticos (3D, geoespacial, PDF/X, P
 
 **Lote 1: ver e imprimir**
 1. ~~Visualizar propriedades do documento (seção 1)~~: ✅ em 08/11 (Ctrl+D; o XMP ainda não aparece).
-2. Rotacionar temporariamente a visualização (seção 1): ❌. Para ver uma página deitada é preciso girar a página de verdade.
+2. ~~Rotacionar temporariamente a visualização (seção 1)~~: ✅ na v0.1.9.
 3. Configurar tamanho de papel (seção 17): ✅ (10/11). Imprimir ▸ Papel.
 
 **Lote 2: páginas e arquivos**
@@ -62,7 +62,7 @@ Critério: uso diário de PDF, sem os itens exóticos (3D, geoespacial, PDF/X, P
 
 **Lote 4: formulários e comentários**
 10. Campo obrigatório em formulário (seção 10): ✅ (10/11). Regras e Tab ▸ Comportamento, com somente leitura e valor padrão.
-11. Definir formato de datas em campo (seção 10): ❌. O campo de data tem calendário, mas sem formato configurável.
+11. ~~Definir formato de datas em campo (seção 10)~~: ✅ na v0.1.9 (AFDate).
 12. ~~Editar comentários (seção 9)~~: ✅ em 08/11 (painel Comentários ▸ Editar; a caixa de texto redesenha o texto na página).
 
 **Lote 5: navegação, marcas e acessibilidade**
@@ -93,7 +93,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Visualização de duas páginas. | ✅ feito | Disposicao::DuasPaginas (main.rs) |
 | Visualização contínua de duas páginas. | 🟡 parcial | linhas de duas páginas já rolam, sem modo separado |
 | Modo de tela cheia. | ✅ feito | F11 (Msg::TelaCheia) |
-| Modo apresentação. | ❌ falta | não há no código |
+| Modo apresentação. | ✅ feito | Exibir ▸ Apresentar (F5), desde a v0.1.8 |
 | Ajustar página à janela. | ✅ feito | Msg::AjustarPagina |
 | Ajustar à largura. | ✅ feito | Msg::AjustarLargura (main.rs) |
 | Ajustar à altura. | ✅ feito | Msg::AjustarAltura (botão Altura) |
@@ -105,14 +105,14 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Painel de anexos. | ✅ feito | painel Anexos, salvar anexo (navegar.rs) |
 | Painel de camadas. | ✅ feito | painel Camadas (comentar.rs) |
 | Painel de comentários. | ✅ feito | painel Comentários (comentar.rs) |
-| Rotacionar temporariamente a visualização. | ❌ falta | não há no código |
+| Rotacionar temporariamente a visualização. | ✅ feito | Ctrl+Shift+= / Ctrl+Shift+-, botão no rodapé, desde a v0.1.9 |
 | Selecionar texto. | ✅ feito | ferramenta Selecionar, ordem de leitura (selecao.rs) |
 | Selecionar imagens. | 🟡 parcial | imagens só como objeto na ferramenta Editar texto |
 | Copiar texto. | ✅ feito | Ctrl+C e botão direito (selecao.rs) |
 | Copiar imagens. | 🟡 parcial | Copiar área copia o trecho da página como imagem (regiao.rs), não a imagem original |
 | Copiar uma região como imagem. | ✅ feito | regiao.rs "Copiar como imagem" |
 | Ler documentos em voz alta. | ❌ falta | não há no código |
-| Rolagem automática. | ❌ falta | não há no código |
+| Rolagem automática. | ✅ feito | Exibir ▸ Rolagem automática (Ctrl+Shift+H; ↑/↓ mudam a velocidade, Esc para), 19/11 |
 | Visualização adaptada para leitura (Reflow). | ❌ falta | não há no código |
 | Modo de leitura com recursos de acessibilidade. | 🟡 parcial | Leitura sem recursos de acessibilidade |
 | Visualizar propriedades do documento. | ✅ feito | ☰ Menu ▸ Propriedades do documento (Ctrl+D), propriedades.rs |
@@ -422,7 +422,7 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Definir campos somente leitura. | ✅ feito | Regras e Tab ▸ Comportamento; o app recusa digitar nele (10/11) |
 | Configurar valores padrão. | ✅ feito | Regras e Tab ▸ Valor padrão (/DV); Limpar campos volta a ele (10/11) |
 | Definir formato de números. | ✅ feito | Regras e Tab ▸ Número (core regras.rs) |
-| Definir formato de datas. | ❌ falta | não há no código |
+| Definir formato de datas. | ✅ feito | data digitada lida e regravada no formato AFDate do campo, desde a v0.1.9 |
 | Definir formato de moedas. | ✅ feito | Regras e Tab ▸ Moeda (core regras.rs) |
 | Definir formatos personalizados. | 🟡 parcial | só formatos prontos (CPF, CNPJ, CEP, telefone, e-mail), sem formato livre |
 | Aplicar máscaras de entrada. | ✅ feito | máscara de CPF, CNPJ, CEP e telefone (core regras.rs) |

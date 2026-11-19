@@ -15,6 +15,11 @@
 
 Todas as versões e os `SHA256SUMS` ficam na [página de releases](https://github.com/feather-works/featherpdf/releases).
 
+### Na próxima versão
+
+- **Rolagem automática** (Exibir ou Ctrl+Shift+H): o documento desce sozinho para ler sem tocar no mouse; ↓ acelera, ↑ desacelera, Esc para.
+- **Janela sem travar em PDF grande:** buscar (Ctrl+F), tarjar, proteger com senha, anexar arquivo, copiar e recortar páginas e levar ao FeatherDocs rodam em segundo plano; se você mexer no documento enquanto isso, nada do que fez se perde.
+
 ### Novidades da 0.1.9
 
 - **Girar a vista:** Ctrl+Shift+= e Ctrl+Shift+- (ou o botão de girar no rodapé) giram a página na tela de 90 em 90°, para ler uma planta ou tabela deitada; o arquivo não muda. Campos, comentários, busca, medidas e seleção acompanham o giro.
