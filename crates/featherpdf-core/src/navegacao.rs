@@ -86,6 +86,41 @@ impl DocumentoPdf {
         self.recontar_sumario();
     }
 
+    /// Tira os links e os marcadores sem filhos cujo destino é uma página que não existe
+    /// neste PDF (sobra de páginas excluídas em outro programa). Link para endereço, arquivo
+    /// ou programa e marcador sem destino (só título) ficam. Devolve (links, marcadores).
+    pub(crate) fn tirar_destinos_quebrados(&mut self) -> (usize, usize) {
+        let numeros: std::collections::HashMap<lopdf::ObjectId, u32> = self.ids_paginas().into_iter().zip(1..).collect();
+        let total = numeros.len() as u32;
+        let doc = &self.documento;
+        // Destino interno de um dicionário de link ou marcador: /Dest ou ação GoTo /D.
+        let destino = |d: &Dictionary| -> Option<Object> {
+            d.get(b"Dest").ok().or_else(|| d.get(b"A").ok().and_then(|a| resolver(doc, a)).and_then(|a| a.as_dict().ok())
+                .filter(|a| a.get(b"S").and_then(Object::as_name).ok() == Some(b"GoTo")).and_then(|a| a.get(b"D").ok())).cloned()
+        };
+        let quebrado = |d: &Dictionary| destino(d).is_some_and(|x| !self.pagina_do_destino(&x, &numeros).is_some_and(|p| (1..=total).contains(&p)));
+        let mut paginas_mudam = Vec::new();
+        let mut links = 0;
+        for &pagina in numeros.keys() {
+            let lista = self.lista_anotacoes(pagina);
+            let ficam: Vec<Object> = lista.iter().filter(|a| !resolver(doc, a).and_then(|o| o.as_dict().ok())
+                .is_some_and(|d| d.get(b"Subtype").and_then(Object::as_name).ok() == Some(b"Link") && quebrado(d))).cloned().collect();
+            if ficam.len() < lista.len() { links += lista.len() - ficam.len(); paginas_mudam.push((pagina, ficam)); }
+        }
+        let mortos: Vec<lopdf::ObjectId> = self.itens_do_sumario().into_iter().map(|(id, _)| id)
+            .filter(|&id| self.filhos_do_sumario(id).is_empty() && doc.get_dictionary(id).is_ok_and(|d| quebrado(d))).collect();
+        for (pagina, ficam) in paginas_mudam {
+            if let Ok(p) = self.documento.get_dictionary_mut(pagina) { p.set("Annots", ficam); }
+        }
+        let marcadores = mortos.len();
+        if !mortos.is_empty() {
+            self.soltar_sumario_do_catalogo();
+            for id in mortos { let _ = self.desligar_do_sumario(id); }
+            self.recontar_sumario();
+        }
+        (links, marcadores)
+    }
+
     /// Raiz do sumário (/Outlines do catálogo), quando é uma referência.
     fn raiz_do_sumario(&self) -> Option<lopdf::ObjectId> {
         self.documento.catalog().ok()?.get(b"Outlines").ok()?.as_reference().ok()
@@ -834,5 +869,28 @@ mod testes {
         doc.get_dictionary_mut(pagina).unwrap().set("Annots", lista);
         let destinos: Vec<crate::Destino> = pdf.links(1).into_iter().map(|l| l.1).collect();
         assert_eq!(destinos, [crate::Destino::Endereco("https://exemplo.com".into()), crate::Destino::Pagina(1), crate::Destino::Pagina(1)]);
+    }
+
+    #[test]
+    fn tira_link_e_marcador_que_levam_a_pagina_que_nao_existe() {
+        let mut pdf = crate::testes::pdf_teste();
+        pdf.inserir_link(1, [10.0, 10.0, 50.0, 20.0], crate::Destino::Endereco("exemplo.com".into())).unwrap();
+        pdf.inserir_link(1, [10.0, 30.0, 50.0, 40.0], crate::Destino::Pagina(1)).unwrap();
+        let fantasma = Object::Reference((9999, 0));
+        let pagina = pdf.id_pagina(1).unwrap();
+        let quebrado = pdf.documento.add_object(dictionary! { "Type" => "Annot", "Subtype" => "Link", "Rect" => vec![0.into(), 0.into(), 5.into(), 5.into()], "Dest" => vec![fantasma.clone(), "Fit".into()] });
+        let sem_nome = pdf.documento.add_object(dictionary! { "Type" => "Annot", "Subtype" => "Link", "Rect" => vec![0.into(), 0.into(), 5.into(), 5.into()], "Dest" => Object::string_literal("sumiu") });
+        let mut lista = pdf.lista_anotacoes(pagina);
+        lista.extend([quebrado.into(), sem_nome.into()]);
+        pdf.documento.get_dictionary_mut(pagina).unwrap().set("Annots", lista);
+        pdf.criar_marcador("Bom", 1, None).unwrap();
+        pdf.criar_marcador("Ruim", 1, Some(0)).unwrap();
+        let ruim = pdf.item_do_sumario(1).unwrap();
+        pdf.documento.get_dictionary_mut(ruim).unwrap().set("Dest", vec![fantasma, "Fit".into()]);
+        assert_eq!(pdf.tirar_destinos_quebrados(), (2, 1));
+        assert_eq!(pdf.links_da_pagina(1).len(), 2);
+        let titulos: Vec<String> = pdf.marcadores().into_iter().map(|m| m.titulo).collect();
+        assert_eq!(titulos, ["Bom"]);
+        assert_eq!(pdf.tirar_destinos_quebrados(), (0, 0));
     }
 }

@@ -332,7 +332,7 @@ impl App {
             ].spacing(4).padding([0, 24]));
         }
         corpo = corpo
-            .push(checkbox("Tirar miniaturas, dados de editor e objetos soltos; juntar imagens repetidas", c.limpar)
+            .push(checkbox("Tirar miniaturas, dados de editor, objetos soltos e links quebrados; juntar imagens repetidas", c.limpar)
                 .on_toggle(|v| Msg::Prot(Pr::Marcar(Marca::Limpar, v))).size(16).text_size(13))
             .push(checkbox("Remover anexos", c.anexos).on_toggle(|v| Msg::Prot(Pr::Marcar(Marca::Anexos, v))).size(16).text_size(13));
         if let Some(desde) = c.desde {

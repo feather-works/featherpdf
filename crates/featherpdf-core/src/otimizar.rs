@@ -28,7 +28,8 @@ pub struct OpcoesCompressao {
     pub dpi: Option<f32>,
     /// Qualidade do JPEG regravado (1–100).
     pub qualidade: u8,
-    /// Miniaturas, dados privados de editor (PieceInfo) e streams vazios.
+    /// Miniaturas, dados privados de editor (PieceInfo), streams vazios e links e marcadores
+    /// que levam a página que não existe.
     pub limpar: bool,
     pub anexos: bool,
     /// Recomprime os streams sem perda com o zopfli: ~8% menor, bem mais lento.
@@ -426,7 +427,11 @@ impl DocumentoPdf {
     /// Cópia menor: imagens reamostradas, streams iguais juntados, tudo
     /// recomprimido e os objetos em streams de objetos.
     pub fn comprimido(&self, opcoes: OpcoesCompressao, reamostrar: Reamostrar<'_>) -> Result<Vec<u8>, String> {
-        let mut doc = self.documento.clone();
+        let mut doc = if opcoes.limpar {
+            let mut copia = self.clone();
+            copia.tirar_destinos_quebrados();
+            copia.documento
+        } else { self.documento.clone() };
         if opcoes.limpar {
             // Sem `delete_zero_length_streams`: ele apaga também a referência (/AP /N, /XObject /Fm0) e deixa o PDF inválido.
             for id in doc.get_pages().into_values() {

@@ -20,6 +20,7 @@ Todas as versões e os `SHA256SUMS` ficam na [página de releases](https://githu
 - **Texto vira PDF:** abra ou arraste um `.txt` e ele vira um PDF A4 com o texto corrido (também ao juntar arquivos e nos fluxos); a imagem ou o texto convertido já vem com o nome do arquivo para salvar.
 - **Resumo dos comentários em PDF:** no painel Comentários, *Resumo PDF…* gera um PDF com cada comentário (página, autor, data, estado e respostas) para imprimir ou mandar.
 - **Tarja mais segura:** “Também tirar metadados” agora tira também o XMP das páginas e imagens e o EXIF das fotos (câmera, GPS), como o Limpar e sanitizar; antes, só o do documento saía.
+- **Comprimir tira links e marcadores quebrados:** com a limpeza marcada, link ou marcador que leva a uma página que não existe mais (sobra de páginas excluídas em outro programa) sai; link para site e marcador que só agrupa outros ficam.
 - **Sanitizar tira vídeo, som e 3D** embutidos junto com os anexos (o arquivo de mídia vai junto dentro do PDF).
 - **Rolagem automática** (Exibir ou Ctrl+Shift+H): o documento desce sozinho para ler sem tocar no mouse; ↓ acelera, ↑ desacelera, Esc para.
 - **Janela sem travar em PDF grande:** buscar (Ctrl+F), tarjar, proteger com senha, anexar arquivo, copiar e recortar páginas e levar ao FeatherDocs rodam em segundo plano; se você mexer no documento enquanto isso, nada do que fez se perde.

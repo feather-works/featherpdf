@@ -7,7 +7,7 @@
 
 ## Resumo
 
-Total: **649** itens. ✅ feito: **316** · 🟡 parcial: **70** · ❌ falta: **263**.
+Total: **649** itens. ✅ feito: **318** · 🟡 parcial: **70** · ❌ falta: **261**.
 
 Ver a contagem por seção abaixo. Desde 10/11 (decisão do usuário) o FeatherPDF não tem nada que dependa de internet ou de IA: saíram da lista os serviços da Adobe (nuvem, compartilhamento, Acrobat Sign remoto, AI Assistant), as seções Compartilhamento e Inteligência artificial e os itens que pedem rede (PDF de página da internet, enviar formulário, procurar atualizações). O OCR local com o modelo latino embutido continua; os modelos baixados de outras línguas saíram. Contagem refeita a partir das linhas de cada seção.
 
@@ -19,7 +19,7 @@ Ver a contagem por seção abaixo. Desde 10/11 (decisão do usuário) o FeatherP
 | 4. Organização de páginas | 27 | 25 | 1 | 1 |
 | 5. Criação de PDF | 21 | 7 | 4 | 10 |
 | 6. Conversão e exportação | 33 | 19 | 3 | 11 |
-| 7. Compressão e otimização de PDF | 41 | 21 | 1 | 19 |
+| 7. Compressão e otimização de PDF | 41 | 23 | 1 | 17 |
 | 8. OCR e digitalização | 22 | 10 | 3 | 9 |
 | 9. Comentários e anotações | 40 | 21 | 11 | 8 |
 | 10. Formulários PDF | 42 | 26 | 5 | 11 |
@@ -300,8 +300,8 @@ Os lotes 1 e 2 são os de maior uso no dia a dia.
 | Remover índices de pesquisa. | ❌ falta | não há no código |
 | Remover objetos não referenciados. | ✅ feito | prune_objects em serializar (lib.rs) |
 | Descartar destinos nomeados sem uso. | ❌ falta | não há no código |
-| Remover links inválidos. | ❌ falta | não há no código |
-| Remover marcadores inválidos. | ❌ falta | não há no código |
+| Remover links inválidos. | ✅ feito | Comprimir ▸ limpeza (core navegacao.rs tirar_destinos_quebrados) |
+| Remover marcadores inválidos. | ✅ feito | Comprimir ▸ limpeza; só marcador sem filhos (core navegacao.rs) |
 | Otimizar fluxos de conteúdo. | ✅ feito | zopfli (otimizar.rs) |
 | Comprimir fluxos não compactados. | ✅ feito | streams não compactados (otimizar.rs) |
 | Substituir compressão LZW por Flate quando apropriado. | ❌ falta | não há no código |

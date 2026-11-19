@@ -103,7 +103,7 @@ pub fn modelo() -> &'static Catalogo {
                         m("Fotos do PDF: tira as fotos de dentro do arquivo como estão (JPEG original ou WebP sem perda), sem desenhar a página."),
                         m("FeatherDocs e FeatherSheet abrem o resultado direto no app da suíte."),
                         m("Tabela do scan e Gráfico para dados: arraste em volta e os números vão para planilha."),
-                        m("PDF/A para arquivamento, Comprimir (fotos a menos dpi), Embutir fontes e Para a web (linearizar)."),
+                        m("PDF/A para arquivamento, Comprimir (fotos a menos dpi; a limpeza tira também links e marcadores que levam a página que não existe), Embutir fontes e Para a web (linearizar)."),
                     ]),
                     topico("ocr", "OCR", vec![
                         t("Texto de páginas escaneadas, sem internet."),
