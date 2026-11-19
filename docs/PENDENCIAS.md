@@ -301,3 +301,10 @@ fluxo), Scripts (feather-macros), Equações em LaTeX (só digitar → desenho).
 
 Faltam: **Mesa infinita**. (**Resumir e traduzir com IA (MCP)** saiu em 10/11: decisão do usuário, nada de internet nem IA no FeatherPDF.) Depois, atualizar o
 artifact de status.
+
+## Resumo dos comentários em PDF (19/11)
+
+Painel Comentários ▸ *Resumo PDF…* (`Rv::Resumo`, `revisao::resumo`): texto com cada comentário principal (página, tipo,
+autor, data, estado) e as respostas, escrito num A4 novo pelo `escrever_texto_corrido`. Recusa gravar por cima do
+documento aberto. Fica de fora: o resumo do Acrobat com a página ao lado e linhas ligando; o filtro do painel não vale
+(vai tudo). Teste `resumo_lista_comentario_com_resposta_e_vira_pdf`.
