@@ -109,10 +109,20 @@ fn fluxo_da_pagina(itens: &[Item], figuras: &[[f32; 4]], (esquerda, direita): (f
         v.sort_by(|&a, &b| caixas[a][0].total_cmp(&caixas[b][0]));
         // Pedaços seguidos com o mesmo peso viram um trecho só.
         let mut trechos: Vec<(String, bool)> = Vec::new();
+        let mut anterior: Option<usize> = None;
         for &k in &v {
+            // A pontuação logo depois de outro pedaço (o ponto depois do link) vai colada; e não dobra o
+            // espaço que um dos dois já traz. A largura das caixas é estimada: o vão sozinho não decide.
+            let colado = anterior.is_some_and(|a| {
+                let (antes, texto) = (&itens[a].texto, &itens[k].texto);
+                antes.ends_with(char::is_whitespace) || texto.starts_with(char::is_whitespace)
+                    || (texto.starts_with(['.', ',', ';', ':', '!', '?', ')', ']']) && caixas[k][0] - caixas[a][2] < itens[k].tamanho * 0.3)
+            });
+            let espaco = if colado { "" } else { " " };
+            anterior = Some(k);
             match trechos.last_mut() {
-                Some((t, n)) if *n == itens[k].negrito => { t.push(' '); t.push_str(&itens[k].texto); }
-                Some(_) => trechos.push((format!(" {}", itens[k].texto), itens[k].negrito)),
+                Some((t, n)) if *n == itens[k].negrito => { t.push_str(espaco); t.push_str(&itens[k].texto); }
+                Some(_) => trechos.push((format!("{espaco}{}", itens[k].texto), itens[k].negrito)),
                 None => trechos.push((itens[k].texto.clone(), itens[k].negrito)),
             }
         }
@@ -209,6 +219,18 @@ mod testes {
         assert!(*centro && *tamanho == 14.0);
         let BlocoFluxo::Paragrafo { trechos, .. } = &p.blocos[2] else { panic!() };
         assert_eq!((trechos[1].0.trim(), trechos[1].1), ("entidades executoras", true), "o negrito do meio vira um trecho");
+    }
+
+    #[test]
+    fn pedaco_colado_no_anterior_vai_sem_espaco() {
+        // O link é um pedaço e o ponto logo depois é outro; palavras em pedaços vizinhos ganham espaço.
+        let itens = vec![
+            t("Texto com", 72.0, 120.0, 700.0, 11.0, false), t("nota", 120.5, 140.0, 700.0, 11.0, false),
+            t("e um link", 147.0, 190.0, 700.0, 11.0, false), t(".", 190.1, 192.0, 700.0, 11.0, false),
+        ];
+        let p = fluxo_com_tabelas(itens, &[], &[], (72.0, 592.0));
+        let BlocoFluxo::Paragrafo { trechos, .. } = &p.blocos[0] else { panic!() };
+        assert_eq!(trechos.iter().map(|t| t.0.as_str()).collect::<String>(), "Texto com nota e um link.");
     }
 
     #[test]
