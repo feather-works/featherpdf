@@ -2,6 +2,8 @@
 
 **The PDF editor of the FeatherWorks suite · version 0.1.9**
 
+The interface is in Portuguese for now; the menu and button names below are translated.
+
 ## Download
 
 [![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/featherpdf)
