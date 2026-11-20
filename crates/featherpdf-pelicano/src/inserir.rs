@@ -968,8 +968,26 @@ fn imagem_da_area_de_transferencia() -> Option<(Arc<ImagemNova>, u32, u32)> {
     Some((Arc::new(ImagemNova::Pixels { largura: w, altura: h, rgb, alfa }), w, h))
 }
 
+/// O JPEG com orientação no EXIF regravado em pé (sem EXIF); `None`: não precisa girar.
+// shortcut: só JPEG (é onde a câmera grava a orientação); PNG com EXIF segue como está.
+fn girada_pelo_exif(bytes: &[u8]) -> Option<Vec<u8>> {
+    use image::ImageDecoder;
+    if !bytes.starts_with(&[0xFF, 0xD8]) {
+        return None;
+    }
+    let mut dec = image::codecs::jpeg::JpegDecoder::new(std::io::Cursor::new(bytes)).ok()?;
+    let o = dec.orientation().ok().filter(|o| *o != image::metadata::Orientation::NoTransforms)?;
+    let mut img = image::DynamicImage::from_decoder(dec).ok()?;
+    img.apply_orientation(o);
+    let mut saida = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut saida, 92).encode_image(&img.to_rgb8()).ok()?;
+    Some(saida)
+}
+
 /// Lê PNG ou JPEG. O JPEG em RGB ou cinza vai como está para o PDF.
 pub(crate) fn ler_imagem(bytes: Vec<u8>) -> Result<(Arc<ImagemNova>, u32, u32), String> {
+    // A foto do celular vem deitada com a orientação no EXIF; o PDF só leva os pixels.
+    let bytes = girada_pelo_exif(&bytes).unwrap_or(bytes);
     let img = image::load_from_memory(&bytes).map_err(|e| format!("Não consegui ler a imagem: {e}"))?;
     let (w, h) = (img.width(), img.height());
     let jpeg = bytes.starts_with(&[0xFF, 0xD8]);
@@ -985,4 +1003,21 @@ pub(crate) fn ler_imagem(bytes: Vec<u8>) -> Result<(Arc<ImagemNova>, u32, u32), 
         }
     };
     Ok((Arc::new(nova), w, h))
+}
+
+#[cfg(test)]
+mod testes {
+    #[test]
+    fn foto_com_orientacao_no_exif_entra_em_pe() {
+        let mut jpeg = Vec::new();
+        image::RgbImage::from_pixel(20, 10, image::Rgb([200, 10, 10]))
+            .write_to(&mut std::io::Cursor::new(&mut jpeg), image::ImageFormat::Jpeg).unwrap();
+        let tiff: &[u8] = b"Exif\0\0MM\0\x2a\0\0\0\x08\0\x01\x01\x12\0\x03\0\0\0\x01\0\x06\0\0\0\0\0\0";
+        let mut app1 = vec![0xFF, 0xE1];
+        app1.extend_from_slice(&((tiff.len() + 2) as u16).to_be_bytes());
+        app1.extend_from_slice(tiff);
+        jpeg.splice(2..2, app1);
+        let (_, w, h) = super::ler_imagem(jpeg).unwrap();
+        assert_eq!((w, h), (10, 20));
+    }
 }
