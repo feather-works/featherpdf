@@ -1,137 +1,113 @@
 # FeatherPDF
 
-**Produto FeatherOffice independente · versão 0.1.9**
+**The PDF editor of the FeatherWorks suite · version 0.1.9**
 
-## Baixar
+## Download
 
 [![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/featherpdf)
 
-| Sistema | Arquivo | Como instalar |
+| System | File | How to install |
 |---|---|---|
-| **Windows 10/11** | [FeatherPDF-windows-x64.exe](https://github.com/feather-works/featherpdf/releases/latest/download/FeatherPDF-windows-x64.exe) | rode o instalador; ou use o [zip portátil](https://github.com/feather-works/featherpdf/releases/latest/download/FeatherPDF-windows-x64-portatil.zip) |
-| **Linux** (Snap Store) | [snapcraft.io/featherpdf](https://snapcraft.io/featherpdf) | `sudo snap install featherpdf` (atualiza sozinho) |
+| **Windows 10/11** | [FeatherPDF-windows-x64.exe](https://github.com/feather-works/featherpdf/releases/latest/download/FeatherPDF-windows-x64.exe) | run the installer; or use the [portable zip](https://github.com/feather-works/featherpdf/releases/latest/download/FeatherPDF-windows-x64-portatil.zip) |
+| **Linux** (Snap Store) | [snapcraft.io/featherpdf](https://snapcraft.io/featherpdf) | `sudo snap install featherpdf` (updates by itself) |
 | **Linux** (Ubuntu, Debian, Mint…) | [featherpdf-linux-amd64.deb](https://github.com/feather-works/featherpdf/releases/latest/download/featherpdf-linux-amd64.deb) | `sudo apt install ./featherpdf-linux-amd64.deb` |
-| **Linux** (qualquer distribuição) | [featherpdf-linux-x86_64.tar.gz](https://github.com/feather-works/featherpdf/releases/latest/download/featherpdf-linux-x86_64.tar.gz) | extraia e rode `./instalar.sh` |
+| **Linux** (any distribution) | [featherpdf-linux-x86_64.tar.gz](https://github.com/feather-works/featherpdf/releases/latest/download/featherpdf-linux-x86_64.tar.gz) | extract it and run `./instalar.sh` |
 
-Todas as versões e os `SHA256SUMS` ficam na [página de releases](https://github.com/feather-works/featherpdf/releases).
+Every version and the `SHA256SUMS` are on the [releases page](https://github.com/feather-works/featherpdf/releases).
 
-### Na próxima versão
+### In the next version
 
-- **Texto vira PDF:** abra ou arraste um `.txt` e ele vira um PDF A4 com o texto corrido (também ao juntar arquivos e nos fluxos); a imagem ou o texto convertido já vem com o nome do arquivo para salvar.
-- **Resumo dos comentários em PDF:** no painel Comentários, *Resumo PDF…* gera um PDF com cada comentário (página, autor, data, estado e respostas) para imprimir ou mandar.
-- **Tarja mais segura:** “Também tirar metadados” agora tira também o XMP das páginas e imagens e o EXIF das fotos (câmera, GPS), como o Limpar e sanitizar; antes, só o do documento saía.
-- **Comprimir tira links e marcadores quebrados:** com a limpeza marcada, link ou marcador que leva a uma página que não existe mais (sobra de páginas excluídas em outro programa) sai; link para site e marcador que só agrupa outros ficam.
-- **Sanitizar tira vídeo, som e 3D** embutidos junto com os anexos (o arquivo de mídia vai junto dentro do PDF).
-- **Rolagem automática** (Exibir ou Ctrl+Shift+H): o documento desce sozinho para ler sem tocar no mouse; ↓ acelera, ↑ desacelera, Esc para.
-- **Janela sem travar em PDF grande:** buscar (Ctrl+F), tarjar, proteger com senha, anexar arquivo, copiar e recortar páginas e levar ao FeatherDocs rodam em segundo plano; se você mexer no documento enquanto isso, nada do que fez se perde.
+- **Text becomes PDF:** open or drop a `.txt` and it becomes an A4 PDF with the running text (also when merging files and in workflows); the converted image or text already comes with the file name to save.
+- **Comment summary as PDF:** in the Comments panel, *Summary PDF…* makes a PDF with every comment (page, author, date, status and replies) to print or send.
+- **Safer redaction:** "Also remove metadata" now also removes the XMP of pages and images and the EXIF of photos (camera, GPS), like Clean and sanitize; before, only the document's own metadata went.
+- **Compress removes broken links and bookmarks:** with cleanup on, a link or bookmark that points to a page that no longer exists (left over from pages deleted in another program) is removed; links to websites and bookmarks that only group others stay.
+- **Sanitize removes embedded video, sound and 3D** together with attachments (the media file travels inside the PDF).
+- **Auto-scroll** (View, or Ctrl+Shift+H): the document scrolls down by itself so you can read without the mouse; ↓ speeds up, ↑ slows down, Esc stops.
+- **No frozen window on large PDFs:** search (Ctrl+F), redact, password-protect, attach a file, copy and cut pages and send to FeatherDocs run in the background; if you edit the document meanwhile, nothing you did is lost.
+- **PDF to Word:** punctuation right after a link or another text piece no longer gets a space before it.
 
-### Novidades da 0.1.9
+### New in 0.1.9
 
-- **Girar a vista:** Ctrl+Shift+= e Ctrl+Shift+- (ou o botão de girar no rodapé) giram a página na tela de 90 em 90°, para ler uma planta ou tabela deitada; o arquivo não muda. Campos, comentários, busca, medidas e seleção acompanham o giro.
-- **Datas nos campos de formulário como no Acrobat:** o campo com formato de data (`AFDate_FormatEx`) aceita "5/3/85", "05032026" ou "5 março 2026" e grava no formato do campo ("05/03/1985", "2026-03-05", "mar 5, 2026"…); data que não existe (31/02) é recusada com o formato certo no aviso, e o calendário lê e escreve no mesmo formato.
-- **Menos memória ao fechar:** fechar um PDF devolve ao sistema as imagens guardadas para desenhar mais rápido (até 256 MB) e o que era só daquele documento; num manual de 134 páginas com fotos, o app volta de 232 MB para 28 MB.
+- **Rotate the view:** Ctrl+Shift+= and Ctrl+Shift+- (or the rotate button in the footer) turn the page on screen in 90° steps, to read a sideways plan or table; the file does not change. Fields, comments, search, measurements and selection follow the rotation.
+- **Dates in form fields like in Acrobat:** a field with a date format (`AFDate_FormatEx`) accepts "5/3/85", "05032026" or "5 março 2026" and stores it in the field's format ("05/03/1985", "2026-03-05", "mar 5, 2026"…); a date that does not exist (31/02) is refused with the right format in the warning, and the calendar reads and writes the same format.
+- **Less memory after closing:** closing a PDF gives back to the system the images kept for faster drawing (up to 256 MB) and everything that belonged only to that document; on a 134-page manual with photos, the app goes from 232 MB back to 28 MB.
 
-### Novidades da 0.1.8
+### New in 0.1.8
 
-- **Tela inicial nova:** "Continuar de onde parou" com a página onde você saiu, ferramentas em blocos e os recentes em cartões com a capa da página 1.
-- **Tema escuro mais bonito:** grafite quente no lugar do cinza quase preto, ícones mais finos e o vermelho legível; a página escura também escurece logotipo em fundo branco e página escaneada.
-- **Confirmação ao salvar:** exportar termina numa tela "Pronto!" com Abrir arquivo e Abrir pasta; dividir, extrair, comprimir, anexos e as outras ferramentas mostram um cartão "Salvo" com os mesmos botões.
-- **Modo apresentação (F5):** uma página por vez em tela cheia; setas, espaço ou Page Down passam, Esc volta como estava. Ctrl+J junta arquivos.
-- **Mais seguro e sem perder arquivo:** Ctrl+Z depois de Salvar como, o mesmo PDF em duas abas, tirar a senha e salvar por cima de um original assinado não perdem mais nada; a tarja apaga letra coberta pela metade, campos, comentários e o XFA; script de campo roda num processo à parte, com prazo.
-- **Mais rápido em PDF grande:** OCR fora da janela e sem texto duplicado, menos memória com muitas páginas, juntar mantém marcadores e links.
+- **New start screen:** "Continue where you left off" with the page you were on, tools in tiles and recent files as cards with the cover of page 1.
+- **Nicer dark theme:** warm graphite instead of near-black gray, thinner icons and a readable red; a dark page also darkens logos on white and scanned pages.
+- **Confirmation on save:** exporting ends on a "Done!" screen with Open file and Open folder; split, extract, compress, attachments and the other tools show a "Saved" card with the same buttons.
+- **Presentation mode (F5):** one page at a time in full screen; arrows, space or Page Down move on, Esc returns as it was. Ctrl+J merges files.
+- **Safer, without losing files:** Ctrl+Z after Save as, the same PDF in two tabs, removing the password and saving over a signed original no longer lose anything; redaction erases a letter that is half covered, fields, comments and XFA; field scripts run in a separate process, with a time limit.
+- **Faster on large PDFs:** OCR off the window thread and without duplicated text, less memory with many pages, merging keeps bookmarks and links.
 
-### Novidades da 0.1.7
+### New in 0.1.7
 
-- **Abre em computador com placa de vídeo antiga:** em placa sem Vulkan/OpenGL utilizável (Intel HD 4000, por exemplo) o FeatherPDF fechava ao iniciar; agora a janela abre desenhada pelo processador. Se a placa falhar com o app aberto, as janelas passam para o processador em vez de o app fechar.
-- **Sem internet:** o FeatherPDF não acessa mais a rede; o aviso de versão nova e o download de modelos de OCR saíram (o OCR latino embutido continua).
-- **Páginas:** copiar, recortar e colar páginas (também entre PDFs abertos) e numeração lógica (i, ii… no prefácio, A-1…).
-- **Marcadores e links:** criar, renomear, mover e excluir marcadores; painel Links da página para trocar ou apagar o destino de cada link.
-- **Formulários:** campo obrigatório, somente leitura e valor padrão.
-- **Anexos, imagem e zoom:** anexar um arquivo ao PDF (e tirar um anexo); girar uma imagem 90°; zoom por área (arraste um retângulo e ele enche a tela).
-- **Mais seguro com PDF estranho:** PDF malicioso não derruba mais o app (bomba de compressão, fórmula de campo gigante); a tarja não cai na página errada depois de editar e tira também o texto alternativo das tags; comprimir e dividir mantêm a senha.
-- **Mais:** papel na impressão (A4, Carta, Ofício, A3, A5), extrair as fotos do PDF, opacidade dos comentários, cabeçalho e rodapé editáveis e removíveis, busca também nos campos e anexos.
+- **Opens on computers with old graphics cards:** on cards without usable Vulkan/OpenGL (Intel HD 4000, for example) FeatherPDF closed at start; now the window opens drawn by the CPU. If the card fails while the app is open, the windows move to the CPU instead of the app closing.
+- **No internet:** FeatherPDF no longer touches the network; the new-version notice and the OCR model download are gone (the built-in Latin OCR stays).
+- **Pages:** copy, cut and paste pages (also between open PDFs) and logical page numbers (i, ii… in the preface, A-1…).
+- **Bookmarks and links:** create, rename, move and delete bookmarks; a page Links panel to change or remove the target of each link.
+- **Forms:** required, read-only and default value for fields.
+- **Attachments, images and zoom:** attach a file to the PDF (and remove one); rotate an image 90°; zoom to an area (drag a rectangle and it fills the screen).
+- **Safer with odd PDFs:** a malicious PDF no longer crashes the app (compression bomb, huge field formula); redaction no longer lands on the wrong page after editing and also removes the alternative text of tags; compress and split keep the password.
+- **More:** paper size when printing (A4, Letter, Legal, A3, A5), extract the photos of a PDF, comment opacity, editable and removable header and footer, search also in fields and attachments.
 
-### Novidades da 0.1.6
+### New in 0.1.6
 
-- **Propriedades do documento (Ctrl+D):** título, autor, assunto e palavras-chave editáveis (com acento, Ctrl+Z desfaz), mais arquivo, tamanho, páginas, versão do PDF, datas e o programa que gerou, como no Acrobat.
-- **TIFF vira PDF:** abrir, arrastar, Imagens para PDF e Juntar aceitam `.tif`/`.tiff` do scanner; cada página do TIFF vira uma página (preto e branco/fax, LZW, JPEG, cinza, cor, CMYK).
-- **Editar comentário:** Comentários ▸ Editar muda o texto de uma nota, marcação ou caixa de texto já criada; a caixa de texto se redesenha na página.
-- **Leitor padrão de PDF:** Configurações ▸ Tornar leitor padrão (no Linux pelo sistema; no Windows aparece em Aplicativos padrão).
-- **Abrir PDF grande com menos memória:** o arquivo é lido direto do disco, sem uma cópia inteira na memória (#2).
-- **Mais:** Dividir e Extrair páginas na tela inicial; boletos com lixo antes do `%PDF-` abrem como no Acrobat; recentes com nomes estranhos voltam inteiros.
+- **Document properties (Ctrl+D):** editable title, author, subject and keywords (accents work, Ctrl+Z undoes), plus file, size, pages, PDF version, dates and the producing program, as in Acrobat.
+- **TIFF becomes PDF:** open, drop, Images to PDF and Merge accept `.tif`/`.tiff` from the scanner; each TIFF page becomes a page (black and white/fax, LZW, JPEG, gray, color, CMYK).
+- **Edit a comment:** Comments ▸ Edit changes the text of an existing note, markup or text box; the text box is redrawn on the page.
+- **Default PDF reader:** Settings ▸ Make default reader (on Linux through the system; on Windows it shows up in Default apps).
+- **Open large PDFs with less memory:** the file is read straight from disk, without a whole copy in memory (#2).
+- **More:** Split and Extract pages on the start screen; bank slips with junk before `%PDF-` open as in Acrobat; recent files with odd names come back whole.
 
-### Novidades da 0.1.5
+### New in 0.1.5
 
-- **Medidas batem com a planta:** a escala que o CAD grava no PDF agora é lida também quando vem sem unidade, e o fator de distância é aplicado direito. Numa planta de lote, os lados medidos passaram a bater com as cotas.
-- **Mover pontos de uma medida:** com uma ferramenta do Medir ligada, arraste um ponto de uma medida pronta para ajustar; o valor se refaz na hora.
-- **Medir em planta grande sem travar:** o imã lê os cantos do desenho uma vez só e procura só perto do mouse (planta com 375 mil vértices ficou leve no zoom).
-- **Salvar sem travar:** salvar e preparar o desenho do PDF rodam em segundo plano; editar durante a gravação não se perde.
-- **Zoom:** dá para digitar o zoom, há o botão "Altura", e o zoom no mouse não pula quando a página pequena passa a encher a tela.
-- **Mais:** exportar por intervalo de páginas, BMP e GIF; colar imagem ou texto da área de transferência; Sanitizar pode tirar comentários; "Limpar caderno" não mexe em fotos e logotipos.
+- **Measurements match the plan:** the scale CAD programs write into the PDF is now read also when it has no unit, and the distance factor is applied correctly. On a lot plan, the measured sides now match the dimensions.
+- **Move the points of a measurement:** with a Measure tool on, drag a point of a finished measurement to adjust it; the value updates at once.
+- **Measure on large plans without freezing:** the snap reads the drawing's corners once and only searches near the mouse (a plan with 375 thousand vertices became light to zoom).
+- **Save without freezing:** saving and preparing the PDF drawing run in the background; editing during the save is not lost.
+- **Zoom:** you can type the zoom, there is a "Height" button, and zooming at the mouse no longer jumps when a small page starts to fill the screen.
+- **More:** export a page range, BMP and GIF; paste an image or text from the clipboard; Sanitize can remove comments; "Clean notebook page" leaves photos and logos alone.
 
-Editor nativo em **Rust + pelicano**. A página é exibida como PDF de verdade
-(textos, imagens e elementos gráficos), e o documento permanece vetorial para
-edição e salvamento. A visualização usa **Hayro 0.8**, um rasterizador em Rust,
-sem exigir a instalação de PDFium ou MuPDF.
+## How it works
 
-## Arquitetura — reaproveitar antes de implementar
+A native editor in **Rust + pelicano**. The page is shown as the real PDF (text, images and graphics), and the
+document stays vector for editing and saving. Display uses **Hayro 0.8**, a rasterizer written in Rust, so neither
+PDFium nor MuPDF has to be installed.
 
-O FeatherPDF consome os motores oficiais já existentes:
-
-| Crate | Responsabilidade |
+| Crate | Job |
 |---|---|
-| `feather-draw` | Cria a cena vetorial A4 usada na criação de documentos. |
-| `featheroffice-io` | `Registro::padrao().gravar("pdf", ...)` exporta a cena para PDF; `seguranca` fornece leitura limitada e gravação atômica para PDFs editados. |
-| `featherpdf-core` | Domínio específico: estrutura de objetos PDF via `lopdf`, extração textual, rotação, exclusão, substituição textual limitada e serialização para bytes. **Sem dependência runtime de IO/interface.** |
-| `featherpdf-io` | Adaptador entre core, FeatherIO e renderização PDF: criar, abrir, salvar, renderizar a página visualmente. |
-| `feather-ui` | Tema, marca FeatherPDF, barra Chrome, Ribbon, Ajuda F1, atalhos globais e gestão de janelas (versão pelicano). |
-| `featheroffice-charts` | Desenha o histórico real da memória no Monitor F12, exportando SVG via FeatherOffice Drawing. |
-| `featherpdf-pelicano` | Janela, navegação, zoom e comandos de edição, sem implementação de parser/codec PDF. |
-| `hayro` | Renderiza PDFs existentes em pixels (não substitui FeatherDrawing e não altera o arquivo). |
+| `featherpdf-core` | PDF objects through `lopdf`: text extraction, rotation, deletion, limited text replacement, forms, redaction, serialization. **No IO or interface dependency.** |
+| `featherpdf-io` | between core, the suite libraries and rendering: create, open, save, render a page, convert to and from other formats. |
+| `featherpdf-ocr` | local OCR with a built-in Latin model; nothing is downloaded. |
+| `featherpdf-pelicano` | window, navigation, zoom and editing commands; no PDF parser or codec of its own. |
+| `feather-io` | bounded reads and atomic writes shared by the suite; macros sandbox (`feather-macros`). |
+| `feather-draw`, `feather-shapes` | the vector A4 scene used to create documents, and shapes. |
+| `feather-ui` | theme, title bar, ribbon, F1 help, shortcuts and windows. |
+| `hayro` | turns existing PDFs into pixels for the screen (it never changes the file). |
 
-Fluxo de dependências: `featherpdf-pelicano → featherpdf-io → featherpdf-core` e
-`featherpdf-io → featheroffice-{io,drawing}`. O FeatherCore não importa
-FeatherIO, nem a interface. Para páginas de PDFs existentes, o formato de objetos
-é específico de PDF e ainda utiliza `lopdf`; nenhum codec compartilhado
-declara suporte à **leitura** de PDF de páginas complexas. Não anunciamos
-suporte de leitura inexistente no registro comum.
+**Important:** the rasterized preview is only what the window shows. The saved PDF is **not** a screenshot; its
+vectors and objects stay in the document.
 
-## Funcionalidades disponíveis no código
+## Features
 
-- Abrir arquivos PDF de até **128 MiB** (limite conservador do FeatherIO).
-- Mostrar a **página gráfica** com Hayro (fontes, imagens, formas e layout
-  conforme suporte da biblioteca); **visualização gráfica padrão**.
-- Zoom de **50% a 300%** e navegação entre páginas, com visualização em mesa cinza e painel lateral.
-- Ribbon com as abas Arquivo, Páginas, Editar e Exibir, reaproveitando `feather-ui::ribbon`.
-- Janela nativa de Ajuda pesquisável via **F1** (`feather-ui::ajuda`).
-- Janela nativa de Monitor via **F12**, amostragem real da RAM e histórico SVG do motor `featheroffice-charts`.
-- `Ctrl+F1` alterna a faixa, `Ctrl+N` novo, `Ctrl+O` abrir, `Ctrl+S` salvar como e `PageUp/PageDown` navegam.
-- Modo opcional **Ver texto extraído**.
-- Criar PDF A4 com o exportador vetorial compartilhado do FeatherOffice.
-- Girar páginas em passos de 90° e excluir páginas (mantendo uma).
-- Substituir texto quando o stream e a fonte são compatíveis.
-- Inserir texto, imagens, desenhos e equações; comentar e anotar.
-- Formulários: criar, preencher, campos calculados, importar/exportar dados.
-- OCR local (`featherpdf-ocr`, modelo latino embutido; nada é baixado). O FeatherPDF não acessa a internet.
-- Tarja (redação) que remove o conteúdo do arquivo, limpeza de JavaScript,
-  anexos e metadados, senha (AES-256/AES-128) e assinatura digital PAdES com certificado A1.
-- Scripts em JavaScript no sandbox das macros da suíte (sem arquivo nem rede).
-- Converter: FeatherSheet/Excel, Word/ODT, PowerPoint, PDF/A, texto, Markdown, HTML e imagens.
-- Imprimir pelo CUPS (`lp`).
-- Salvar PDF estrutural (sem converter páginas inteiras em imagem).
-- Gravação **atômica**: o FeatherIO escreve em arquivo temporário e renomeia
-  somente quando a operação termina sem erro; links simbólicos e permissões do
-  arquivo existente são mantidos.
-- Renderização pesada em `tokio::spawn_blocking`; mensagens antigas são
-  descartadas quando a página, documento ou zoom mudam.
+- Open PDF files up to **128 MiB**, read from disk.
+- Zoom from **50% to 300%**, page navigation, side panel, text view.
+- Rotate pages in 90° steps and delete pages (keeping at least one); copy, cut and paste pages.
+- Replace text when the stream and the font allow it; insert text, images, drawings and equations; comments and markup.
+- Forms: create, fill, calculated fields, import and export data.
+- Local OCR. FeatherPDF never touches the internet.
+- Redaction that removes the content from the file; cleanup of JavaScript, attachments and metadata; passwords
+  (AES-256/AES-128) and PAdES digital signatures with an A1 certificate.
+- JavaScript in the suite's macro sandbox (no files, no network).
+- Convert: FeatherSheet/Excel, Word/ODT, PowerPoint, PDF/A, text, Markdown, HTML and images.
+- Print through CUPS (`lp`).
+- **Atomic** saving: written to a temporary file and renamed only when the operation ends without error; symbolic
+  links and the existing file's permissions are kept.
+- Heavy rendering off the window thread; stale results are dropped when the page, document or zoom change.
 
-**Importante:** o preview rasterizado é apenas o que aparece na janela.
-O PDF salvo **não** é um screenshot; seus vetores e objetos continuam no
-documento PDF.
-
-## Comandos
-
-Nesta pasta (pelicano vem do crates.io e o feather-ui do git, ramo `featherpdf-v0.3.11`; o `[patch]` do `Cargo.toml` só troca o hayro pela cópia em `vendor/`):
+## Commands
 
 ```bash
 cargo run -p featherpdf-pelicano
@@ -139,17 +115,19 @@ cargo check --workspace --all-targets
 cargo test --workspace
 ```
 
-## Limitações e validação
+pelicano comes from crates.io and the suite libraries from git tags; the `[patch]` in `Cargo.toml` only swaps hayro
+for the copy in `vendor/`.
 
-O projeto **ainda não é um editor de PDF com 100% das funções**. A substituição
-textual é parcial. Fontes raras e efeitos gráficos complexos podem não renderizar
-corretamente no Hayro. Editar um PDF assinado e salvar regrava o arquivo inteiro:
-as assinaturas antigas deixam de valer (o Ctrl+S recusa gravar por cima de um
-original assinado). O verificador confere integridade, não a identidade: não há
-validação da cadeia até uma certificadora confiável.
+## Limits
 
-A renderização usa pixels com zoom configurável e limite de **20 milhões de
-pixels por página**; evita criar buffers sem limite. O arquivo original
-não é rasterizado nem sobreposto automaticamente.
+This is **not yet an editor with 100% of the features**. Text replacement is partial. Rare fonts and complex graphic
+effects may not render correctly in Hayro. Editing a signed PDF and saving rewrites the whole file, so the old
+signatures stop being valid (Ctrl+S refuses to save over a signed original). The verifier checks integrity, not
+identity: the chain up to a trusted certificate authority is not validated.
 
-**Validação:** `cargo test --workspace` cobre core, io, OCR e a lógica da interface; a interface em si é conferida à mão.
+Rendering is limited to **20 million pixels per page**, so no unbounded buffers are created. The original file is
+never rasterized or covered automatically.
+
+**Validation:** `cargo test --workspace` covers core, io, OCR and the interface logic; the interface itself is checked by hand.
+
+License: GPL-3.0.
