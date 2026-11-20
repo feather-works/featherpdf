@@ -165,7 +165,7 @@ impl DocumentoPdf {
         let cabe = |t: &str| largura_texto(t, FontePdf::Helvetica, TAMANHO) <= util;
         // Páginas de linhas: `None` numa página marca o form feed.
         let mut paginas: Vec<Vec<String>> = vec![Vec::new()];
-        let mut por = |linha: String, paginas: &mut Vec<Vec<String>>| {
+        let por = |linha: String, paginas: &mut Vec<Vec<String>>| {
             if paginas.last().is_some_and(|p| p.len() >= por_pagina) { paginas.push(Vec::new()); }
             paginas.last_mut().expect("sempre há uma").push(linha);
         };
