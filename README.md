@@ -1,5 +1,7 @@
 # FeatherPDF
 
+[![Discord](https://img.shields.io/badge/Discord-Maragon.Dev-5865F2?logo=discord&logoColor=white)](https://discord.gg/b4Epb4eSSH)
+
 **The PDF editor of the FeatherWorks suite · version 0.1.9**
 
 The interface is in Portuguese for now; the menu and button names below are translated.
