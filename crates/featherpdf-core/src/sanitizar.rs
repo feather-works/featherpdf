@@ -35,6 +35,28 @@ fn acao_perigosa(d: &Dictionary, js: bool, externos: bool) -> bool {
     (js && (s == b"JavaScript" || s == b"RichMediaExecute" || d.has(b"JS"))) || (externos && matches!(s, b"URI" | b"Launch" | b"GoToR" | b"GoToE" | b"SubmitForm" | b"ImportData"))
 }
 
+/// Tira o arquivo de som/mídia das ações `/Sound` e `/Rendition` dentro de `o` (dicionários e listas
+/// diretos; as referências são outros objetos, visitados à parte). Devolve quantas.
+fn sem_midia_nas_acoes(o: &mut Object) -> usize {
+    match o {
+        Object::Dictionary(d) => sem_midia_no_dicionario(d),
+        Object::Stream(s) => sem_midia_no_dicionario(&mut s.dict),
+        Object::Array(v) => v.iter_mut().map(sem_midia_nas_acoes).sum(),
+        _ => 0,
+    }
+}
+
+fn sem_midia_no_dicionario(d: &mut Dictionary) -> usize {
+    let s = d.get(b"S").and_then(Object::as_name).unwrap_or(b"");
+    let mut n = match s {
+        b"Sound" => usize::from(d.remove(b"Sound").is_some()),
+        b"Rendition" => usize::from(d.remove(b"R").is_some()),
+        _ => 0,
+    };
+    for (_, v) in d.iter_mut() { n += sem_midia_nas_acoes(v); }
+    n
+}
+
 /// O JPEG sem os segmentos APP1 (EXIF/XMP) e APP13 (IPTC); `None` se não tinha ou não deu para ler.
 fn sem_exif(jpeg: &[u8]) -> Option<Vec<u8>> {
     if !jpeg.starts_with(&[0xFF, 0xD8]) { return None; }
@@ -147,7 +169,16 @@ impl DocumentoPdf {
                 n += antes - lista.len();
                 if antes != lista.len() { if let Ok(p) = self.documento.get_dictionary_mut(id) { p.set("Annots", lista); } }
             }
-            if n > 0 { relatorio.push(format!("{n} vídeo(s), som(ns) ou objeto(s) 3D.")); }
+            // Ação de som (/S /Sound) ou de mídia (/S /Rendition) num link, numa página ou no /Next de
+            // outra ação leva o áudio ou vídeo como stream comum: sai a mídia, a ação fica sem efeito.
+            let alvos: Vec<ObjectId> = self.documento.objects.keys().copied().collect();
+            for id in alvos {
+                if let Ok(o) = self.documento.get_object_mut(id) { n += sem_midia_nas_acoes(o); }
+            }
+            if n > 0 {
+                crate::podar(&mut self.documento);
+                relatorio.push(format!("{n} vídeo(s), som(ns) ou objeto(s) 3D."));
+            }
         }
         if op.javascript || op.links_externos { self.tirar_acoes(&ids, op, &mut relatorio); }
         if op.autores {
@@ -370,6 +401,19 @@ impl DocumentoPdf {
 
 #[cfg(test)]
 mod testes {
+    #[test]
+    fn acao_de_som_perde_o_audio() {
+        use lopdf::{dictionary, Object};
+        let mut link = Object::Dictionary(dictionary! {
+            "Subtype" => "Link",
+            "A" => dictionary! { "S" => "Sound", "Sound" => Object::Reference((99, 0)),
+                "Next" => dictionary! { "S" => "Rendition", "R" => Object::Reference((98, 0)) } },
+        });
+        assert_eq!(super::sem_midia_nas_acoes(&mut link), 2);
+        let a = link.as_dict().unwrap().get(b"A").unwrap().as_dict().unwrap();
+        assert!(!a.has(b"Sound") && !a.get(b"Next").unwrap().as_dict().unwrap().has(b"R"));
+    }
+
     use super::*;
     use crate::objetos::testes::pdf_com;
     use lopdf::dictionary;

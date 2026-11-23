@@ -173,11 +173,13 @@ impl DocumentoPdf {
             if k > 0 { paginas.push(Vec::new()); }
             for paragrafo in bloco.split('\n') {
                 let mut linha = String::new();
+                // Linha que nasceu de uma quebra: o espaço antes da palavra seguinte não é recuo.
+                let mut quebrou = false;
                 // O primeiro pedaço começa a linha; os vazios do começo viram os espaços da indentação.
                 for (j, palavra) in paragrafo.split(' ').enumerate() {
-                    let tentativa = if j == 0 { palavra.to_string() } else { format!("{linha} {palavra}") };
+                    let tentativa = if j == 0 || (quebrou && linha.is_empty()) { palavra.to_string() } else { format!("{linha} {palavra}") };
                     if cabe(&tentativa) { linha = tentativa; continue; }
-                    if !linha.is_empty() { por(std::mem::take(&mut linha), &mut paginas); }
+                    if !linha.is_empty() { por(std::mem::take(&mut linha), &mut paginas); quebrou = true; }
                     // Palavra sozinha maior que a linha: parte letra a letra.
                     for c in palavra.chars() {
                         linha.push(c);
@@ -553,6 +555,15 @@ mod testes {
         pdf.escrever_texto_corrido("def f():\n    return 1").unwrap();
         let linhas: Vec<String> = pdf.objetos(1).unwrap().into_iter().filter_map(|o| match o.tipo { crate::TipoObjeto::Texto { texto, .. } => Some(texto), _ => None }).collect();
         assert!(linhas.iter().any(|l| l.starts_with("    return")), "o código perdia o recuo: {linhas:?}");
+    }
+
+    #[test]
+    fn linha_quebrada_nao_ganha_recuo() {
+        // Dois espaços entre as palavras: a quebra pode cair no pedaço vazio entre elas.
+        let mut pdf = pdf_teste();
+        pdf.escrever_texto_corrido(&vec!["palavra"; 200].join("  ")).unwrap();
+        let linhas: Vec<String> = pdf.objetos(1).unwrap().into_iter().filter_map(|o| match o.tipo { crate::TipoObjeto::Texto { texto, .. } => Some(texto), _ => None }).collect();
+        assert!(linhas.len() > 2 && linhas.iter().all(|l| !l.starts_with(' ')), "{linhas:?}");
     }
 
     #[test]
