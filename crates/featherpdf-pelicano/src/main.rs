@@ -5,6 +5,7 @@
 //! ferramenta mora no seu módulo, com o estado, as mensagens e as camadas dela.
 
 mod ajuda_pdf;
+mod recuperacao;
 mod leitor_padrao;
 mod assinar;
 mod busca;
@@ -151,6 +152,9 @@ pub enum Msg {
     DeOutraInstancia(PathBuf),
     CaminhoEscolhido(Option<Vec<PathBuf>>),
     Aberto(Result<(DocumentoPdf, Visualizador), String>),
+    /// De minuto em minuto, com alteração por salvar: grava as cópias de recuperação.
+    Recuperar,
+    RecuperacaoGravada,
     Salvar,
     SalvarComo,
     ParaFeatherDocs,
@@ -645,6 +649,12 @@ impl App {
         if let Some(caminho) = std::env::args_os().nth(1).map(PathBuf::from) {
             tarefas.push(Task::done(Msg::AbrirCaminho(caminho)));
         }
+        // O app caiu da última vez: os documentos não salvos voltam, cada um na sua aba.
+        for pdf in recuperacao::recolher() {
+            if let Ok(vis) = pdf.serializar().and_then(Visualizador::novo) {
+                tarefas.push(Task::done(Msg::Aberto(Ok((pdf, vis)))));
+            }
+        }
         tarefas.push(app.pedir_capas());
         (app, Task::batch(tarefas))
     }
@@ -805,6 +815,7 @@ impl App {
             return Task::none();
         }
         self.fechar_pendente = None;
+        if let Some(id) = id { recuperacao::apagar(id); }
         if self.guias.len() == 1 {
             // Última aba: volta para a página inicial.
             self.lembrar_pagina();
@@ -1464,6 +1475,14 @@ impl App {
                 return match self.depois_de_abrir.take() { Some(m) => Task::batch([entrar, self.update_interno(m)]), None => entrar };
             }
             Msg::Aberto(Err(e)) => { self.depois_de_abrir = None; self.status = e; }
+            Msg::Recuperar => {
+                // shortcut: copia mesmo sem mudança desde o último minuto (clonar + serializar); medir se pesar em PDF enorme.
+                let frente = self.aberto.iter().map(|a| (a.id, &a.pdf));
+                let docs: Vec<(u64, DocumentoPdf)> = frente.chain(self.guias.iter().flatten().map(|g| (g.aberto.id, &g.aberto.pdf)))
+                    .filter(|(_, p)| p.modificado()).map(|(id, p)| (id, p.clone())).collect();
+                return Task::perform(async move { let _ = tokio::task::spawn_blocking(move || recuperacao::gravar(docs)).await; }, |_| Msg::RecuperacaoGravada);
+            }
+            Msg::RecuperacaoGravada => {}
             Msg::Salvar => { self.menu = false; return self.salvar(false); }
             Msg::SalvarComo => { self.menu = false; return self.escolher_destino(); }
             Msg::VistaPronta(id, vez, tamanhos, r) => {
@@ -1558,6 +1577,7 @@ impl App {
                 match r {
                     Ok(()) => {
                         if let Some(p) = self.documento_mut(id) { p.gravado_em(destino.clone()); }
+                        recuperacao::apagar(id);
                         self.recentes.registrar(&destino, total);
                         self.status = if assinado { format!("Salvo em {}. As assinaturas que o PDF tinha não valem nesta versão alterada.", destino.display()) }
                             else { format!("Salvo em {}", destino.display()) };
@@ -1900,6 +1920,7 @@ impl App {
                     return Task::none();
                 }
                 self.lembrar_pagina();
+                recuperacao::apagar_tudo();
                 instancia::parar();
                 return Task::window(WindowCmd::Close);
             }
@@ -2121,6 +2142,9 @@ impl pelicano::App for App {
         }
         if self.zoom_animado.is_some() {
             subs.push(Subscription::every(Duration::from_millis(16)).map(|_| Msg::ZoomQuadro));
+        }
+        if (0..self.guias.len()).any(|i| self.modificada(i)) {
+            subs.push(Subscription::every(Duration::from_secs(60)).map(|_| Msg::Recuperar));
         }
         if self.rolagem_auto.is_some() {
             subs.push(Subscription::every(Duration::from_millis(16)).map(|_| Msg::RolagemQuadro));

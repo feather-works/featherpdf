@@ -1,5 +1,15 @@
 # Pendências do FeatherPDF
 
+## Recuperação automática (23/11/2026, para a 0.1.10)
+
+De 60 em 60 s, com alguma aba alterada (`Msg::Recuperar`), cada documento com `modificado()` é clonado e gravado em
+fundo em `~/.config/featherpdf/recuperacao/<id>-<nome>.pdf` (pasta 0700, `.tmp` + rename; `recuperacao.rs`). O tique
+apaga as cópias de quem não está mais alterado; salvar (`Msg::Salvo`) e fechar a aba apagam a do documento; fechar a
+janela de propósito apaga a pasta. Na abertura, `recolher()` traz cada cópia como documento sem arquivo, nome
+"<nome> (recuperado).pdf", e apaga o arquivo (a cópia nova sai no minuto seguinte). Limites (`shortcut:`): PDF com
+senha fica sem cópia; copia mesmo sem mudança no último minuto. Teste `copia_volta_com_o_nome_e_some_quando_o_documento_sai`.
+Sem conferir: uma queda de verdade com o app aberto.
+
 ## Texto (.txt) vira PDF (19/11/2026)
 
 Abrir, arrastar, juntar ou pôr num fluxo um `.txt` faz um PDF A4 com o texto corrido (`juntar::vira_pdf`, que
