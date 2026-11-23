@@ -222,9 +222,11 @@ impl App {
                 }
             }
             // Cancelou no meio: o resultado da compressão chega depois e é descartado.
-            Pr::Pronto(_, _, "comprimido") if !matches!(self.protecao, Some(Janela::Comprimir(_))) => self.status = "Compressão cancelada.".into(),
-            Pr::Pronto(_, _, "protegido") if !matches!(self.protecao, Some(Janela::Senha(_))) => self.status = "Proteção cancelada.".into(),
+            // O nome guardado é do documento desta operação: não pode virar a sugestão da próxima (de outra aba).
+            Pr::Pronto(_, _, "comprimido") if !matches!(self.protecao, Some(Janela::Comprimir(_))) => { self.nome_da_saida = None; self.status = "Compressão cancelada.".into() }
+            Pr::Pronto(_, _, "protegido") if !matches!(self.protecao, Some(Janela::Senha(_))) => { self.nome_da_saida = None; self.status = "Proteção cancelada.".into() }
             Pr::Pronto(Err(e), _, _) => {
+                self.nome_da_saida = None;
                 if let Some(Janela::Comprimir(c)) = &mut self.protecao { c.desde = None; }
                 if let Some(Janela::Senha(s)) = &mut self.protecao { s.cifrando = false; }
                 self.status = e;

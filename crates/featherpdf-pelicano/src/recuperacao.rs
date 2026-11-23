@@ -16,8 +16,22 @@ const TRAVA: &str = "trava";
 
 /// A pasta desta execução e a trava aberta (fica presa enquanto o app roda).
 static MINHA: Mutex<Option<(PathBuf, File)>> = Mutex::new(None);
-/// Pastas de uma execução que caiu, lidas na abertura: só somem depois que as cópias novas existem.
-static RECOLHIDAS: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+/// Pastas de uma execução que caiu, lidas na abertura, com a trava delas presa (outra janela aberta
+/// depois não as recupera de novo): só somem depois que as cópias novas existem.
+static RECOLHIDAS: Mutex<Vec<(PathBuf, File)>> = Mutex::new(Vec::new());
+/// A janela está fechando: uma gravação em fundo que termine depois apaga a pasta em vez de deixá-la.
+static FECHANDO: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Apaga as pastas recolhidas (solta a trava antes: no Windows o arquivo aberto não se apaga).
+fn apagar_recolhidas() {
+    for (p, trava) in std::mem::take(&mut *RECOLHIDAS.lock().unwrap_or_else(|e| e.into_inner())) {
+        drop(trava);
+        let _ = std::fs::remove_dir_all(p);
+    }
+}
+
+/// Nenhum documento segue alterado (todos salvos ou fechados): o que veio da queda já não volta.
+pub fn esquecer_recolhidas() { apagar_recolhidas(); }
 
 // Testes não podem tocar na pasta real do usuário.
 fn base() -> Option<PathBuf> {
@@ -55,25 +69,36 @@ pub fn gravar(docs: Vec<(u64, DocumentoPdf)>) {
     let r = minha_pasta(&b).and_then(|p| gravar_em(&p, docs));
     match r {
         // As cópias novas existem: as da execução que caiu já não fazem falta.
-        Ok(()) => for p in std::mem::take(&mut *RECOLHIDAS.lock().unwrap_or_else(|e| e.into_inner())) { let _ = std::fs::remove_dir_all(p); },
+        Ok(()) => apagar_recolhidas(),
         Err(e) => crate::monitor::anotar(format!("[recuperação] {e}")),
     }
+    // Fechou enquanto esta gravação corria: o que ela deixou não pode voltar na próxima abertura.
+    if FECHANDO.load(std::sync::atomic::Ordering::Relaxed) { apagar_tudo(); }
 }
 
 pub(crate) fn gravar_em(pasta: &Path, docs: Vec<(u64, DocumentoPdf)>) -> Result<(), String> {
     let mut manter = HashSet::new();
+    let mut erro = None;
     for (id, pdf) in docs {
         // shortcut: PDF com senha fica sem cópia (sem a senha ela exporia o conteúdo; com ela, reabrir pede a senha); fazer se pedirem.
         if pdf.tem_senha() { continue; }
-        let nome = format!("{id}-{}", nome_do(&pdf));
-        let bytes = pdf.bytes_para_gravar()?;
-        let temporario = pasta.join(format!(".{nome}.tmp"));
-        std::fs::write(&temporario, bytes).map_err(|e| e.to_string())?;
-        std::fs::rename(&temporario, pasta.join(&nome)).map_err(|e| e.to_string())?;
-        manter.insert(nome);
+        // Nome de arquivo tem teto de 255 bytes: o do documento entra cortado (sem partir uma letra).
+        let mut original = nome_do(&pdf);
+        while original.len() > 180 { original.pop(); }
+        let nome = format!("{id}-{original}");
+        // Um documento que falha não deixa os outros sem cópia.
+        let feito = pdf.bytes_para_gravar().and_then(|bytes| {
+            let temporario = pasta.join(format!(".{nome}.tmp"));
+            std::fs::write(&temporario, bytes).map_err(|e| e.to_string())?;
+            std::fs::rename(&temporario, pasta.join(&nome)).map_err(|e| e.to_string())
+        });
+        match feito {
+            Ok(()) => { manter.insert(nome); }
+            Err(e) => erro = Some(e),
+        }
     }
     podar_em(pasta, |nome| manter.contains(nome));
-    Ok(())
+    erro.map_or(Ok(()), Err)
 }
 
 /// Apaga as cópias desta execução que `fica` recusa (a trava e os temporários ficam).
@@ -100,11 +125,12 @@ pub fn apagar(id: u64) {
 
 /// Fechar a janela de propósito: nada a recuperar desta execução nem das que ela reabriu.
 pub fn apagar_tudo() {
+    FECHANDO.store(true, std::sync::atomic::Ordering::Relaxed);
     if let Some((p, trava)) = MINHA.lock().unwrap_or_else(|e| e.into_inner()).take() {
         drop(trava); // no Windows o arquivo aberto não se apaga
         let _ = std::fs::remove_dir_all(p);
     }
-    for p in std::mem::take(&mut *RECOLHIDAS.lock().unwrap_or_else(|e| e.into_inner())) { let _ = std::fs::remove_dir_all(p); }
+    apagar_recolhidas();
 }
 
 /// As cópias das execuções que caíram, como documentos sem arquivo. As pastas ficam até as cópias
@@ -117,14 +143,14 @@ pub fn recolher() -> Vec<DocumentoPdf> {
 }
 
 /// Os documentos das pastas soltas de `base` e essas pastas. A de outra janela aberta (trava presa) fica.
-pub(crate) fn recolher_de(base: &Path) -> (Vec<DocumentoPdf>, Vec<PathBuf>) {
+pub(crate) fn recolher_de(base: &Path) -> (Vec<DocumentoPdf>, Vec<(PathBuf, File)>) {
     let mut pastas: Vec<PathBuf> = std::fs::read_dir(base).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
     pastas.sort();
     let (mut docs, mut lidas) = (Vec::new(), Vec::new());
     for pasta in pastas {
-        let Ok(trava) = std::fs::OpenOptions::new().write(true).create(true).truncate(false).open(pasta.join(TRAVA)) else { continue };
+        // Sem criar a trava: a pasta que ainda não tem uma é de uma janela que está nascendo agora.
+        let Ok(trava) = std::fs::OpenOptions::new().write(true).open(pasta.join(TRAVA)) else { continue };
         if trava.try_lock().is_err() { continue; } // outra janela do app está viva
-        drop(trava);
         let mut arquivos: Vec<PathBuf> = std::fs::read_dir(&pasta).into_iter().flatten().flatten().map(|e| e.path()).collect();
         arquivos.sort();
         for caminho in arquivos {
@@ -137,7 +163,7 @@ pub(crate) fn recolher_de(base: &Path) -> (Vec<DocumentoPdf>, Vec<PathBuf>) {
             pdf.sugerir_nome(format!("{sem_extensao} (recuperado).pdf"));
             docs.push(pdf);
         }
-        lidas.push(pasta);
+        lidas.push((pasta, trava));
     }
     (docs, lidas)
 }
@@ -157,6 +183,8 @@ mod testes {
         let _ = std::fs::remove_dir_all(&base);
         let (viva, caiu) = (base.join("1-viva"), base.join("2-caiu"));
         for p in [&viva, &caiu] { std::fs::create_dir_all(p).unwrap(); }
+        // A execução que caiu também tinha a trava dela (já solta).
+        drop(File::create(caiu.join(TRAVA)).unwrap());
         let trava_viva = File::create(viva.join(TRAVA)).unwrap();
         trava_viva.try_lock().unwrap();
         gravar_em(&viva, vec![(7, pdf_de_teste())]).unwrap();
@@ -169,7 +197,9 @@ mod testes {
         assert_eq!(docs.len(), 1, "a pasta da outra janela viva não é recuperada");
         assert_eq!(docs[0].nome_sugerido(), Some("relatorio (recuperado).pdf"));
         assert!(docs[0].modificado() && docs[0].origem().is_none(), "volta como não salvo");
-        assert_eq!(pastas, vec![caiu.clone()]);
+        assert_eq!(pastas.iter().map(|(p, _)| p.clone()).collect::<Vec<_>>(), vec![caiu.clone()]);
+        assert_eq!(recolher_de(&base).0.len(), 0, "presa por quem recolheu, outra janela não traz de novo");
+        drop(pastas);
         assert!(caiu.join("3-relatorio.pdf").exists(), "lida, a cópia fica até a nova existir");
         drop(trava_viva);
         let _ = std::fs::remove_dir_all(&base);

@@ -287,6 +287,8 @@ impl DocumentoPdf {
                 };
                 if let Some(c) = alvo {
                     if self.apagar_pixels(c, lugar.matriz, &toca, apagar) {
+                        // O XMP da original (o do Photoshop guarda uma miniatura) mostraria a imagem sem a tarja.
+                        if let Ok(st) = self.documento.get_object_mut(c).and_then(lopdf::Object::as_stream_mut) { st.dict.remove(b"Metadata"); }
                         // Todo nome que desenha a mesma imagem passa para a cópia (/Im1 e /Im2 → x).
                         copias.insert(x, c);
                         self.trocar_xobjeto(id, &nome, Some(c));

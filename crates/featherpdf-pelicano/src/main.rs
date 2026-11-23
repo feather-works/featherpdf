@@ -809,6 +809,13 @@ impl App {
     }
 
     /// Fecha a aba `i`; com alterações não salvas, pergunta antes (`com_pergunta_fechar`).
+    /// Há documento alterado por salvar, sem contar `fora` (o que está sendo fechado sem salvar).
+    fn algum_alterado_alem(&self, fora: Option<u64>) -> bool {
+        let frente = self.aberto.iter().map(|a| (a.id, a.pdf.modificado()));
+        frente.chain(self.guias.iter().flatten().map(|g| (g.aberto.id, g.aberto.pdf.modificado())))
+            .any(|(id, m)| m && Some(id) != fora)
+    }
+
     fn fechar_aba(&mut self, i: usize) -> Task<Msg> {
         if i >= self.guias.len() { return Task::none(); }
         let id = if i == self.ativa { self.id_aberto() } else { self.guias[i].as_ref().map(|g| g.aberto.id) };
@@ -819,6 +826,7 @@ impl App {
         }
         self.fechar_pendente = None;
         if let Some(id) = id { recuperacao::apagar(id); }
+        if !self.algum_alterado_alem(id) { recuperacao::esquecer_recolhidas(); }
         if self.guias.len() == 1 {
             // Última aba: volta para a página inicial.
             self.lembrar_pagina();
@@ -1586,6 +1594,7 @@ impl App {
                     Ok(()) => {
                         if let Some(p) = self.documento_mut(id) { p.gravado_em(destino.clone()); }
                         recuperacao::apagar(id);
+                        if !self.algum_alterado_alem(None) { recuperacao::esquecer_recolhidas(); }
                         self.recentes.registrar(&destino, total);
                         self.status = if assinado { format!("Salvo em {}. As assinaturas que o PDF tinha não valem nesta versão alterada.", destino.display()) }
                             else { format!("Salvo em {}", destino.display()) };
