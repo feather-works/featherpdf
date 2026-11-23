@@ -66,19 +66,26 @@ fn nome_do(pdf: &DocumentoPdf) -> String {
 /// Grava a cópia de cada documento e apaga as que não valem mais (salvos ou fechados).
 pub fn gravar(docs: Vec<(u64, DocumentoPdf)>) {
     let Some(b) = base() else { return };
-    let r = minha_pasta(&b).and_then(|p| gravar_em(&p, docs));
+    let pasta = minha_pasta(&b);
+    let r = pasta.clone().and_then(|p| gravar_em(&p, docs));
     match r {
         // As cópias novas existem: as da execução que caiu já não fazem falta.
         Ok(()) => apagar_recolhidas(),
         Err(e) => crate::monitor::anotar(format!("[recuperação] {e}")),
     }
     // Fechou enquanto esta gravação corria: o que ela deixou não pode voltar na próxima abertura.
-    if FECHANDO.load(std::sync::atomic::Ordering::Relaxed) { apagar_tudo(); }
+    // A pasta é a desta gravação: o `apagar_tudo` da janela já tirou a de `MINHA` (e o remove dele pode ter
+    // falhado com o `.tmp` que esta gravação criava).
+    if FECHANDO.load(std::sync::atomic::Ordering::Relaxed) {
+        if let Ok(p) = pasta { let _ = std::fs::remove_dir_all(p); }
+        apagar_tudo();
+    }
 }
 
 pub(crate) fn gravar_em(pasta: &Path, docs: Vec<(u64, DocumentoPdf)>) -> Result<(), String> {
     let mut manter = HashSet::new();
     let mut erro = None;
+    let mut falhou: Vec<String> = Vec::new();
     for (id, pdf) in docs {
         // shortcut: PDF com senha fica sem cópia (sem a senha ela exporia o conteúdo; com ela, reabrir pede a senha); fazer se pedirem.
         if pdf.tem_senha() { continue; }
@@ -94,10 +101,11 @@ pub(crate) fn gravar_em(pasta: &Path, docs: Vec<(u64, DocumentoPdf)>) -> Result<
         });
         match feito {
             Ok(()) => { manter.insert(nome); }
-            Err(e) => erro = Some(e),
+            // A cópia do minuto anterior fica: sem ela, uma queda agora perderia o documento.
+            Err(e) => { falhou.push(format!("{id}-")); erro = Some(e) }
         }
     }
-    podar_em(pasta, |nome| manter.contains(nome));
+    podar_em(pasta, |nome| manter.contains(nome) || falhou.iter().any(|p| nome.starts_with(p.as_str())));
     erro.map_or(Ok(()), Err)
 }
 
