@@ -474,6 +474,8 @@ pub struct App {
     pub exportar: exportar::Exportar,
     pub validacao: Option<Result<Vec<featherpdf_core::assinatura::AssinaturaLida>, String>>,
     pub saida_pendente: Option<Vec<u8>>,
+    /// O nome do documento de onde a cópia em fundo (tarja, proteção) saiu: a aba da frente pode ser outra quando ela fica pronta.
+    pub nome_da_saida: Option<String>,
     /// O último arquivo (ou pasta) gravado por uma ferramenta: o cartão "Salvo" no canto da janela.
     pub salvo: Option<(String, PathBuf)>,
     pub tarjas: tarja::Tarjas,
@@ -616,6 +618,7 @@ impl App {
             exportar: exportar::Exportar::default(),
             validacao: None,
             saida_pendente: None,
+            nome_da_saida: None,
             salvo: None,
             tarjas: tarja::Tarjas::default(),
             comentarios: comentar::Comentarios::default(),
@@ -1482,7 +1485,12 @@ impl App {
                     .filter(|(_, p)| p.modificado()).map(|(id, p)| (id, p.clone())).collect();
                 return Task::perform(async move { let _ = tokio::task::spawn_blocking(move || recuperacao::gravar(docs)).await; }, |_| Msg::RecuperacaoGravada);
             }
-            Msg::RecuperacaoGravada => {}
+            Msg::RecuperacaoGravada => {
+                let frente = self.aberto.iter().map(|a| (a.id, a.pdf.modificado()));
+                let alterados: Vec<u64> = frente.chain(self.guias.iter().flatten().map(|g| (g.aberto.id, g.aberto.pdf.modificado())))
+                    .filter(|(_, m)| *m).map(|(id, _)| id).collect();
+                recuperacao::podar(&alterados);
+            }
             Msg::Salvar => { self.menu = false; return self.salvar(false); }
             Msg::SalvarComo => { self.menu = false; return self.escolher_destino(); }
             Msg::VistaPronta(id, vez, tamanhos, r) => {

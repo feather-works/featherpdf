@@ -173,8 +173,9 @@ impl DocumentoPdf {
             if k > 0 { paginas.push(Vec::new()); }
             for paragrafo in bloco.split('\n') {
                 let mut linha = String::new();
-                for palavra in paragrafo.split(' ') {
-                    let tentativa = if linha.is_empty() { palavra.to_string() } else { format!("{linha} {palavra}") };
+                // O primeiro pedaço começa a linha; os vazios do começo viram os espaços da indentação.
+                for (j, palavra) in paragrafo.split(' ').enumerate() {
+                    let tentativa = if j == 0 { palavra.to_string() } else { format!("{linha} {palavra}") };
                     if cabe(&tentativa) { linha = tentativa; continue; }
                     if !linha.is_empty() { por(std::mem::take(&mut linha), &mut paginas); }
                     // Palavra sozinha maior que a linha: parte letra a letra.
@@ -544,6 +545,14 @@ mod testes {
         assert!(linhas.iter().any(|l| l.contains("ação")));
         assert!(pdf.texto_pagina(1).unwrap().trim_start().starts_with("Título"), "a primeira linha no alto: {}", pdf.texto_pagina(1).unwrap());
         assert!(pdf.escrever_texto_corrido("  \n ").is_err());
+    }
+
+    #[test]
+    fn texto_corrido_guarda_a_indentacao() {
+        let mut pdf = pdf_teste();
+        pdf.escrever_texto_corrido("def f():\n    return 1").unwrap();
+        let linhas: Vec<String> = pdf.objetos(1).unwrap().into_iter().filter_map(|o| match o.tipo { crate::TipoObjeto::Texto { texto, .. } => Some(texto), _ => None }).collect();
+        assert!(linhas.iter().any(|l| l.starts_with("    return")), "o código perdia o recuo: {linhas:?}");
     }
 
     #[test]

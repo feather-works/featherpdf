@@ -133,6 +133,7 @@ impl App {
                 let mut copia = a.pdf.clone();
                 let (rotulo, metadados) = (self.tarjas.rotulo.clone(), self.tarjas.metadados);
                 self.status = "Tarjando…".into();
+                self.nome_da_saida = self.nome_documento();
                 return Task::perform(async move {
                     tokio::task::spawn_blocking(move || copia.tarjar(&marcas, &rotulo, &featherpdf_io::apagar_pixels_jpeg).and_then(|_| {
                         if metadados { copia.limpar_metadados(); }

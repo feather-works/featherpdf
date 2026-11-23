@@ -44,14 +44,23 @@ fn texto_para_pdf(caminho: &Path) -> Result<DocumentoPdf, String> {
     let tamanho = std::fs::metadata(caminho).map_err(|e| e.to_string())?.len();
     if tamanho > TETO_TEXTO { return Err("Arquivo de texto grande demais para virar PDF (mais de 20 MB).".into()); }
     let bytes = featherpdf_io::ler_bytes(caminho)?;
-    let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF][..]).unwrap_or(&bytes);
-    let texto = match std::str::from_utf8(bytes) {
-        Ok(t) => t.to_string(),
-        Err(_) => bytes.iter().map(|&b| featherpdf_core::de_win_ansi(b).unwrap_or(b as char)).collect(),
-    };
+    let texto = texto_do_arquivo(&bytes);
     let mut pdf = featherpdf_io::criar_a4()?;
     pdf.escrever_texto_corrido(&texto)?;
     Ok(pdf)
+}
+
+/// O texto de um `.txt`: UTF-8 (com ou sem BOM), UTF-16 com BOM (o "Unicode" do Bloco de Notas e o `>`
+/// do PowerShell 5) e, no resto, Windows-1252.
+fn texto_do_arquivo(bytes: &[u8]) -> String {
+    let utf16 = |pares: &[u8], de: fn([u8; 2]) -> u16| String::from_utf16_lossy(&pares.chunks_exact(2).map(|p| de([p[0], p[1]])).collect::<Vec<_>>());
+    if let Some(r) = bytes.strip_prefix(&[0xFF, 0xFE][..]) { return utf16(r, u16::from_le_bytes); }
+    if let Some(r) = bytes.strip_prefix(&[0xFE, 0xFF][..]) { return utf16(r, u16::from_be_bytes); }
+    let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF][..]).unwrap_or(bytes);
+    match std::str::from_utf8(bytes) {
+        Ok(t) => t.to_string(),
+        Err(_) => bytes.iter().map(|&b| featherpdf_core::de_win_ansi(b).unwrap_or(b as char)).collect(),
+    }
 }
 
 fn e_tiff(caminho: &Path) -> bool {
@@ -202,5 +211,13 @@ mod testes {
         assert!(a.texto_pagina(1).unwrap().contains("Relatório de ação"));
         assert_eq!(a.nome_sugerido(), Some(format!("featherpdf-texto-{}.pdf", std::process::id()).as_str()));
         assert!(b.texto_pagina(1).unwrap().contains("Função"));
+    }
+
+    #[test]
+    fn txt_em_utf16_do_bloco_de_notas() {
+        let le: Vec<u8> = [0xFF, 0xFE].into_iter().chain("Relatório".encode_utf16().flat_map(u16::to_le_bytes)).collect();
+        let be: Vec<u8> = [0xFE, 0xFF].into_iter().chain("Relatório".encode_utf16().flat_map(u16::to_be_bytes)).collect();
+        assert_eq!(texto_do_arquivo(&le), "Relatório");
+        assert_eq!(texto_do_arquivo(&be), "Relatório");
     }
 }

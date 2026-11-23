@@ -9,6 +9,17 @@ janela de propósito apaga a pasta. Na abertura, `recolher()` traz cada cópia c
 "<nome> (recuperado).pdf", e apaga o arquivo (a cópia nova sai no minuto seguinte). Limites (`shortcut:`): PDF com
 senha fica sem cópia; copia mesmo sem mudança no último minuto. Teste `copia_volta_com_o_nome_e_some_quando_o_documento_sai`.
 Sem conferir: uma queda de verdade com o app aberto.
+Revisto no mesmo dia (auditoria): cada execução tem a sua pasta (`recuperacao/<pid>-<ms>/`) presa por `File::try_lock`;
+na abertura só se lê a pasta com a trava solta (duas janelas do app não pegam nem apagam as cópias uma da outra); a
+pasta lida fica até as cópias novas existirem (uma segunda queda no primeiro minuto não perde nada); depois de cada
+gravação em fundo, `podar` tira a cópia de quem foi salvo ou fechado enquanto ela corria.
+
+## Auditoria de 23/11/2026 (código desde 14/11)
+
+- `.txt` em UTF-16 com BOM (Bloco de Notas "Unicode", `>` do PowerShell 5) vira PDF certo (`juntar::texto_do_arquivo`).
+- O recuo no começo da linha do `.txt` fica (código e poemas perdiam a indentação).
+- Tarjar e Proteger em fundo sugerem o nome do documento de onde saíram (`App::nome_da_saida`), não o da aba da frente.
+- Ctrl+Shift+"+" gira a vista como no Acrobat (Ctrl e "=" sem Shift dá zoom): ficou assim de propósito.
 
 ## Texto (.txt) vira PDF (19/11/2026)
 

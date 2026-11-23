@@ -213,6 +213,7 @@ impl App {
                         let pdf = a.pdf.clone();
                         if let Some(Janela::Senha(s)) = &mut self.protecao { s.cifrando = true; }
                         self.status = "Protegendo…".into();
+                        self.nome_da_saida = self.nome_documento();
                         return Task::perform(async move {
                             tokio::task::spawn_blocking(move || pdf.protegido(&p)).await
                                 .unwrap_or_else(|e| Err(format!("Falha ao proteger: {e}")))
@@ -250,7 +251,8 @@ impl App {
             Pr::Pronto(Ok(bytes), None, rotulo) => {
                 if let Some(Janela::Comprimir(c)) = &mut self.protecao { c.desde = None; }
                 if let Some(Janela::Senha(s)) = &mut self.protecao { s.cifrando = false; }
-                let nome = sufixo(&self.nome_documento().unwrap_or_else(|| "documento.pdf".into()), rotulo);
+                let origem = self.nome_da_saida.take().or_else(|| self.nome_documento());
+                let nome = sufixo(&origem.unwrap_or_else(|| "documento.pdf".into()), rotulo);
                 self.saida_pendente = Some(bytes);
                 return Task::perform(async move {
                     rfd::AsyncFileDialog::new().add_filter("PDF", &["pdf"]).set_file_name(nome).save_file().await
